@@ -87,7 +87,11 @@
   //   (rotation 0; rotation 2 = 180 flip), NOT via a swapping odd rotation.
   #define TFT_PANEL_WIDTH      320
   #define TFT_PANEL_HEIGHT     240
-  #define DISPLAY_DEFAULT_ROTATION 0   // MV=0; use 2 to flip 180
+  // MV=0 family (even rotations, all report 320x240): rot 0 was upright but
+  // horizontally mirrored on this unit, so use rot 6 = rot 0 + horizontal flip
+  // (upright, un-mirrored). Reference for the other MV=0 values if needed:
+  // 0 = upright+mirrored, 2 = upside-down+un-mirrored, 4 = upside-down+mirrored.
+  #define DISPLAY_DEFAULT_ROTATION 6
   // COLOUR — this CYD has reversed R/B wiring; without RGB order the warm theme
   // colours (yellow/orange) render as cyan/blue (yoRadio DSP_PANEL_RGB). Set 0
   // if your unit's colours are already correct.
