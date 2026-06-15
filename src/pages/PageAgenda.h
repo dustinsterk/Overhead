@@ -24,7 +24,10 @@ public:
 
   const char* title() const override { return "Agenda"; }
   void onEnter(App& app) override { _dirty = true; }
-  void onData(App& app, ProviderId id) override { _dirty = true; }
+  // Redraw on data, but only force the EXPENSIVE recompute (pass prediction) when
+  // the location changes — otherwise it runs on every provider publish and starves
+  // the UI/touch loop.
+  void onData(App& app, ProviderId id) override { _dirty = true; if (id == ProviderId::Location) _computed = false; }
   void tick(App& app, uint32_t nowMs) override;
 
 private:
@@ -50,5 +53,7 @@ private:
   time_t _base = 0;
 
   bool  _dirty = true;
+  bool  _computed = false;
+  uint32_t _lastRecompute = 0;
   uint32_t _lastDraw = 0;
 };

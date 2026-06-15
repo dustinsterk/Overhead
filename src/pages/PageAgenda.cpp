@@ -77,9 +77,14 @@ void PageAgenda::recompute() {
 }
 
 void PageAgenda::tick(App& app, uint32_t nowMs) {
-  if (!_dirty && nowMs - _lastDraw < 60000) return;
+  // Heavy recompute (pass prediction for the watchlist) only every 5 min or on a
+  // location change — NOT on every provider publish (that starved the loop/touch).
+  bool ready = _time.synced() && _loc.active().valid;
+  if (ready && (!_computed || nowMs - _lastRecompute > 300000)) {
+    recompute(); _lastRecompute = nowMs; _computed = true; _dirty = true;
+  }
+  if (!_dirty && nowMs - _lastDraw < 15000) return;   // cheap redraw, <=15s
   _dirty = false; _lastDraw = nowMs;
-  recompute();
   draw(app);
 }
 

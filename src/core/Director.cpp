@@ -58,7 +58,9 @@ void Director::tick(uint32_t nowMs) {
   if (nowMs - _lastDecideMs < 3000) return;       // decide every ~3 s
   _lastDecideMs = nowMs;
 
-  if (nowMs - _lastScanMs > 60000 || (_passAos == 0 && nowMs > 8000)) {
+  // Heavy (nextPass x watchlist) — scan once at startup then every 60s. (Was
+  // re-scanning every 3s whenever no pass was found, starving the UI/touch loop.)
+  if (_lastScanMs == 0 ? nowMs > 8000 : nowMs - _lastScanMs > 60000) {
     scanPasses(); _lastScanMs = nowMs;
   }
 

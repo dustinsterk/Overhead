@@ -235,5 +235,11 @@ void loop() {
   themeCtl.tick(now);   // day/night palette + backlight
   director.tick(now);   // Intelligent Focus
   app.tick(now);
+
+  // Loop-timing heartbeat: if dt spikes, the UI/touch loop is being starved.
+  static uint32_t lastHb = 0, maxDt = 0;
+  uint32_t dt = millis() - now;
+  if (dt > maxDt) maxDt = dt;
+  if (now - lastHb > 3000) { lastHb = now; Serial.printf("[loop] dt=%lums max=%lums heap=%u\n", (unsigned long)dt, (unsigned long)maxDt, (unsigned)ESP.getFreeHeap()); maxDt = 0; }
   delay(2);
 }
