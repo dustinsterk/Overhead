@@ -40,6 +40,7 @@ void Settings::seedDefaults() {
   _doc["refreshTleHour"]    = 12;
   _doc["refreshSpaceWxMin"] = 20;
   _doc["refreshWeatherMin"] = 45;
+  _doc["refreshAvWxMin"]    = 12;     // aviation METAR/TAF refresh
   // Seed the watchlist so the Director is useful on first boot (spec §13).
   JsonArray wl = _doc["watchlist"].to<JsonArray>();
   wl.add("ISS");

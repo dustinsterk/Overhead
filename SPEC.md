@@ -386,7 +386,11 @@ freshly-posted METAR/TAF, a **SPECI** (off-cycle special report — usually a
 significant change), or a new sounding for the home field. UI: decoded METAR card
 + a compact Skew-T/“thermal” strip (cloud base, convective potential). Heavier
 parse (soundings) and bundling an airfield list (reuse the OurAirports subset from
-the Aircraft tab). Strong fit for the layered provider/Director model.
+the Aircraft tab). Strong fit for the layered provider/Director model. A fuller "flight weather
+brief" adds winds/temps aloft (→ freezing level), AIRMET/SIGMET/G-AIRMET hazards
+(icing, turbulence, IFR, freezing level), and PIREPs — all from the same keyless
+AWC API. Surface SLP + rising/falling trend from the METAR; synoptic
+pressure-system/frontal charts (WPC) are graphical and out of scope here.
 
 Ham (later): POTA spots tab; PSKReporter/RBN propagation spots; Home
 Assistant/MQTT publish; ntfy push; deeper observability (transparency/seeing,

@@ -33,6 +33,7 @@
 #include "providers/AircraftProvider.h"
 #include "providers/SpaceWxProvider.h"
 #include "providers/WeatherProvider.h"
+#include "providers/AviationWxProvider.h"
 #include "pages/PageHealth.h"
 #include "pages/PageSatellites.h"
 #include "pages/PageLaunches.h"
@@ -41,6 +42,7 @@
 #include "pages/PageSpaceWx.h"
 #include "pages/PageAgenda.h"
 #include "pages/PageStarMap.h"
+#include "pages/PageAviation.h"
 #if ASTRO_SELFTEST
 #include "astro/SelfTest.h"
 #endif
@@ -68,11 +70,13 @@ static LaunchProvider  launchProv;
 static AircraftProvider aircraftProv;
 static SpaceWxProvider spaceWxProv;
 static WeatherProvider weatherProv;
+static AviationWxProvider avwxProv;
 // --- pages ---
 static String          gHostname;
 static PageAgenda*     agendaPage = nullptr;
 static PageLaunches*   launchesPage = nullptr;
 static PageAircraft*   aircraftPage = nullptr;
+static PageAviation*   aviationPage = nullptr;
 static PageSatellites* satsPage = nullptr;
 static PageSolarSystem* solarPage = nullptr;
 static PageStarMap*    starPage = nullptr;
@@ -158,6 +162,7 @@ void setup() {
   aircraftProv.begin(&settings, &net, &bus, &locSvc);
   spaceWxProv.begin(&settings, &net, &cache, &bus);
   weatherProv.begin(&settings, &net, &cache, &bus, &locSvc);
+  avwxProv.begin(&settings, &net, &cache, &bus, &locSvc);
 
   web.setStatusJsonProvider(fillStatusJson);
   web.begin(&settings, gHostname);
@@ -175,11 +180,14 @@ void setup() {
   sched.every(swxMs, [] { spaceWxProv.refresh(); }, /*runNow=*/false);
   uint32_t wxMs = (uint32_t)settings.getInt("refreshWeatherMin", 45) * 60UL * 1000UL;
   sched.every(wxMs, [] { weatherProv.refresh(); }, /*runNow=*/false);
+  uint32_t avMs = (uint32_t)settings.getInt("refreshAvWxMin", 12) * 60UL * 1000UL;
+  sched.every(avMs, [] { avwxProv.refresh(); }, /*runNow=*/false);
 
   // UI carousel, ground->space order: Launches, Aircraft, Satellites, Diagnostics.
   agendaPage = new PageAgenda(timeSvc, locSvc, weatherProv, tleProv, launchProv, settings);
   launchesPage = new PageLaunches(launchProv, timeSvc);
   aircraftPage = new PageAircraft(aircraftProv, locSvc, settings);
+  aviationPage = new PageAviation(avwxProv, locSvc);
   satsPage = new PageSatellites(tleProv, locSvc, timeSvc, settings);
   solarPage = new PageSolarSystem(timeSvc, locSvc, settings);
   starPage = new PageStarMap(timeSvc, locSvc);
@@ -191,6 +199,7 @@ void setup() {
   app.addPage(agendaPage);
   app.addPage(launchesPage);
   app.addPage(aircraftPage);
+  app.addPage(aviationPage);
   app.addPage(satsPage);
   app.addPage(spaceWxPage);
   app.addPage(solarPage);

@@ -74,6 +74,23 @@ momentum. Pick up later. (Bugs/blocking work go in commits/tasks, not here.)
 - Aurora visibility estimate from Kp + observer latitude.
 - Kp trigger currently only badges Space Wx; optional banner/auto-switch (m7 polish).
 
+## Aviation weather tab  (Phase 1 METAR/TAF shipped)
+Goal: a real "flight weather brief", all from the keyless NOAA Aviation Weather
+Center API (aviationweather.gov/api/data/...) + rucsoundings.
+- Phase 1 (done): nearby METARs via bbox, decoded card (wind/vis/ceiling/temp/
+  dewpoint/altimeter/flight category) + raw METAR + raw TAF, tap to step stations.
+- Decoded TAF (forecast periods, not just raw); home-field pin / favourite.
+- Skew-T / atmospheric SOUNDING (rucsoundings RAOB/RAP): temp+dewpoint vs altitude,
+  lapse rate, inversion height, lifted index, wind barbs, convective/soaring index.
+- Winds & temps aloft (FB) -> FREEZING LEVEL (interp temp=0) + wind/temp by altitude.
+- AIRMET/SIGMET + G-AIRMET hazards (icing, turbulence, IFR, mtn obscuration, FZLVL)
+  near the observer; PIREPs (turbulence/icing/cloud tops); CWAs.
+- Pressure: SLP + rising/falling trend from the METAR (synoptic fronts/highs-lows are
+  graphical WPC products -> out of scope on this screen).
+- Director: badge/notice on a new METAR or a SPECI (off-cycle special report), and
+  on a new sounding / hazard for the home field (spec §7-style trigger).
+- Flight-category color is in the decoded card; add a nearby-field category strip.
+
 ## Future tab ideas (in SPEC §14)
 - Moon/Sun detail + EVENTS: moonrise/set + transit; and special events not yet
   covered anywhere — lunar/solar eclipses, blood moon (total lunar), supermoon,
