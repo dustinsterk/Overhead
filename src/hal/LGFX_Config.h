@@ -160,7 +160,8 @@ public:
       cfg.x_max          = 3900;
       cfg.y_min          = 200;
       cfg.y_max          = 3700;
-      cfg.pin_int        = PIN_TOUCH_IRQ;
+      cfg.pin_int        = -1;       // poll pressure (do NOT gate on IRQ — if the
+                                     // IRQ doesn't fire, getTouch() never returns true)
       cfg.bus_shared     = false;
       cfg.offset_rotation = 0;
       cfg.spi_host       = SPI3_HOST; // VSPI — separate from the display bus

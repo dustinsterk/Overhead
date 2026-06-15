@@ -69,6 +69,20 @@ void App::tick(uint32_t nowMs) {
   // (delivered to the active page). Hold/pin + the Director arrive later.
   int16_t tx, ty;
   bool touched = _touch.read(_display, tx, ty);
+
+  // Raw-touch probe: prints the XPT2046's raw reading regardless of threshold/
+  // calibration, so we can tell a dead bus from a threshold/IRQ issue.
+  {
+    static uint32_t lastTr = 0;
+    if (nowMs - lastTr > 800) {
+      lastTr = nowMs;
+      int16_t rx = -1, ry = -1;
+      uint_fast8_t n = _display.gfx().getTouchRaw(&rx, &ry);
+      Serial.printf("[touchraw] n=%u rx=%d ry=%d mapped=%d (%d,%d)\n",
+                    (unsigned)n, rx, ry, (int)touched, tx, ty);
+    }
+  }
+
   if (touched) {
     if (!_wasTouched) {
       _pressX = tx; _pressY = ty; _pressStartMs = nowMs;
