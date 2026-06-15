@@ -40,6 +40,7 @@
 #include "pages/PageSolarSystem.h"
 #include "pages/PageSpaceWx.h"
 #include "pages/PageAgenda.h"
+#include "pages/PageStarMap.h"
 #if ASTRO_SELFTEST
 #include "astro/SelfTest.h"
 #endif
@@ -74,6 +75,7 @@ static PageLaunches*   launchesPage = nullptr;
 static PageAircraft*   aircraftPage = nullptr;
 static PageSatellites* satsPage = nullptr;
 static PageSolarSystem* solarPage = nullptr;
+static PageStarMap*    starPage = nullptr;
 static PageSpaceWx*    spaceWxPage = nullptr;
 static PageHealth*     healthPage = nullptr;
 
@@ -180,6 +182,7 @@ void setup() {
   aircraftPage = new PageAircraft(aircraftProv, locSvc, settings);
   satsPage = new PageSatellites(tleProv, locSvc, timeSvc, settings);
   solarPage = new PageSolarSystem(timeSvc, locSvc, settings);
+  starPage = new PageStarMap(timeSvc, locSvc);
   spaceWxPage = new PageSpaceWx(spaceWxProv, timeSvc, locSvc);
   healthPage = new PageHealth(touch, timeSvc, locSvc, gHostname,
                               tleProv, launchProv, aircraftProv, spaceWxProv, weatherProv);
@@ -191,6 +194,7 @@ void setup() {
   app.addPage(satsPage);
   app.addPage(spaceWxPage);
   app.addPage(solarPage);
+  app.addPage(starPage);
   app.addPage(healthPage);
   app.setInactivityMs((uint32_t)settings.getInt("inactivitySec", 90) * 1000UL);
   app.begin();

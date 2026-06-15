@@ -396,3 +396,10 @@ meteor showers; Starlink train passes. iOS port (§14.1): the layered design mak
 renderer/UI are platform-specific (SwiftUI + MapKit). Out of scope: internet radio,
 DX-cluster telnet, comet/asteroid ephemeris, live solar imagery, "visible during
 launch" filter.
+
+**Sun & Moon detail + events (candidate):** moonrise/set + transit; sunrise/set +
+twilight phases + golden hour; and special events — **lunar/solar eclipses, blood
+moon (total lunar), supermoon**, equinox/solstice. A small static eclipse/event
+table (like the meteor-shower table) is enough — no live compute — surfaced in the
+Agenda and a Sun/Moon detail tab, with the Director flagging an imminent eclipse.
+(Moon phase + % illumination is already covered by the Solar System tab.)

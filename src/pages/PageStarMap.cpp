@@ -1,0 +1,103 @@
+#include "PageStarMap.h"
+#include "../core/App.h"
+#include "../core/Theme.h"
+#include "../hal/Display.h"
+#include "../services/TimeService.h"
+#include "../services/LocationService.h"
+#include "../assets/StarCatalog.h"
+#include "../astro/Time.h"
+#include "../astro/Coords.h"
+#include <math.h>
+#include <string.h>
+
+// Project a star to screen (azimuthal: zenith centre, horizon edge). Returns
+// false if below the horizon.
+static bool project(const Star& s, double jd, double latRad, double lst,
+                    int cx, int cy, int R, int& sx, int& sy, float& alt) {
+  astro::Equatorial eq{ s.raHours * 15.0 * astro::DEG2RAD, s.decDeg * astro::DEG2RAD };
+  astro::Horizontal h = astro::equatorialToHorizontal(eq, latRad, lst);
+  alt = h.altRad * astro::RAD2DEG;
+  if (alt <= 0) return false;
+  double rr = R * (90.0 - alt) / 90.0;
+  sx = cx + (int)round(rr * sin(h.azRad));
+  sy = cy - (int)round(rr * cos(h.azRad));
+  return true;
+}
+
+void PageStarMap::onTouch(App& app, int x, int y) {
+  if (x <= 80 && y >= app.contentH() - 20) {       // bottom-left badge: mag limit
+    _magLimit = (_magLimit >= 4.0f) ? 2.0f : _magLimit + 1.0f;
+    _dirty = true; return;
+  }
+  int third = app.contentW() / 3;
+  if (x >= third && x <= 2 * third) { _labels = !_labels; _dirty = true; }
+}
+
+void PageStarMap::tick(App& app, uint32_t nowMs) {
+  if (!_dirty && nowMs - _lastDraw < 30000) return; // sky rotates slowly
+  _dirty = false; _lastDraw = nowMs;
+  draw(app);
+}
+
+void PageStarMap::draw(App& app) {
+  auto& g = app.display().gfx();
+  const int cw = app.contentW(), cy0 = app.contentY(), ch = app.contentH();
+  g.fillRect(0, cy0, cw, ch, gTheme.bg);
+
+  if (!_time.synced() || !_loc.active().valid) {
+    g.setTextDatum(textdatum_t::middle_center);
+    g.setTextColor(gTheme.dim, gTheme.bg);
+    g.drawString(_time.synced() ? "no location" : "waiting for time sync...", cw / 2, cy0 + ch / 2);
+    return;
+  }
+
+  int R = min(cw, ch) / 2 - 8;
+  int cx = cw / 2, cy = cy0 + ch / 2;
+  double jd = _time.julianDate();
+  double latRad = _loc.active().lat * astro::DEG2RAD;
+  double lst = astro::lstRad(jd, _loc.active().lon);
+
+  // Horizon circle + cardinal marks.
+  g.drawCircle(cx, cy, R, gTheme.grid);
+  g.setTextColor(gTheme.dim, gTheme.bg);
+  g.setTextDatum(textdatum_t::middle_center);
+  g.drawString("N", cx, cy - R - 5); g.drawString("S", cx, cy + R + 5);
+  g.drawString("E", cx + R + 5, cy); g.drawString("W", cx - R - 5, cy);
+
+  // Constellation lines (both endpoints above horizon).
+  for (int i = 0; i < kStarLineCount; ++i) {
+    const Star *a = nullptr, *b = nullptr;
+    for (int k = 0; k < kStarCount; ++k) {
+      if (!strcmp(kStars[k].name, kStarLines[i].a)) a = &kStars[k];
+      if (!strcmp(kStars[k].name, kStarLines[i].b)) b = &kStars[k];
+    }
+    if (!a || !b) continue;
+    int ax, ay, bx, by; float al, bl;
+    if (project(*a, jd, latRad, lst, cx, cy, R, ax, ay, al) &&
+        project(*b, jd, latRad, lst, cx, cy, R, bx, by, bl))
+      g.drawLine(ax, ay, bx, by, gTheme.grid);
+  }
+
+  // Stars (brightest first so labels favour them).
+  for (int k = 0; k < kStarCount; ++k) {
+    const Star& s = kStars[k];
+    if (s.mag > _magLimit) continue;
+    int sx, sy; float alt;
+    if (!project(s, jd, latRad, lst, cx, cy, R, sx, sy, alt)) continue;
+    int r = s.mag < 0.5f ? 3 : s.mag < 1.5f ? 2 : 1;
+    g.fillCircle(sx, sy, r, gTheme.fg);
+    if (_labels && s.mag <= 1.6f) {
+      g.setTextDatum(textdatum_t::bottom_left);
+      g.setTextColor(gTheme.dim, gTheme.bg);
+      g.drawString(s.name, sx + 4, sy - 1);
+    }
+  }
+
+  // Badge: magnitude limit.
+  int by = cy0 + ch - 16;
+  g.fillRect(4, by, 78, 14, gTheme.grid);
+  g.setTextDatum(textdatum_t::middle_left);
+  g.setTextColor(gTheme.fg, gTheme.grid);
+  g.setTextSize(1);
+  g.drawString(String("mag<=") + String(_magLimit, 0) + (_labels ? " +lbl" : ""), 8, by + 7);
+}

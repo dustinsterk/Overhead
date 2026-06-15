@@ -75,6 +75,15 @@ momentum. Pick up later. (Bugs/blocking work go in commits/tasks, not here.)
 - Kp trigger currently only badges Space Wx; optional banner/auto-switch (m7 polish).
 
 ## Future tab ideas (in SPEC §14)
+- Moon/Sun detail + EVENTS: moonrise/set + transit; and special events not yet
+  covered anywhere — lunar/solar eclipses, blood moon (total lunar), supermoon,
+  equinox/solstice. Pragmatic: a small static table of upcoming eclipse/supermoon
+  dates (like the meteor-shower table) surfaced in Agenda + a Sun/Moon tab, with
+  the Director flagging an imminent eclipse. (Moon PHASE + illumination already
+  done: Solar System tab + astro::SolarSystem + Agenda moon-up shading.)
+- Sun/Moon rise/set + transit (peak/culmination) as DIRECTOR inputs: golden-hour
+  cue at sunset, moonrise/moonset notices, sun/moon transit ("peak") markers on the
+  Agenda Sky Window. Compute from astro::Sun / astro::SolarSystem altitude crossings.
 - Aviation weather: METAR/TAF + atmospheric soundings (Skew-T, lapse rate,
   inversion, lifted index) for glider/soaring analysis. NOAA AWC (no key) +
   RAOB/RAP soundings. Director triggers: new METAR/TAF, SPECI, new sounding.
@@ -92,5 +101,11 @@ momentum. Pick up later. (Bugs/blocking work go in commits/tasks, not here.)
   carousel tab, once the overlay chrome exists (spec §4.1).
 - Per-provider "next poll" column + last HTTP status code (need providers to expose them).
 - Confirm dialog before Reboot; toast after Refresh; on-device settings editing.
+
+## M9 — Star Map
+- Expand the catalog (PC-generated to mag ~5.5, ~1000-1600 stars) bundled in
+  LittleFS; current is ~40 brightest in flash. Measure render time on no-PSRAM.
+- More constellation lines + labels; planets/Moon/Sun plotted on the chart.
+- Pan/zoom (+/- buttons), magnitude limit persisted; gridlines / ecliptic.
 
 <!-- new milestones append below as they land -->
