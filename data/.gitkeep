@@ -1,0 +1,4 @@
+# LittleFS image source (spec §4 data/).
+# Bundled assets go here and are flashed with `pio run -t uploadfs`:
+#   star catalog, meteor-shower table, fonts, region map, and the OurAirports
+#   airports.csv / airport-frequencies.csv subset. Empty for milestone 0.

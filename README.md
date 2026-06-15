@@ -1,0 +1,133 @@
+# Overhead
+
+A from-scratch, modular tabbed "what's overhead / around me" dashboard for
+ESP32 touch displays — agenda, rocket launches, aircraft (ADS-B), satellites,
+space weather, solar system, and a star map, with an Intelligent Focus
+"director" that auto-surfaces the most relevant tab. See the project spec for
+the full design.
+
+This repo is the **clean-room implementation** — existing CYD projects are
+reference material only, not a fork base.
+
+## Status — Milestone 1 (services + infra) ✅ builds on all 3 boards
+
+Milestone 0 (HAL bring-up) and Milestone 1 (services + infra) are in. The base
+platform is complete: HAL (display/touch), core plumbing (EventBus, Scheduler,
+Theme, minimal App shell), and the service layer — Settings (LittleFS + schema
+versioning), Cache, a threaded **NetClient** (HTTP on a core-0 FreeRTOS task,
+callbacks marshalled to the UI thread), TimeService (NTP + sync gating + tz),
+LocationService (IP geolocation default), WiFiManager provisioning, and a
+**WebPortal** (ESPAsyncWebServer settings page + JSON API + **ElegantOTA**).
+
+A **Diagnostics page** proves the full pipeline: boot → WiFi → NTP → IP
+geolocation (background fetch on the NetTask) → EventBus → screen redraw, with
+the settings/OTA UI live at `http://overhead-XXXX.local/`.
+
+Flash headroom note: with the full infra the 4 MB boards sit at ~1.30 MB of the
+1.5 MB app slot (~82%). The heavy tabs (SGP4 + bundled catalogs) will need
+watching there; the CrowPanel's 4 MB app slot has plenty of room.
+
+Still **compile-verified only — not yet flashed to hardware.**
+
+## Targets (multi-board by design — spec §3.1)
+
+One project, one renderer (**LovyanGFX**), one `[env:…]` per board. Shared code
+is variant-agnostic and reads pins + capability flags from `src/hal/Board.h`,
+selected by the env's `-D BOARD_*` flag.
+
+| Env | Board | MCU | Panel | Touch | PSRAM | RTC |
+|---|---|---|---|---|---|---|
+| `cyd28_ili9341` *(default)* | 2.8" Cheap Yellow Display (ESP32-2432S028R) | ESP32 | ILI9341 240×320 SPI | XPT2046 resistive (own VSPI bus) | none | no |
+| `cyd4_st7796` | 4" Cheap Yellow Display (ESP32-32E) | ESP32 | ST7796S 480×320 SPI | XPT2046 resistive (shared bus) | none | no |
+| `crowpanel_s3_5hmi` | Elecrow CrowPanel Advance 5.0-HMI | ESP32-S3 | ST7262 800×480 parallel-RGB | GT911 capacitive | 8 MB | PCF8563 |
+
+Pin sources: 2.8" CYD → `../BladeAir/cyd.md`; 4" CYD → [lcdwiki](https://www.lcdwiki.com/4.0inch_ESP32-32E_Display);
+CrowPanel → `../cyd-radio/crowpanel-5in.md` (silkscreen + factory source —
+authoritative over the Elecrow wiki, which lists a different/wrong pinout).
+
+## Build / flash
+
+```sh
+# 2.8" CYD (default env — the board on hand)
+pio run -e cyd28_ili9341 -t upload
+pio device monitor                      # 115200
+
+# 4" CYD
+pio run -e cyd4_st7796 -t upload
+
+# CrowPanel Advance 5.0-HMI
+pio run -e crowpanel_s3_5hmi -t upload
+```
+
+> The CrowPanel env uses the **pioarduino** platform (arduino-esp32 3.x) because
+> the S3 parallel-RGB `esp_lcd` driver LovyanGFX needs isn't exposed by the
+> classic 2.0.x platform. If a build fails with `No module named 'esptool'`,
+> install it into the PlatformIO venv: `…/.platformio/penv/Scripts/python -m pip
+> install esptool` (a pioarduino dependency-bootstrap glitch, not a code issue).
+
+On first boot the bring-up prints, over serial and on screen:
+board name, panel resolution, **PSRAM size**, **free heap**, and **largest free
+block**, then echoes live touch coordinates.
+
+## Layout (spec §4)
+
+```
+platformio.ini          envs per board; build-flag-selected HAL
+partitions.csv          4" CYD: dual-OTA 1.5MB + ~0.94MB LittleFS
+partitions_16mb.csv     CrowPanel: dual-OTA 4MB + ~7.9MB LittleFS
+include/config.h        build-time feature flags only (on the auto include path)
+data/                   LittleFS image source (catalogs, fonts) — uploadfs
+src/
+  main.cpp              boot orchestration (cold-start sequence, spec §13)
+  hal/
+    Board.h             pins + capability flags per variant
+    LGFX_Config.h       LovyanGFX panel/bus/touch wiring per variant
+    Display.{h,cpp}     panel init, rotation, backlight, heap helpers
+    Touch.{h,cpp}       XPT2046 cal (persisted) / GT911 (no cal)
+    Rtc.{h,cpp}         optional RTC stub (per CAP_HAS_RTC; driver = m2)
+  core/
+    Ids.h               ProviderId
+    EventBus.h          provider -> page/director pub/sub
+    Scheduler.h         cooperative interval runner
+    Theme.h             runtime palette (gTheme) every widget reads
+    Page.h              page interface
+    App.{h,cpp}         minimal shell: status strip + active page routing
+    Canvas.h            abstract draw seam (filled in with the widget toolkit)
+  services/
+    Settings.{h,cpp}    LittleFS JSON store + schema versioning
+    Cache.{h,cpp}       blob cache (body + fetchedAt + status)
+    NetClient.{h,cpp}   queued non-blocking HTTP (core-0 NetTask)
+    TimeService.{h,cpp} NTP + sync gate + tz offset
+    LocationService.{h,cpp}  IP-geoloc default + presets
+    Provisioning.{h,cpp}     WiFiManager captive portal
+    WebPortal.{h,cpp}        async settings page + JSON API + ElegantOTA
+  pages/
+    PageDiag.{h,cpp}    milestone-1 pipeline-proof page
+```
+
+Pages currently draw via `Display::gfx()` + `gTheme`; the `core/Canvas`
+renderer-abstraction + widget toolkit land with the first real tabs (m3+), so
+the carousel/quick-jump/corner-glyph chrome (spec §4.1) is not built yet.
+
+## ⚠️ Needs on-hardware verification
+
+This bring-up was written from datasheets/reference docs and **has not been
+compiled or flashed here**. Confirm on real hardware:
+
+- **4" CYD** — if colours look inverted, set `-D CYD_INVERT_DISPLAY=1`. If the
+  panel stays black, the ST7796 may want a different LovyanGFX panel variant.
+- **CrowPanel** — the RGB **porch timings** in `Board.h` are generic 800×480
+  values; if the image tears/rolls, reconcile against the Elecrow factory
+  `esp_lcd` config. Also confirm the **I²C coexistence** of Wire (expander,
+  I2C_NUM_0) and LovyanGFX's GT911 (I2C_NUM_1) on the shared SDA/SCL pins, and
+  that function jumpers are set to MIC&SPK (`00`).
+- **PSRAM** on the 4" CYD: the heap print is ground truth. If it reports PSRAM,
+  flip `CAP_HAS_PSRAM` in `Board.h` and reconsider the rendering options.
+
+## Open decisions (spec §11)
+
+Notably: rendering stack is settled as **LovyanGFX for both boards** (one
+renderer, custom graphics are the app's identity; reversible via `Canvas`).
+The CrowPanel's PSRAM would also permit LVGL, but unifying keeps the design
+clean. Remaining §11 items (ADS-B mode, AMSAT bird list, location/GPS, star
+map in v1, license posture, focus defaults) are still open.
