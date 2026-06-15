@@ -87,4 +87,10 @@ momentum. Pick up later. (Bugs/blocking work go in commits/tasks, not here.)
 - Tap a Sky Window event to jump to its tab pre-focused (spec §6 Agenda).
 - Context title Today/Tonight by time of day; meteor-shower peak markers.
 
+## M11 — System/Health
+- Make Health a corner-glyph MODAL OVERLAY (with Settings + Location) instead of a
+  carousel tab, once the overlay chrome exists (spec §4.1).
+- Per-provider "next poll" column + last HTTP status code (need providers to expose them).
+- Confirm dialog before Reboot; toast after Refresh; on-device settings editing.
+
 <!-- new milestones append below as they land -->

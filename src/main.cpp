@@ -33,7 +33,7 @@
 #include "providers/AircraftProvider.h"
 #include "providers/SpaceWxProvider.h"
 #include "providers/WeatherProvider.h"
-#include "pages/PageDiag.h"
+#include "pages/PageHealth.h"
 #include "pages/PageSatellites.h"
 #include "pages/PageLaunches.h"
 #include "pages/PageAircraft.h"
@@ -75,7 +75,7 @@ static PageAircraft*   aircraftPage = nullptr;
 static PageSatellites* satsPage = nullptr;
 static PageSolarSystem* solarPage = nullptr;
 static PageSpaceWx*    spaceWxPage = nullptr;
-static PageDiag*       diag = nullptr;
+static PageHealth*     healthPage = nullptr;
 
 static String chipSuffix() {
   uint64_t mac = ESP.getEfuseMac();
@@ -181,7 +181,8 @@ void setup() {
   satsPage = new PageSatellites(tleProv, locSvc, timeSvc, settings);
   solarPage = new PageSolarSystem(timeSvc, locSvc, settings);
   spaceWxPage = new PageSpaceWx(spaceWxProv, timeSvc, locSvc);
-  diag = new PageDiag(timeSvc, locSvc, gHostname);
+  healthPage = new PageHealth(touch, timeSvc, locSvc, gHostname,
+                              tleProv, launchProv, aircraftProv, spaceWxProv, weatherProv);
   // Carousel, ground->space order (spec §4.1): Agenda (home), Launches, Aircraft,
   // Satellites, Space Wx, Solar System, then Diagnostics.
   app.addPage(agendaPage);
@@ -190,7 +191,7 @@ void setup() {
   app.addPage(satsPage);
   app.addPage(spaceWxPage);
   app.addPage(solarPage);
-  app.addPage(diag);
+  app.addPage(healthPage);
   app.setInactivityMs((uint32_t)settings.getInt("inactivitySec", 90) * 1000UL);
   app.begin();
 
