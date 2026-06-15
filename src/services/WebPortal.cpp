@@ -8,18 +8,39 @@ static const char kIndexHtml[] PROGMEM = R"HTML(
 <!doctype html><html><head><meta charset=utf-8>
 <meta name=viewport content="width=device-width,initial-scale=1">
 <title>Overhead</title>
-<style>body{font:15px system-ui;margin:1.2rem;max-width:40rem;background:#0b1018;color:#e6e8f0}
-a{color:#50aaff}code{background:#1a2030;padding:.1rem .3rem;border-radius:3px}
-pre{background:#11161f;padding:.6rem;border-radius:6px;overflow:auto}</style></head>
-<body><h2>Overhead</h2>
-<p><a href=/update>Firmware update (OTA)</a></p>
-<h3>Status</h3><pre id=s>loading…</pre>
-<h3>Settings</h3><pre id=cfg>loading…</pre>
-<p>Edit settings via <code>POST /api/settings</code> with a JSON body of the keys to change.</p>
+<style>body{font:15px system-ui;margin:1rem;max-width:40rem;background:#0b1018;color:#e6e8f0}
+a{color:#50aaff}h3{margin:1.1rem 0 .3rem;border-bottom:1px solid #233;color:#9bf}
+label{display:flex;justify-content:space-between;align-items:center;gap:1rem;padding:.18rem 0}
+input,select{background:#11161f;color:#e6e8f0;border:1px solid #334;border-radius:4px;padding:.25rem;min-width:11rem}
+button{background:#2563c0;color:#fff;border:0;border-radius:6px;padding:.5rem 1rem;font-size:15px;margin-top:.6rem}
+#msg{color:#5d2}</style></head>
+<body><h2>Overhead settings</h2>
+<p><a href=/update>Firmware update (OTA)</a> · <a href=/api/status>status JSON</a></p>
+<form id=f></form><button onclick=save()>Save</button> <span id=msg></span>
 <script>
-const j=(u,o)=>fetch(u,o).then(r=>r.json());
-j('/api/status').then(d=>s.textContent=JSON.stringify(d,null,2));
-j('/api/settings').then(d=>cfg.textContent=JSON.stringify(d,null,2));
+const F=[
+ ['Location'],['locMode','mode','sel',['auto','preset']],['locName','name','t'],['locLat','lat','n'],['locLon','lon','n'],
+ ['Appearance'],['themeMode','theme','sel',['auto','day','night']],['nightPalette','night palette','sel',['dark','red']],
+ ['nightBacklight','night backlight','n'],['themeNightAlt','theme night sun-alt','n'],['dimAfterSec','dim after (s)','n'],['dimLevel','dim level','n'],
+ ['Focus'],['focusEnabled','enabled','c'],['ambientDay','ambient day tab','t'],['ambientNight','ambient night tab','t'],
+ ['passLeadMin','pass lead (min)','n'],['launchLeadMin','launch lead (min)','n'],['satMinEl','min pass el','n'],
+ ['nightAmbientAlt','night ambient sun-alt','n'],['inactivitySec','inactivity->auto (s)','n'],
+ ['Aircraft'],['adsbMode','mode','sel',['cloud','local']],['adsbHost','local host','t'],['adsbRadiusNm','radius (nm)','n'],
+ ['Refresh'],['refreshLaunchMin','launches (min)','n'],['refreshTleHour','TLE (h)','n'],['refreshSpaceWxMin','space wx (min)','n'],['refreshWeatherMin','weather (min)','n'],
+ ['Web/OTA'],['otaUser','user','t'],['otaPass','password','t'],
+];
+let cur={};
+fetch('/api/settings').then(r=>r.json()).then(d=>{cur=d;build()});
+function build(){let h='';for(const r of F){if(r.length==1){h+=`<h3>${r[0]}</h3>`;continue;}
+ const[k,l,t,o]=r,v=cur[k];
+ if(t=='c')h+=`<label>${l}<input type=checkbox id=_${k} ${v?'checked':''}></label>`;
+ else if(t=='sel')h+=`<label>${l}<select id=_${k}>${o.map(x=>`<option ${x==v?'selected':''}>${x}</option>`).join('')}</select></label>`;
+ else h+=`<label>${l}<input id=_${k} type=${t=='n'?'number':'text'} step=any value="${v??''}"></label>`;}
+ f.innerHTML=h;}
+function save(){const o={};for(const r of F){if(r.length==1)continue;const[k,l,t]=r,e=document.getElementById('_'+k);
+ o[k]=t=='c'?e.checked:t=='n'?Number(e.value):e.value;}
+ fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(o)})
+ .then(r=>r.json()).then(_=>{msg.textContent='saved (some settings apply on reboot)';});}
 </script></body></html>
 )HTML";
 

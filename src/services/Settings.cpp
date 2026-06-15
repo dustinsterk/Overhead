@@ -66,6 +66,8 @@ void Settings::seedDefaults() {
   _doc["passLeadMin"]   = 5;          // minutes before AOS to seize focus
   _doc["launchLeadMin"] = 10;         // minutes before T-0 to seize focus
   _doc["inactivitySec"] = 90;         // MANUAL -> AUTO after this idle time
+  _doc["dimAfterSec"]   = 120;        // backlight dims after this idle time (spec §13)
+  _doc["dimLevel"]      = 20;         // dimmed backlight (0..255)
 }
 
 void Settings::migrate() {

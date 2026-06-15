@@ -4,14 +4,24 @@
 #include "../services/TimeService.h"
 #include "../services/LocationService.h"
 #include "../services/Settings.h"
+#include "../core/App.h"
 #include "../astro/Sun.h"
 
-void ThemeController::begin(TimeService* time, LocationService* loc, Display* display, Settings* settings) {
-  _time = time; _loc = loc; _display = display; _settings = settings;
+void ThemeController::begin(TimeService* time, LocationService* loc, Display* display, Settings* settings, App* app) {
+  _time = time; _loc = loc; _display = display; _settings = settings; _app = app;
   apply(false);                 // start in day until the first evaluation
 }
 
 void ThemeController::tick(uint32_t nowMs) {
+  // Inactivity backlight dimming (cheap, every call) — wake on touch (spec §13).
+  if (_app && _display) {
+    uint32_t dimAfter = (uint32_t)_settings->getInt("dimAfterSec", 120) * 1000UL;
+    int dimLevel = (int)_settings->getInt("dimLevel", 20);
+    uint8_t target = (_app->idleMs(nowMs) > dimAfter)
+                   ? (uint8_t)constrain(dimLevel, 5, (int)_baseBl) : _baseBl;
+    if (target != _curBl) { _curBl = target; _display->setBacklight(target); }
+  }
+
   if (_applied && nowMs - _lastMs < 15000) return;
   _lastMs = nowMs;
 
@@ -37,11 +47,13 @@ void ThemeController::apply(bool night) {
 
   if (!night) {
     gTheme = themes::dark;
-    if (_display) _display->setBacklight(255);
+    _baseBl = 255;
   } else {
     bool red = _settings && _settings->getString("nightPalette", "dark") == "red";
     gTheme = red ? themes::redNight : themes::dark;
     int bl = _settings ? (int)_settings->getInt("nightBacklight", 90) : 90;
-    if (_display) _display->setBacklight((uint8_t)constrain(bl, 10, 255));
+    _baseBl = (uint8_t)constrain(bl, 10, 255);
   }
+  _curBl = _baseBl;
+  if (_display) _display->setBacklight(_baseBl);   // dimmer adjusts from here when idle
 }

@@ -108,4 +108,11 @@ momentum. Pick up later. (Bugs/blocking work go in commits/tasks, not here.)
 - More constellation lines + labels; planets/Moon/Sun plotted on the chart.
 - Pan/zoom (+/- buttons), magnitude limit persisted; gridlines / ecliptic.
 
+## M12 — Polish
+- WebPortal settings form covers §7.10; add watchlist editing (array) + presets
+  add/edit with Open-Meteo geocoding (city -> lat/lon), per spec §6 Location.
+- Auth on the settings page + API (ElegantOTA auth is set; settings POST is open).
+- Settings schema versioning migrate() only fills a few keys — extend as schema grows.
+- Final theming: tune day/red palettes; per-widget contrast pass on real panels.
+
 <!-- new milestones append below as they land -->

@@ -9,7 +9,23 @@ the full design.
 This repo is the **clean-room implementation** — existing CYD projects are
 reference material only, not a fork base.
 
-## Status — Milestone 3 (Satellites tab) ✅ builds on all 3 boards
+## Status — all milestones (0–12) implemented ✅ builds on all 3 boards
+
+Every spec milestone is in and the firmware compiles for `cyd28_ili9341`,
+`cyd4_st7796`, and `crowpanel_s3_5hmi`. Content tabs (carousel, ground→space):
+**Agenda · Launches · Aircraft · Satellites · Space Wx · Solar System · Star Map ·
+Health**, with the **Director** (ambient day/night + pass/launch interrupts +
+AUTO/MANUAL/pin lifecycle + tab badges) and **ThemeController** (day/night palette,
+red dark-adapt, backlight dim + inactivity dimming) on top. Services: NTP/RTC,
+IP-geolocation, threaded NetClient, Cache, Settings (+ a web settings form),
+WiFiManager provisioning, ESPAsyncWebServer + ElegantOTA.
+
+Remaining work is **polish** (tracked in `BACKLOG.md`) and **on-hardware
+verification** beyond the 2.8" CYD (the 4"/CrowPanel panels, and runtime behaviour
+of the data tabs). Astronomy is permissive (Schlyter Sun/Moon/planets + Hopperpop
+SGP4); GPLv3 Ephem stays behind `ENABLE_EPHEM`.
+
+## Earlier milestone notes
 
 First real content tab. `TleProvider` fetches the Celestrak `amateur` + `stations`
 GP groups via the NetTask, caches them in LittleFS (offline-friendly), parses to a

@@ -200,7 +200,7 @@ void setup() {
   app.begin();
 
   // Intelligent Focus + day/night theming (spec §7).
-  themeCtl.begin(&timeSvc, &locSvc, &display, &settings);
+  themeCtl.begin(&timeSvc, &locSvc, &display, &settings, &app);
   director.begin(&app, &settings, &timeSvc, &locSvc, &tleProv, &launchProv, satsPage);
   director.setSpaceWx(&spaceWxProv);
 

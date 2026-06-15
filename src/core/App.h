@@ -34,6 +34,7 @@ public:
   bool autoFocus(int index);            // switch only if AUTO & unpinned; true if switched
   void setBadge(int index, bool on);
   void setInactivityMs(uint32_t ms) { _inactivityMs = ms; }
+  uint32_t idleMs(uint32_t now) const { return now - _lastInteractMs; }
 
   Display& display() { return _display; }
 
