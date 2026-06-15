@@ -74,11 +74,13 @@ void App::tick(uint32_t nowMs) {
       _pressX = tx; _pressY = ty; _pressStartMs = nowMs;
       if (ty >= contentY()) { _mode = Mode::Manual; _statusDirty = true; }  // content touch -> MANUAL
     }
-    _lastX = tx; _lastY = ty; _lastInteractMs = nowMs;
-  } else if (_wasTouched) {                 // release edge — classify the gesture here
+    _lastX = tx; _lastY = ty; _lastInteractMs = nowMs; _lastTouchMs = nowMs;
+    _wasTouched = true;
+  } else if (_wasTouched && nowMs - _lastTouchMs >= 60) {  // debounced release (resistive flicker)
     int dx = _lastX - _pressX, dy = _lastY - _pressY;
-    uint32_t held = nowMs - _pressStartMs;
+    uint32_t held = _lastTouchMs - _pressStartMs;
     bool moved = abs(dx) > kTapMax || abs(dy) > kTapMax;
+    Serial.printf("[touch] rel dx=%d dy=%d held=%lums press(%d,%d)\n", dx, dy, (unsigned long)held, _pressX, _pressY);
     if (abs(dx) >= kSwipeMin && abs(dx) > abs(dy)) {       // horizontal swipe -> page nav
       if (dx < 0) nextPage(); else prevPage();
     } else if (!moved) {
@@ -91,8 +93,8 @@ void App::tick(uint32_t nowMs) {
         _pages[_active]->onTouch(*this, _pressX, _pressY - contentY());
       }
     }
+    _wasTouched = false;
   }
-  _wasTouched = touched;
 
   // Inactivity: MANUAL -> AUTO (unless pinned) (spec §7.4).
   if (_mode == Mode::Manual && !_pinned && nowMs - _lastInteractMs > _inactivityMs) {

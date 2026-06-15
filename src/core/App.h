@@ -68,9 +68,10 @@ private:
   bool     _pinToggled = false;        // pin toggled during the current press
   uint32_t _lastInteractMs = 0;
   uint32_t _pressStartMs = 0;
+  uint32_t _lastTouchMs = 0;     // for release debounce (resistive touch flickers)
   uint32_t _inactivityMs = 90000;
 
   static constexpr int kStatusH   = 20;
-  static constexpr int kSwipeMin  = 40;   // px to count as a swipe
+  static constexpr int kSwipeMin  = 28;   // px to count as a swipe
   static constexpr int kTapMax    = 18;   // px movement still a tap
 };
