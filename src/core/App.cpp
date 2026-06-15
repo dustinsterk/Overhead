@@ -71,25 +71,23 @@ void App::tick(uint32_t nowMs) {
   bool touched = _touch.read(_display, tx, ty);
   if (touched) {
     if (!_wasTouched) {
-      _pressX = tx; _pressY = ty; _pressStartMs = nowMs; _pinToggled = false;
+      _pressX = tx; _pressY = ty; _pressStartMs = nowMs;
       if (ty >= contentY()) { _mode = Mode::Manual; _statusDirty = true; }  // content touch -> MANUAL
     }
     _lastX = tx; _lastY = ty; _lastInteractMs = nowMs;
-    // Long-press on content (no movement) toggles pin (spec §7.4).
-    if (!_pinToggled && _pressY >= contentY() && nowMs - _pressStartMs > 800 &&
-        abs(_lastX - _pressX) <= kTapMax && abs(_lastY - _pressY) <= kTapMax) {
-      _pinned = !_pinned; _pinToggled = true; _statusDirty = true;
-    }
-  } else if (_wasTouched) {                 // release edge
+  } else if (_wasTouched) {                 // release edge — classify the gesture here
     int dx = _lastX - _pressX, dy = _lastY - _pressY;
-    if (_pinToggled) {                       // consumed by the pin long-press
-    } else if (abs(dx) >= kSwipeMin && abs(dx) > abs(dy)) {
+    uint32_t held = nowMs - _pressStartMs;
+    bool moved = abs(dx) > kTapMax || abs(dy) > kTapMax;
+    if (abs(dx) >= kSwipeMin && abs(dx) > abs(dy)) {       // horizontal swipe -> page nav
       if (dx < 0) nextPage(); else prevPage();
-    } else if (abs(dx) <= kTapMax && abs(dy) <= kTapMax) {
-      if (_pressY < contentY()) {            // status-strip tap = master AUTO/MANUAL toggle
+    } else if (!moved) {
+      if (_pressY < contentY()) {                          // status-strip tap = master AUTO/MANUAL
         if (_pinned) _pinned = false; else _mode = (_mode == Mode::Auto) ? Mode::Manual : Mode::Auto;
         _statusDirty = true;
-      } else if (_active >= 0) {
+      } else if (held > 700) {                             // long-press (stationary) = pin (spec §7.4)
+        _pinned = !_pinned; _statusDirty = true;
+      } else if (_active >= 0) {                            // quick tap
         _pages[_active]->onTouch(*this, _pressX, _pressY - contentY());
       }
     }

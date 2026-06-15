@@ -49,7 +49,7 @@ int Director::ambientTarget() {
     night = alt < (double)_s->getInt("nightAmbientAlt", -12);
   }
   String t = night ? _s->getString("ambientNight", "Solar System")
-                   : _s->getString("ambientDay", "Launches");
+                   : _s->getString("ambientDay", "Agenda");
   return _app->pageIndexByTitle(t.c_str());
 }
 

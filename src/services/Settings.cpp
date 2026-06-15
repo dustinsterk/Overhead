@@ -79,9 +79,9 @@ void Settings::migrate() {
   if (!_doc["locMode"].is<const char*>()) _doc["locMode"] = "auto";
   if (!_doc["otaUser"].is<const char*>()) _doc["otaUser"] = "admin";
   if (!_doc["otaPass"].is<const char*>()) _doc["otaPass"] = "overhead";
-  // v1 -> v2: the day-ambient default moved from Launches to the new Agenda tab.
-  if (v < 2 && String((const char*)(_doc["ambientDay"] | "")) == "Launches")
-    _doc["ambientDay"] = "Agenda";
+  // -> v3: the day-ambient default is the Agenda home tab (force; the old default
+  // was Launches and the v2 conditional migration didn't take on some units).
+  if (v < 3) _doc["ambientDay"] = "Agenda";
   _doc["settingsVersion"] = kVersion;
   save();
 }
