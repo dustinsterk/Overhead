@@ -1,22 +1,23 @@
-# Custom 4 MB partition table for Overhead (4" CYD, 4 MB flash, no PSRAM).
+# Custom 4 MB partition table for Overhead (2.8"/4" CYD, 4 MB flash, no PSRAM).
 #
-# Dual-OTA 1.5 MB app slots so ElegantOTA browser updates work from day one
-# (spec §3.1), plus ~0.94 MB LittleFS for caches, bundled catalogs (TLEs,
-# airports, star data) and fonts (spec §3.1, §4 data/).
+# Dual-OTA 1.75 MB app slots (ElegantOTA needs two slots, spec §3.1) + ~448 KB
+# LittleFS. Rebalanced up from 1.5 MB app slots once the astro core + tabs pushed
+# flash past ~88%; the regional airport subset (m5) + reduced star catalog (m9) +
+# TLE cache + settings fit in ~448 KB.
 #
 # Layout (ends exactly at 0x400000 = 4 MB):
-#   nvs      0x009000  0x005000   WiFiManager creds + small NVS use
+#   nvs      0x009000  0x005000
 #   otadata  0x00e000  0x002000
-#   app0     0x010000  0x180000   1.5 MB
-#   app1     0x190000  0x180000   1.5 MB
-#   spiffs   0x310000  0x0F0000   ~0.94 MB (caches, catalogs, fonts, settings)
+#   app0     0x010000  0x1C0000   1.75 MB
+#   app1     0x1d0000  0x1C0000   1.75 MB
+#   spiffs   0x390000  0x070000   ~448 KB (caches, catalogs, fonts, settings)
 #
 # NOTE: the data partition must be LABELLED "spiffs" — Arduino's LittleFS.begin()
-# looks for that label by default (the subtype is also spiffs; LittleFS reuses it).
+# looks for that label by default.
 #
 # Name,    Type, SubType, Offset,   Size,     Flags
 nvs,       data, nvs,     0x9000,   0x5000,
 otadata,   data, ota,     0xe000,   0x2000,
-app0,      app,  ota_0,   0x10000,  0x180000,
-app1,      app,  ota_1,   0x190000, 0x180000,
-spiffs,    data, spiffs,  0x310000, 0xF0000,
+app0,      app,  ota_0,   0x10000,  0x1C0000,
+app1,      app,  ota_1,   0x1d0000, 0x1C0000,
+spiffs,    data, spiffs,  0x390000, 0x70000,

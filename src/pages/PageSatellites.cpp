@@ -7,10 +7,13 @@
 #include "../services/LocationService.h"
 #include "../services/TimeService.h"
 #include "../services/Settings.h"
+#include "../assets/Coastline.h"
 #include <math.h>
 #include <time.h>
 
 static constexpr double D2R = 3.14159265358979323846 / 180.0;
+
+int PageSatellites::minEl() const { return (int)_settings.getInt("satMinEl", 10); }
 
 void PageSatellites::onEnter(App& app) { rebuildOrder(); _dirty = true; }
 
@@ -69,7 +72,18 @@ void PageSatellites::reloadSelected() {
 }
 
 void PageSatellites::recomputePass(time_t now) {
-  if (_loaded) _pass = _eng.nextPass(now, 0.0, 60);
+  if (!_loaded) { _pass = astro::SatPass{}; _graphEl.clear(); return; }
+  _pass = _eng.nextPass(now, (double)minEl(), 60);
+  recomputeGraph();
+}
+
+void PageSatellites::recomputeGraph() {
+  _graphEl.clear();
+  if (!_pass.valid || _pass.los <= _pass.aos) return;
+  const int N = 40;
+  long span = (long)_pass.los - (long)_pass.aos;
+  for (int k = 0; k <= N; ++k)
+    _graphEl.push_back((float)_eng.elevationAt(_pass.aos + (time_t)(span * k / N)));
 }
 
 void PageSatellites::recomputeTrack(time_t now) {
@@ -84,11 +98,28 @@ void PageSatellites::recomputeTrack(time_t now) {
 }
 
 void PageSatellites::onTouch(App& app, int x, int y) {
+  if (handleMinElTap(app, x, y)) return;          // small bottom-left badge
   if (_order.empty()) return;
   int third = app.contentW() / 3;
   if (x < third)          selectPos(_orderPos - 1);
   else if (x > 2 * third) selectPos(_orderPos + 1);
-  else { _view = (_view == View::Polar) ? View::Ground : View::Polar; _dirty = true; }
+  else {                                          // centre: cycle Polar->Ground->Graph
+    _view = (_view == View::Polar) ? View::Ground
+          : (_view == View::Ground) ? View::Graph : View::Polar;
+    _dirty = true;
+  }
+}
+
+bool PageSatellites::handleMinElTap(App& app, int x, int yRel) {
+  // Bottom-left badge cycles the min-elevation filter (0/10/20/30/40).
+  if (x > 80 || yRel < app.contentH() - 20) return false;
+  int v = minEl();
+  int next = (v >= 40) ? 0 : v + 10;
+  _settings.set("satMinEl", (long)next);
+  _settings.save();
+  recomputePass(time(nullptr));
+  _dirty = true;
+  return true;
 }
 
 void PageSatellites::tick(App& app, uint32_t nowMs) {
@@ -119,8 +150,20 @@ void PageSatellites::draw(App& app) {
 
   auto& g = app.display().gfx();
   g.fillRect(0, app.contentY(), app.contentW(), app.contentH(), gTheme.bg);
-  if (_view == View::Polar) drawPolarView(app, o);
-  else                      drawGroundView(app, o);
+  if      (_view == View::Polar)  drawPolarView(app, o);
+  else if (_view == View::Ground) drawGroundView(app, o);
+  else                            drawGraphView(app, o);
+  if (_view != View::Graph) drawMinElBadge(app);   // graph shows the threshold line instead
+}
+
+void PageSatellites::drawMinElBadge(App& app) {
+  auto& g = app.display().gfx();
+  int y = app.contentY() + app.contentH() - 16;
+  g.fillRect(4, y, 72, 14, gTheme.grid);
+  g.setTextDatum(textdatum_t::middle_left);
+  g.setTextColor(gTheme.fg, gTheme.grid);
+  g.setTextSize(1);
+  g.drawString(String("minEl ") + minEl(), 8, y + 7);
 }
 
 void PageSatellites::drawInfoColumn(App& app, int ix, int iy, const astro::SatObservation& o) {
@@ -205,6 +248,15 @@ void PageSatellites::drawGroundView(App& app, const astro::SatObservation& o) {
   for (int lat = -60; lat < 90;  lat += 30) g.drawFastHLine(mx, py(lat), mw, gTheme.grid);
   g.drawFastHLine(mx, py(0), mw, gTheme.dim);   // equator
 
+  // Coastline (coarse; see assets/Coastline.h).
+  for (int i = 1; i < kCoastlineCount; ++i) {
+    const CoastPt& a = kCoastline[i - 1];
+    const CoastPt& b = kCoastline[i];
+    if (a.lon == 999 || b.lon == 999) continue;          // pen-up separator
+    if (abs(a.lon - b.lon) > 180) continue;              // seam
+    g.drawLine(px(a.lon), py(a.lat), px(b.lon), py(b.lat), gTheme.dim);
+  }
+
   // Ground track (skip the +/-180 seam).
   for (size_t i = 1; i < _track.size(); ++i) {
     if (fabs(_track[i].lon - _track[i - 1].lon) > 180.0f) continue;
@@ -232,5 +284,63 @@ void PageSatellites::drawGroundView(App& app, const astro::SatObservation& o) {
   g.drawString(b, cw - 4, cy0 + 3);
   g.setTextColor(gTheme.dim, gTheme.bg);
   g.setTextDatum(textdatum_t::top_left);
-  g.drawString("tap centre: polar  |  edges: select", 4, cy0 + 15);
+  g.drawString("centre: next view  |  edges: select", 4, cy0 + 15);
+}
+
+void PageSatellites::drawGraphView(App& app, const astro::SatObservation& o) {
+  auto& g = app.display().gfx();
+  const int cw = app.contentW(), cy0 = app.contentY(), ch = app.contentH();
+  const auto& sat = _tle.sats()[_sel];
+
+  g.setTextDatum(textdatum_t::top_left);
+  g.setTextSize(1);
+  g.setTextColor(gTheme.accent, gTheme.bg);
+  g.drawString(sat.name.substring(0, 16) + " - pass elevation", 4, cy0 + 3);
+
+  if (!_pass.valid || _graphEl.size() < 2) {
+    g.setTextColor(gTheme.dim, gTheme.bg);
+    g.drawString(String("no pass >= ") + minEl() + " deg in window", 4, cy0 + ch / 2);
+    return;
+  }
+
+  // Plot area.
+  const int gx = 30, gy = cy0 + 18, gw = cw - gx - 8, gh = ch - 18 - 22;
+  g.drawRect(gx, gy, gw, gh, gTheme.grid);
+  // Y gridlines at 30/60/90 deg.
+  for (int e = 30; e <= 90; e += 30) {
+    int yy = gy + gh - (int)((float)e / 90.0f * gh);
+    g.drawFastHLine(gx, yy, gw, gTheme.grid);
+    g.setTextDatum(textdatum_t::middle_right);
+    g.setTextColor(gTheme.dim, gTheme.bg);
+    g.drawString(String(e), gx - 3, yy);
+  }
+  // min-el threshold line.
+  int yMin = gy + gh - (int)((float)minEl() / 90.0f * gh);
+  g.drawFastHLine(gx, yMin, gw, gTheme.warn);
+
+  // Elevation curve.
+  int prevx = 0, prevy = 0;
+  for (size_t i = 0; i < _graphEl.size(); ++i) {
+    float el = _graphEl[i] < 0 ? 0 : _graphEl[i];
+    int xx = gx + (int)((float)i / (_graphEl.size() - 1) * gw);
+    int yy = gy + gh - (int)(el / 90.0f * gh);
+    if (i) g.drawLine(prevx, prevy, xx, yy, gTheme.accent);
+    prevx = xx; prevy = yy;
+  }
+
+  // "now" marker if the pass is in progress.
+  time_t now = time(nullptr);
+  if (now >= _pass.aos && now <= _pass.los) {
+    int xx = gx + (int)((float)(now - _pass.aos) / (float)(_pass.los - _pass.aos) * gw);
+    g.drawFastVLine(xx, gy, gh, gTheme.ok);
+  }
+
+  // Labels.
+  struct tm tm; time_t a = _pass.aos; localtime_r(&a, &tm);
+  char b[40];
+  snprintf(b, sizeof(b), "AOS %02d:%02d  max %d deg  dur %lus",
+           tm.tm_hour, tm.tm_min, (int)round(_pass.maxElDeg), (unsigned long)_pass.durationSec);
+  g.setTextDatum(textdatum_t::top_left);
+  g.setTextColor(gTheme.fg, gTheme.bg);
+  g.drawString(b, gx, gy + gh + 4);
 }

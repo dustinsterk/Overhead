@@ -28,7 +28,7 @@ public:
   void tick(App& app, uint32_t nowMs) override;
 
 private:
-  enum class View { Polar, Ground };
+  enum class View { Polar, Ground, Graph };
   struct TrackPt { float lat; float lon; };
 
   void rebuildOrder();                 // filter provider sats by the watchlist
@@ -36,12 +36,17 @@ private:
   void reloadSelected();
   void recomputePass(time_t now);
   void recomputeTrack(time_t now);
+  void recomputeGraph();               // elevation samples across the pass
+  int  minEl() const;
+  bool handleMinElTap(App& app, int x, int yRel);
 
   void draw(App& app);
   void drawMessage(App& app, const char* msg);
   void drawPolarView(App& app, const astro::SatObservation& o);
   void drawGroundView(App& app, const astro::SatObservation& o);
+  void drawGraphView(App& app, const astro::SatObservation& o);
   void drawInfoColumn(App& app, int ix, int iy, const astro::SatObservation& o);
+  void drawMinElBadge(App& app);
 
   TleProvider&     _tle;
   LocationService& _loc;
@@ -55,6 +60,7 @@ private:
   bool  _loaded   = false;
   astro::SatPass _pass;
   std::vector<TrackPt> _track;
+  std::vector<float>   _graphEl;       // elevation samples aos..los
 
   View     _view     = View::Polar;
   bool     _dirty    = true;

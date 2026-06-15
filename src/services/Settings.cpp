@@ -46,6 +46,7 @@ void Settings::seedDefaults() {
   wl.add("SO-50");
   wl.add("AO-91");
   _doc["satWatchlistOnly"] = true;    // Satellites selector walks the watchlist
+  _doc["satMinEl"]         = 10;      // min pass elevation (deg) — kills grazers
 }
 
 void Settings::migrate() {
