@@ -80,4 +80,11 @@ momentum. Pick up later. (Bugs/blocking work go in commits/tasks, not here.)
   RAOB/RAP soundings. Director triggers: new METAR/TAF, SPECI, new sounding.
   Reuses the OurAirports subset; pairs with the Aircraft tab.
 
+## M10 — Agenda + observability
+- Sky Window: moon illumination shading intensity; precip overlay; finer (30-min) buckets.
+- Director cloud gating: reduce visible-pass viewability bonus when overcast; observing-
+  window banner ("clearing 22:00-00:30") (spec §7.2) — provider exists, Director not wired.
+- Tap a Sky Window event to jump to its tab pre-focused (spec §6 Agenda).
+- Context title Today/Tonight by time of day; meteor-shower peak markers.
+
 <!-- new milestones append below as they land -->

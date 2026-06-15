@@ -60,7 +60,7 @@ void Settings::seedDefaults() {
   _doc["nightBacklight"]= 90;         // 0..255 at night
   // Director / Intelligent Focus (spec §7.10)
   _doc["focusEnabled"]  = true;
-  _doc["ambientDay"]    = "Launches";       // page title for day ambient
+  _doc["ambientDay"]    = "Agenda";         // page title for day ambient
   _doc["ambientNight"]  = "Solar System";   // page title for night ambient
   _doc["nightAmbientAlt"] = -12;      // Sun alt to switch to the night ambient tab
   _doc["passLeadMin"]   = 5;          // minutes before AOS to seize focus

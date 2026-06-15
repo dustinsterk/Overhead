@@ -32,12 +32,14 @@
 #include "providers/LaunchProvider.h"
 #include "providers/AircraftProvider.h"
 #include "providers/SpaceWxProvider.h"
+#include "providers/WeatherProvider.h"
 #include "pages/PageDiag.h"
 #include "pages/PageSatellites.h"
 #include "pages/PageLaunches.h"
 #include "pages/PageAircraft.h"
 #include "pages/PageSolarSystem.h"
 #include "pages/PageSpaceWx.h"
+#include "pages/PageAgenda.h"
 #if ASTRO_SELFTEST
 #include "astro/SelfTest.h"
 #endif
@@ -64,8 +66,10 @@ static TleProvider     tleProv;
 static LaunchProvider  launchProv;
 static AircraftProvider aircraftProv;
 static SpaceWxProvider spaceWxProv;
+static WeatherProvider weatherProv;
 // --- pages ---
 static String          gHostname;
+static PageAgenda*     agendaPage = nullptr;
 static PageLaunches*   launchesPage = nullptr;
 static PageAircraft*   aircraftPage = nullptr;
 static PageSatellites* satsPage = nullptr;
@@ -151,6 +155,7 @@ void setup() {
   launchProv.begin(&settings, &net, &cache, &bus); // LL2 + fallback
   aircraftProv.begin(&settings, &net, &bus, &locSvc);
   spaceWxProv.begin(&settings, &net, &cache, &bus);
+  weatherProv.begin(&settings, &net, &cache, &bus, &locSvc);
 
   web.setStatusJsonProvider(fillStatusJson);
   web.begin(&settings, gHostname);
@@ -166,14 +171,20 @@ void setup() {
   sched.every(adsbMs, [] { aircraftProv.poll(); }, /*runNow=*/true);
   uint32_t swxMs = (uint32_t)settings.getInt("refreshSpaceWxMin", 20) * 60UL * 1000UL;
   sched.every(swxMs, [] { spaceWxProv.refresh(); }, /*runNow=*/false);
+  uint32_t wxMs = (uint32_t)settings.getInt("refreshWeatherMin", 45) * 60UL * 1000UL;
+  sched.every(wxMs, [] { weatherProv.refresh(); }, /*runNow=*/false);
 
   // UI carousel, ground->space order: Launches, Aircraft, Satellites, Diagnostics.
+  agendaPage = new PageAgenda(timeSvc, locSvc, weatherProv, tleProv, launchProv, settings);
   launchesPage = new PageLaunches(launchProv, timeSvc);
   aircraftPage = new PageAircraft(aircraftProv, locSvc, settings);
   satsPage = new PageSatellites(tleProv, locSvc, timeSvc, settings);
   solarPage = new PageSolarSystem(timeSvc, locSvc, settings);
   spaceWxPage = new PageSpaceWx(spaceWxProv, timeSvc, locSvc);
   diag = new PageDiag(timeSvc, locSvc, gHostname);
+  // Carousel, ground->space order (spec §4.1): Agenda (home), Launches, Aircraft,
+  // Satellites, Space Wx, Solar System, then Diagnostics.
+  app.addPage(agendaPage);
   app.addPage(launchesPage);
   app.addPage(aircraftPage);
   app.addPage(satsPage);
