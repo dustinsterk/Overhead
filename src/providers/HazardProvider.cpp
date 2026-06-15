@@ -1,0 +1,92 @@
+#include "HazardProvider.h"
+#include "../services/Settings.h"
+#include "../services/NetClient.h"
+#include "../services/Cache.h"
+#include "../services/LocationService.h"
+#include "../core/EventBus.h"
+#include <ArduinoJson.h>
+#include <time.h>
+
+void HazardProvider::begin(Settings* s, NetClient* net, Cache* cache, EventBus* bus, LocationService* loc) {
+  _s = s; _net = net; _cache = cache; _bus = bus; _loc = loc;
+  refresh(false);
+}
+
+void HazardProvider::refresh(bool force) {
+  if (!_loc->active().valid) return;
+  if (!_inAir) fetchAirsig();
+  if (!_inPi)  fetchPirep();
+}
+
+void HazardProvider::rebuild() {
+  _all.clear();
+  for (auto& h : _airsig) _all.push_back(h);
+  for (auto& h : _pirep)  _all.push_back(h);
+  _status = _all.empty() ? ProviderStatus::Ready : ProviderStatus::Ready;  // empty = no hazards (fine)
+  if (_bus) _bus->publish(ProviderId::Weather);
+}
+
+void HazardProvider::fetchAirsig() {
+  _inAir = true;
+  _net->get("https://aviationweather.gov/api/data/airsigmet?format=json", [this](int code, const String& body) {
+    _inAir = false;
+    _airsig.clear();
+    if (code == 200) {
+      JsonDocument filter;
+      JsonObject e = filter.add<JsonObject>();
+      e["airSigmetType"] = e["hazard"] = e["severity"] = e["altitudeLow1"] = e["altitudeHi1"] = true;
+      JsonObject c = e["coords"].add<JsonObject>(); c["lat"] = c["lon"] = true;
+      JsonDocument doc;
+      if (!deserializeJson(doc, body, DeserializationOption::Filter(filter))) {
+        double olat = _loc->active().lat, olon = _loc->active().lon;
+        for (JsonObject o : doc.as<JsonArray>()) {
+          JsonArray cs = o["coords"].as<JsonArray>();
+          if (cs.isNull()) continue;
+          double mnLa = 1e9, mxLa = -1e9, mnLo = 1e9, mxLo = -1e9;
+          for (JsonObject p : cs) {
+            double la = p["lat"] | 0.0, lo = p["lon"] | 0.0;
+            mnLa = min(mnLa, la); mxLa = max(mxLa, la); mnLo = min(mnLo, lo); mxLo = max(mxLo, lo);
+          }
+          if (olat < mnLa - 0.7 || olat > mxLa + 0.7 || olon < mnLo - 0.7 || olon > mxLo + 0.7) continue;
+          Hazard h; h.pirep = false;
+          h.text = String((const char*)(o["airSigmetType"] | "AIRMET")) + " "
+                 + (const char*)(o["hazard"] | "?") + " " + (const char*)(o["severity"] | "")
+                 + " " + (int)(o["altitudeLow1"] | 0) + "-" + (int)(o["altitudeHi1"] | 0) + "ft";
+          _airsig.push_back(h);
+          if (_airsig.size() >= 8) break;
+        }
+      }
+      _lastFetched = (uint32_t)time(nullptr);
+    }
+    rebuild();
+  });
+}
+
+void HazardProvider::fetchPirep() {
+  double la = _loc->active().lat, lo = _loc->active().lon;
+  char url[150];
+  snprintf(url, sizeof(url),
+    "https://aviationweather.gov/api/data/pirep?format=json&bbox=%.1f,%.1f,%.1f,%.1f",
+    la - 1.5, lo - 2.0, la + 1.5, lo + 2.0);
+  _inPi = true;
+  _net->get(url, [this](int code, const String& body) {
+    _inPi = false;
+    _pirep.clear();
+    if (code == 200) {
+      JsonDocument filter;
+      JsonObject e = filter.add<JsonObject>();
+      e["rawOb"] = true;
+      JsonDocument doc;
+      if (!deserializeJson(doc, body, DeserializationOption::Filter(filter))) {
+        for (JsonObject o : doc.as<JsonArray>()) {
+          String raw = (const char*)(o["rawOb"] | "");
+          if (!raw.length()) continue;
+          Hazard h; h.pirep = true; h.text = raw.substring(0, 40);
+          _pirep.push_back(h);
+          if (_pirep.size() >= 6) break;
+        }
+      }
+    }
+    rebuild();
+  });
+}

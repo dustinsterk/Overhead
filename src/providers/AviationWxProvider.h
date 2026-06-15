@@ -29,6 +29,7 @@ public:
   void refresh(bool force = false);
 
   const std::vector<Metar>& stations() const { return _stations; }
+  bool hasSpeci() const { for (auto& m : _stations) if (m.raw.startsWith("SPECI")) return true; return false; }
   ProviderStatus status() const { return _status; }
   uint32_t lastFetched() const { return _lastFetched; }
 

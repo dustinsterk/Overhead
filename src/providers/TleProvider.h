@@ -40,6 +40,14 @@ private:
   void loadFromCache(int idx);
   void parseInto(std::vector<TleEntry>& target, const String& tleText);
   void rebuildMerged();
+  bool keepName(const String& name, size_t kept) const;
+
+  // RAM is tight on no-PSRAM ESP32: holding the whole amateur+stations list as
+  // Strings (~18 KB) fragments the heap so TLS fetches fail. So we retain only
+  // watchlisted birds (spec §13: passes are computed for the watchlist anyway);
+  // with no watchlist we keep up to kMaxKeep.
+  std::vector<String> _watch;
+  static constexpr size_t kMaxKeep = 20;
 
   Settings*  _s     = nullptr;
   NetClient* _net   = nullptr;

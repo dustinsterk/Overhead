@@ -117,7 +117,7 @@ bool AviationWxProvider::parseMetars(const String& body) {
   }
   if (out.empty()) return false;
   std::sort(out.begin(), out.end(), [](const Metar& a, const Metar& b) { return a.distNm < b.distNm; });
-  if (out.size() > 20) out.resize(20);
+  if (out.size() > 12) out.resize(12);   // bound RAM on no-PSRAM boards
   _stations = std::move(out);
   return true;
 }

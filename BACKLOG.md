@@ -74,7 +74,20 @@ momentum. Pick up later. (Bugs/blocking work go in commits/tasks, not here.)
 - Aurora visibility estimate from Kp + observer latitude.
 - Kp trigger currently only badges Space Wx; optional banner/auto-switch (m7 polish).
 
-## Aviation weather tab  (Phase 1 METAR/TAF shipped)
+## No-PSRAM RAM budget (CYD)
+- TLEs are retained WATCHLIST-ONLY (full amateur+stations ~18KB of Strings froze
+  TLS). On the PSRAM CrowPanel we could keep the full list (board-conditional).
+- NetClient skips an HTTPS fetch when the largest free block < 45KB (avoids the
+  OOM heap-corruption crash); providers then serve stale + retry. Boot fires ~12
+  HTTPS jobs serially — consider staggering/chaining to cut heap contention.
+- Aircraft cap 24, METAR cap 12, to bound resident heap.
+- Consider an LGFX sprite double-buffer ONLY on the CrowPanel (PSRAM) — not the CYD.
+
+## Aviation weather tab  (Phase 1 METAR/TAF + Phase 2 sounding + 2b hazards shipped)
+- Phase 2 (done): Op40 sounding (temp/dewpoint profile + freezing level + winds
+  aloft); Phase 2b (done): AIRMET/SIGMET + PIREP hazards view + SPECI Director badge.
+- Decode TAF periods; Skew-T proper skew + isotherms; soaring indices (Thermal
+  Index, trigger temp, top of lift); decode AIRMET/SIGMET into plain phrases.
 Goal: a real "flight weather brief", all from the keyless NOAA Aviation Weather
 Center API (aviationweather.gov/api/data/...) + rucsoundings.
 - Phase 1 (done): nearby METARs via bbox, decoded card (wind/vis/ceiling/temp/

@@ -6,6 +6,7 @@
 #include "../providers/TleProvider.h"
 #include "../providers/LaunchProvider.h"
 #include "../providers/SpaceWxProvider.h"
+#include "../providers/AviationWxProvider.h"
 #include "../pages/PageSatellites.h"
 #include "../astro/Sun.h"
 #include <ArduinoJson.h>
@@ -78,6 +79,9 @@ void Director::tick(uint32_t nowMs) {
   // Low-priority geomagnetic indicator: badge Space Wx when Kp is high (spec §7.2).
   int swxIdx = _app->pageIndexByTitle("Space Wx");
   if (swxIdx >= 0) _app->setBadge(swxIdx, _spacewx && _spacewx->kp() >= 5.0f);
+  // Aviation: badge on an off-cycle SPECI special report (spec §14, phase 2b).
+  int avIdx = _app->pageIndexByTitle("Aviation");
+  if (avIdx >= 0) _app->setBadge(avIdx, _avwx && _avwx->hasSpeci());
 
   // Interrupt: pass wins ties if it starts first.
   if (passNow && (!launchNow || _passAos <= lnet)) {

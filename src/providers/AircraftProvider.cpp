@@ -101,6 +101,6 @@ void AircraftProvider::parse(const String& body) {
     out.push_back(a);
   }
   std::sort(out.begin(), out.end(), [](const Aircraft& a, const Aircraft& b) { return a.distNm < b.distNm; });
-  if (out.size() > 50) out.resize(50);
+  if (out.size() > 24) out.resize(24);   // bound RAM on no-PSRAM boards
   _ac = std::move(out);
 }

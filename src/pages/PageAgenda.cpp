@@ -143,13 +143,15 @@ void PageAgenda::draw(App& app) {
     g.setTextDatum(textdatum_t::top_left);
     g.setTextColor(e.launch ? gTheme.warn : gTheme.accent, gTheme.bg);
     g.drawString(hm, sx, y);
-    g.setTextColor(gTheme.fg, gTheme.bg);
-    g.drawString(e.label.substring(0, 22), sx + 40, y);
     int cl = _wx.cloudCoverAt(e.t);
-    if (cl >= 0) {
+    int labelX = sx + 40, cloudX = cw - 4, cloudW = cl >= 0 ? 34 : 0;  // "NN% cld"
+    int labelMax = (cloudX - cloudW - labelX) / 6;
+    g.setTextColor(gTheme.fg, gTheme.bg);
+    g.drawString(e.label.substring(0, labelMax), labelX, y);
+    if (cl >= 0) {                                   // cloud cover at the event's time
       g.setTextDatum(textdatum_t::top_right);
       g.setTextColor(cl < 35 ? gTheme.ok : cl < 70 ? gTheme.accent : gTheme.dim, gTheme.bg);
-      g.drawString(String(cl) + "%", cw - 4, y);
+      g.drawString(String(cl) + "% cld", cloudX, y);
     }
     y += 13;
   }

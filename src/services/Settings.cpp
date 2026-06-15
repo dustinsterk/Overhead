@@ -75,10 +75,13 @@ void Settings::migrate() {
   int v = version();
   if (v == kVersion) return;
   Serial.printf("[settings] migrating v%d -> v%d\n", v, kVersion);
-  // v0/unknown -> v1: fill any missing keys without clobbering existing ones.
+  // v0/unknown -> fill any missing keys without clobbering existing ones.
   if (!_doc["locMode"].is<const char*>()) _doc["locMode"] = "auto";
   if (!_doc["otaUser"].is<const char*>()) _doc["otaUser"] = "admin";
   if (!_doc["otaPass"].is<const char*>()) _doc["otaPass"] = "overhead";
+  // v1 -> v2: the day-ambient default moved from Launches to the new Agenda tab.
+  if (v < 2 && String((const char*)(_doc["ambientDay"] | "")) == "Launches")
+    _doc["ambientDay"] = "Agenda";
   _doc["settingsVersion"] = kVersion;
   save();
 }

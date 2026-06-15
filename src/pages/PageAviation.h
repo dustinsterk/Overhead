@@ -3,15 +3,18 @@
 #include <Arduino.h>
 
 class AviationWxProvider;
+class SoundingProvider;
+class HazardProvider;
 class LocationService;
 
-// pages/PageAviation — nearby aviation weather (spec §14). Decoded METAR card for
-// the selected/nearest station (wind, vis, ceiling, temp/dewpoint, altimeter,
-// flight category) + raw METAR + raw TAF. Tap edges to step through stations.
-// Phase 1 (METAR/TAF); Skew-T soundings are a follow-up (BACKLOG).
+// pages/PageAviation — aviation weather "brief" (spec §14). Three views toggled
+// by centre tap: METAR (decoded card + raw METAR/TAF), Sounding (Skew-T-style
+// temp/dewpoint profile + freezing level + winds aloft), Hazards (AIRMET/SIGMET +
+// PIREP). Tap edges step METAR stations. Phase 1 + 2 + 2b.
 class PageAviation : public Page {
 public:
-  PageAviation(AviationWxProvider& wx, LocationService& loc) : _wx(wx), _loc(loc) {}
+  PageAviation(AviationWxProvider& wx, SoundingProvider& snd, HazardProvider& haz, LocationService& loc)
+    : _wx(wx), _snd(snd), _haz(haz), _loc(loc) {}
 
   const char* title() const override { return "Aviation"; }
   void onEnter(App& app) override { _dirty = _needClear = true; }
@@ -20,10 +23,17 @@ public:
   void tick(App& app, uint32_t nowMs) override;
 
 private:
+  enum class View { Metar, Sounding, Hazards };
   void draw(App& app);
+  void drawMetar(App& app);
+  void drawSounding(App& app);
+  void drawHazards(App& app);
 
   AviationWxProvider& _wx;
+  SoundingProvider&   _snd;
+  HazardProvider&     _haz;
   LocationService&    _loc;
+  View  _view = View::Metar;
   int   _sel = 0;
   bool  _dirty = true;
   bool  _needClear = true;

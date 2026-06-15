@@ -34,6 +34,8 @@
 #include "providers/SpaceWxProvider.h"
 #include "providers/WeatherProvider.h"
 #include "providers/AviationWxProvider.h"
+#include "providers/SoundingProvider.h"
+#include "providers/HazardProvider.h"
 #include "pages/PageHealth.h"
 #include "pages/PageSatellites.h"
 #include "pages/PageLaunches.h"
@@ -71,6 +73,8 @@ static AircraftProvider aircraftProv;
 static SpaceWxProvider spaceWxProv;
 static WeatherProvider weatherProv;
 static AviationWxProvider avwxProv;
+static SoundingProvider sndProv;
+static HazardProvider   hazProv;
 // --- pages ---
 static String          gHostname;
 static PageAgenda*     agendaPage = nullptr;
@@ -163,6 +167,8 @@ void setup() {
   spaceWxProv.begin(&settings, &net, &cache, &bus);
   weatherProv.begin(&settings, &net, &cache, &bus, &locSvc);
   avwxProv.begin(&settings, &net, &cache, &bus, &locSvc);
+  sndProv.begin(&settings, &net, &cache, &bus, &locSvc);
+  hazProv.begin(&settings, &net, &cache, &bus, &locSvc);
 
   web.setStatusJsonProvider(fillStatusJson);
   web.begin(&settings, gHostname);
@@ -182,12 +188,14 @@ void setup() {
   sched.every(wxMs, [] { weatherProv.refresh(); }, /*runNow=*/false);
   uint32_t avMs = (uint32_t)settings.getInt("refreshAvWxMin", 12) * 60UL * 1000UL;
   sched.every(avMs, [] { avwxProv.refresh(); }, /*runNow=*/false);
+  sched.every(60UL * 60UL * 1000UL, [] { sndProv.refresh(); }, /*runNow=*/false);   // hourly sounding
+  sched.every(15UL * 60UL * 1000UL, [] { hazProv.refresh(); }, /*runNow=*/false);   // hazards
 
   // UI carousel, ground->space order: Launches, Aircraft, Satellites, Diagnostics.
   agendaPage = new PageAgenda(timeSvc, locSvc, weatherProv, tleProv, launchProv, settings);
   launchesPage = new PageLaunches(launchProv, timeSvc);
   aircraftPage = new PageAircraft(aircraftProv, locSvc, settings);
-  aviationPage = new PageAviation(avwxProv, locSvc);
+  aviationPage = new PageAviation(avwxProv, sndProv, hazProv, locSvc);
   satsPage = new PageSatellites(tleProv, locSvc, timeSvc, settings);
   solarPage = new PageSolarSystem(timeSvc, locSvc, settings);
   starPage = new PageStarMap(timeSvc, locSvc);
@@ -212,6 +220,7 @@ void setup() {
   themeCtl.begin(&timeSvc, &locSvc, &display, &settings, &app);
   director.begin(&app, &settings, &timeSvc, &locSvc, &tleProv, &launchProv, satsPage);
   director.setSpaceWx(&spaceWxProv);
+  director.setAviation(&avwxProv);
 
   Serial.printf("[boot] done. free heap=%u  largest=%u\n",
                 Display::freeHeap(), Display::largestFreeBlock());

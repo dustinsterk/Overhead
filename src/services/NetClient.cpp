@@ -2,6 +2,7 @@
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
+#include <esp_heap_caps.h>
 
 bool NetClient::begin(uint32_t stackWords, BaseType_t core) {
   _reqQ  = xQueueCreate(8, sizeof(Job*));
@@ -47,6 +48,15 @@ void NetClient::taskLoop() {
 
 void NetClient::perform(Job* job) {
   if (WiFi.status() != WL_CONNECTED) { job->code = -1; return; }
+
+  // TLS needs a large contiguous block; attempting it when the heap is too
+  // fragmented OOMs and can corrupt the heap (lfs_close assert). Skip instead
+  // and let the provider serve stale / retry later (cyd-radio §15 mbedtls floor).
+  if (job->url.startsWith("https://") &&
+      heap_caps_get_largest_free_block(MALLOC_CAP_8BIT) < 45000) {
+    job->code = -3;
+    return;
+  }
 
   HTTPClient http;
   http.setConnectTimeout(8000);

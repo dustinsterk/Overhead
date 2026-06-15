@@ -126,7 +126,8 @@ void PageLaunches::draw(App& app) {
     else snprintf(tm, sizeof(tm), "%02ld:%02ld", s / 3600, (s % 3600) / 60);
     g.setTextDatum(textdatum_t::top_left);
     g.setTextColor(gTheme.fg, gTheme.bg);
-    g.drawString(u.name.substring(0, 26), x0, y);
+    int nameMax = (cw - x0 - 48 - x0) / 6;            // fill up to the time cell
+    g.drawString(u.name.substring(0, nameMax), x0, y);
     g.fillRect(cw - x0 - 44, y, 44, 12, gTheme.bg);   // clear time cell (right-aligned, shrinks)
     g.setTextDatum(textdatum_t::top_right);
     g.setTextColor(gTheme.dim, gTheme.bg);

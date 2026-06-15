@@ -14,6 +14,9 @@ static const GroupDef kGroups[TleProvider::kGroupCount] = {
 void TleProvider::begin(Settings* s, NetClient* net, Cache* cache, EventBus* bus) {
   _s = s; _net = net; _cache = cache; _bus = bus;
 
+  JsonArray wl = _s->doc()["watchlist"].as<JsonArray>();   // retain only watchlist (RAM)
+  for (JsonVariant v : wl) { String p = (const char*)(v | ""); if (p.length()) _watch.push_back(p); }
+
   for (int i = 0; i < kGroupCount; ++i) loadFromCache(i);   // last-good, offline-friendly
   rebuildMerged();
   if (!_sats.empty()) _status = ProviderStatus::Stale;
@@ -67,6 +70,12 @@ void TleProvider::loadFromCache(int idx) {
     parseInto(_groupSats[idx], body);
 }
 
+bool TleProvider::keepName(const String& name, size_t kept) const {
+  if (_watch.empty()) return kept < kMaxKeep;        // no watchlist: cap to bound RAM
+  for (const auto& p : _watch) if (name.startsWith(p)) return true;
+  return false;
+}
+
 void TleProvider::rebuildMerged() {
   _sats.clear();
   for (int i = 0; i < kGroupCount; ++i)
@@ -90,8 +99,10 @@ void TleProvider::parseInto(std::vector<TleEntry>& target, const String& tleText
       String l2 = tleText.substring(i, eol2);
       l2.trim();
       i = eol2 + 1;
-      if (l2.startsWith("2 "))
-        target.push_back({ prev.length() ? prev : String("UNNAMED"), l1, l2 });
+      if (l2.startsWith("2 ")) {
+        String nm = prev.length() ? prev : String("UNNAMED");
+        if (keepName(nm, target.size())) target.push_back({ nm, l1, l2 });
+      }
     } else if (line.length()) {
       prev = line;
     }

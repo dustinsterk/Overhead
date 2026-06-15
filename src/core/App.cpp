@@ -72,11 +72,11 @@ void App::tick(uint32_t nowMs) {
   if (touched) {
     if (!_wasTouched) {
       _pressX = tx; _pressY = ty; _pressStartMs = nowMs; _pinToggled = false;
-      _mode = Mode::Manual; _statusDirty = true;        // any touch -> MANUAL
+      if (ty >= contentY()) { _mode = Mode::Manual; _statusDirty = true; }  // content touch -> MANUAL
     }
     _lastX = tx; _lastY = ty; _lastInteractMs = nowMs;
-    // Long-press without movement toggles pin (spec §7.4).
-    if (!_pinToggled && nowMs - _pressStartMs > 800 &&
+    // Long-press on content (no movement) toggles pin (spec §7.4).
+    if (!_pinToggled && _pressY >= contentY() && nowMs - _pressStartMs > 800 &&
         abs(_lastX - _pressX) <= kTapMax && abs(_lastY - _pressY) <= kTapMax) {
       _pinned = !_pinned; _pinToggled = true; _statusDirty = true;
     }
@@ -85,9 +85,13 @@ void App::tick(uint32_t nowMs) {
     if (_pinToggled) {                       // consumed by the pin long-press
     } else if (abs(dx) >= kSwipeMin && abs(dx) > abs(dy)) {
       if (dx < 0) nextPage(); else prevPage();
-    } else if (abs(dx) <= kTapMax && abs(dy) <= kTapMax &&
-               _active >= 0 && _pressY >= contentY()) {
-      _pages[_active]->onTouch(*this, _pressX, _pressY - contentY());
+    } else if (abs(dx) <= kTapMax && abs(dy) <= kTapMax) {
+      if (_pressY < contentY()) {            // status-strip tap = master AUTO/MANUAL toggle
+        if (_pinned) _pinned = false; else _mode = (_mode == Mode::Auto) ? Mode::Manual : Mode::Auto;
+        _statusDirty = true;
+      } else if (_active >= 0) {
+        _pages[_active]->onTouch(*this, _pressX, _pressY - contentY());
+      }
     }
   }
   _wasTouched = touched;
