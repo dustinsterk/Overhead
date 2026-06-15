@@ -56,4 +56,16 @@ momentum. Pick up later. (Bugs/blocking work go in commits/tasks, not here.)
   current Schlyter is ~arcmin (outer planets worse, no planet perturbations).
 - Persist the show-filter (all/up/eye) in Settings.
 
+## M7 — Intelligent Focus + theming
+- Notice/banner before an auto-switch (silent | banner-then-switch | banner-only)
+  + buzzer chirp / CW announce (spec §7.5) — not yet (no banner widget/buzzer).
+- Master AUTO/MANUAL toggle as a status-strip glyph (currently only the
+  interaction->MANUAL->inactivity->AUTO lifecycle + long-press pin).
+- Scoring with urgency/viewability bonuses + hysteresis margin + anti-flap dwell/
+  cooldown (current Director uses simple priority: pass > launch > ambient).
+- Visible-ISS boost + cloud-gated viewability (needs WeatherProvider, m10).
+- Geomagnetic (Kp) banner trigger (needs SpaceWx, m8); aircraft-emergency trigger.
+- Pulsing/lead-time tab badges (currently a steady warn dot).
+- Red dark-adapt palette is wired (nightPalette=red) but default dark; tune palettes.
+
 <!-- new milestones append below as they land -->

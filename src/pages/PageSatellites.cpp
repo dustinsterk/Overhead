@@ -51,6 +51,12 @@ void PageSatellites::rebuildOrder() {
   selectPos(pos);
 }
 
+void PageSatellites::focusBird(const String& namePrefix) {
+  const auto& sats = _tle.sats();
+  for (size_t i = 0; i < _order.size(); ++i)
+    if (sats[_order[i]].name.startsWith(namePrefix)) { selectPos((int)i); return; }
+}
+
 void PageSatellites::selectPos(int pos) {
   if (_order.empty()) return;
   _orderPos = (pos % (int)_order.size() + _order.size()) % _order.size();

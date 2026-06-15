@@ -53,6 +53,19 @@ void Settings::seedDefaults() {
   _doc["adsbRadiusNm"]  = 50;
   _doc["adsbPollSec"]   = 5;
   _doc["adsbMaxAltFt"]  = 0;          // 0 = no altitude cap
+  // Appearance / ThemeController (spec §7.9)
+  _doc["themeMode"]     = "auto";     // auto | day | night
+  _doc["nightPalette"]  = "dark";     // dark | red (dark-adapt)
+  _doc["themeNightAlt"] = -6;         // Sun alt (deg) to flip the theme to night
+  _doc["nightBacklight"]= 90;         // 0..255 at night
+  // Director / Intelligent Focus (spec §7.10)
+  _doc["focusEnabled"]  = true;
+  _doc["ambientDay"]    = "Launches";       // page title for day ambient
+  _doc["ambientNight"]  = "Solar System";   // page title for night ambient
+  _doc["nightAmbientAlt"] = -12;      // Sun alt to switch to the night ambient tab
+  _doc["passLeadMin"]   = 5;          // minutes before AOS to seize focus
+  _doc["launchLeadMin"] = 10;         // minutes before T-0 to seize focus
+  _doc["inactivitySec"] = 90;         // MANUAL -> AUTO after this idle time
 }
 
 void Settings::migrate() {

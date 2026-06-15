@@ -25,6 +25,16 @@ public:
 
   void tick(uint32_t nowMs);
 
+  // --- Attention lifecycle (spec §7.4), driven by the Director ---
+  enum class Mode { Auto, Manual };
+  Mode mode() const { return _mode; }
+  bool pinned() const { return _pinned; }
+  int  activeIndex() const { return _active; }
+  int  pageIndexByTitle(const char* title) const;
+  bool autoFocus(int index);            // switch only if AUTO & unpinned; true if switched
+  void setBadge(int index, bool on);
+  void setInactivityMs(uint32_t ms) { _inactivityMs = ms; }
+
   Display& display() { return _display; }
 
   // Content rect available to pages (below the status strip).
@@ -43,6 +53,7 @@ private:
   Scheduler& _sched;
 
   std::vector<Page*> _pages;
+  std::vector<bool>  _badge;
   int  _active = -1;
 
   bool     _wasTouched   = false;
@@ -50,6 +61,13 @@ private:
   int      _lastX  = 0, _lastY  = 0;   // last point while touched
   uint32_t _lastStatusMs = 0;
   bool     _statusDirty  = true;
+
+  Mode     _mode = Mode::Auto;
+  bool     _pinned = false;
+  bool     _pinToggled = false;        // pin toggled during the current press
+  uint32_t _lastInteractMs = 0;
+  uint32_t _pressStartMs = 0;
+  uint32_t _inactivityMs = 90000;
 
   static constexpr int kStatusH   = 20;
   static constexpr int kSwipeMin  = 40;   // px to count as a swipe

@@ -18,7 +18,9 @@
 #include "core/EventBus.h"
 #include "core/Scheduler.h"
 #include "core/Theme.h"
+#include "core/ThemeController.h"
 #include "core/App.h"
+#include "core/Director.h"
 #include "services/Settings.h"
 #include "services/Cache.h"
 #include "services/NetClient.h"
@@ -46,6 +48,8 @@ static Rtc     rtc;
 static EventBus  bus;
 static Scheduler sched;
 static App       app(display, touch, bus, sched);
+static ThemeController themeCtl;
+static Director  director;
 // --- services ---
 static Settings        settings;
 static Cache           cache;
@@ -167,7 +171,12 @@ void setup() {
   app.addPage(satsPage);
   app.addPage(solarPage);
   app.addPage(diag);
+  app.setInactivityMs((uint32_t)settings.getInt("inactivitySec", 90) * 1000UL);
   app.begin();
+
+  // Intelligent Focus + day/night theming (spec §7).
+  themeCtl.begin(&timeSvc, &locSvc, &display, &settings);
+  director.begin(&app, &settings, &timeSvc, &locSvc, &tleProv, &launchProv, satsPage);
 
   Serial.printf("[boot] done. free heap=%u  largest=%u\n",
                 Display::freeHeap(), Display::largestFreeBlock());
@@ -179,6 +188,8 @@ void loop() {
   timeSvc.tick();    // detect NTP sync edge -> publish Time
   web.loop();        // ElegantOTA pump
   sched.tick(now);
+  themeCtl.tick(now);   // day/night palette + backlight
+  director.tick(now);   // Intelligent Focus
   app.tick(now);
   delay(2);
 }

@@ -8,6 +8,7 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <time.h>
+#include <string.h>
 
 // The one mutable global palette every widget reads.
 Theme gTheme = themes::dark;
@@ -30,7 +31,26 @@ void App::begin() {
   if (!_pages.empty() && _active < 0) setPage(0);
 }
 
-void App::addPage(Page* page) { _pages.push_back(page); }
+void App::addPage(Page* page) { _pages.push_back(page); _badge.push_back(false); }
+
+int App::pageIndexByTitle(const char* title) const {
+  for (size_t i = 0; i < _pages.size(); ++i)
+    if (strcmp(_pages[i]->title(), title) == 0) return (int)i;
+  return -1;
+}
+
+bool App::autoFocus(int index) {
+  if (_mode != Mode::Auto || _pinned || index < 0 || index == _active) return false;
+  setPage(index);
+  if (index < (int)_badge.size()) _badge[index] = false;
+  return true;
+}
+
+void App::setBadge(int index, bool on) {
+  if (index >= 0 && index < (int)_badge.size() && _badge[index] != on) {
+    _badge[index] = on; _statusDirty = true;
+  }
+}
 
 void App::setPage(int index) {
   if (index < 0 || index >= (int)_pages.size()) return;
@@ -50,11 +70,20 @@ void App::tick(uint32_t nowMs) {
   int16_t tx, ty;
   bool touched = _touch.read(_display, tx, ty);
   if (touched) {
-    if (!_wasTouched) { _pressX = tx; _pressY = ty; }
-    _lastX = tx; _lastY = ty;
+    if (!_wasTouched) {
+      _pressX = tx; _pressY = ty; _pressStartMs = nowMs; _pinToggled = false;
+      _mode = Mode::Manual; _statusDirty = true;        // any touch -> MANUAL
+    }
+    _lastX = tx; _lastY = ty; _lastInteractMs = nowMs;
+    // Long-press without movement toggles pin (spec §7.4).
+    if (!_pinToggled && nowMs - _pressStartMs > 800 &&
+        abs(_lastX - _pressX) <= kTapMax && abs(_lastY - _pressY) <= kTapMax) {
+      _pinned = !_pinned; _pinToggled = true; _statusDirty = true;
+    }
   } else if (_wasTouched) {                 // release edge
     int dx = _lastX - _pressX, dy = _lastY - _pressY;
-    if (abs(dx) >= kSwipeMin && abs(dx) > abs(dy)) {
+    if (_pinToggled) {                       // consumed by the pin long-press
+    } else if (abs(dx) >= kSwipeMin && abs(dx) > abs(dy)) {
       if (dx < 0) nextPage(); else prevPage();
     } else if (abs(dx) <= kTapMax && abs(dy) <= kTapMax &&
                _active >= 0 && _pressY >= contentY()) {
@@ -62,6 +91,11 @@ void App::tick(uint32_t nowMs) {
     }
   }
   _wasTouched = touched;
+
+  // Inactivity: MANUAL -> AUTO (unless pinned) (spec §7.4).
+  if (_mode == Mode::Manual && !_pinned && nowMs - _lastInteractMs > _inactivityMs) {
+    _mode = Mode::Auto; _statusDirty = true;
+  }
 
   if (_active >= 0) _pages[_active]->tick(*this, nowMs);
 
@@ -88,22 +122,24 @@ void App::drawStatus() {
   }
   g.drawString(clk, 6, kStatusH / 2);
 
-  // WiFi state + active page title, right-aligned.
+  // WiFi state + mode + active page title, right-aligned.
   g.setTextDatum(textdatum_t::middle_right);
-  String right;
-  if (WiFi.status() == WL_CONNECTED) right = String("WiFi ") + WiFi.RSSI() + "dBm";
-  else                               right = "WiFi --";
-  if (_active >= 0) right = String(_pages[_active]->title()) + "  |  " + right;
+  String wifi = (WiFi.status() == WL_CONNECTED) ? String("WiFi ") + WiFi.RSSI() : "WiFi --";
+  const char* modeTag = _pinned ? "PIN" : (_mode == Mode::Auto ? "AUTO" : "MAN");
+  String right = (_active >= 0 ? String(_pages[_active]->title()) + "  " : "")
+               + modeTag + "  " + wifi;
   g.drawString(right, _display.width() - 6, kStatusH / 2);
 
-  // Page-indicator dots (carousel position), just right of the clock so they
-  // don't collide with the page title on the right.
+  // Page-indicator dots just right of the clock. A badged page (Director has a
+  // suppressed interrupt for it) shows a warn-coloured dot (spec §7.4).
   int n = (int)_pages.size();
   if (n > 1) {
     int gap = 8, x0 = 52, cy = kStatusH / 2;
     for (int i = 0; i < n; ++i) {
-      if (i == _active) g.fillCircle(x0 + i * gap, cy, 2, gTheme.accent);
-      else              g.drawCircle(x0 + i * gap, cy, 2, gTheme.dim);
+      bool badged = (i < (int)_badge.size() && _badge[i]);
+      if (i == _active)   g.fillCircle(x0 + i * gap, cy, 2, gTheme.accent);
+      else if (badged)    g.fillCircle(x0 + i * gap, cy, 2, gTheme.warn);
+      else                g.drawCircle(x0 + i * gap, cy, 2, gTheme.dim);
     }
   }
 }

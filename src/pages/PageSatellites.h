@@ -22,6 +22,7 @@ public:
     : _tle(tle), _loc(loc), _time(time), _settings(settings) {}
 
   const char* title() const override { return "Satellites"; }
+  void focusBird(const String& namePrefix);   // Director pre-focus (spec §7)
   void onEnter(App& app) override;
   void onData(App& app, ProviderId id) override;
   void onTouch(App& app, int x, int y) override;
