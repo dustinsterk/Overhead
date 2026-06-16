@@ -25,6 +25,9 @@ class AircraftProvider {
 public:
   void begin(Settings* s, NetClient* net, EventBus* bus, LocationService* loc);
   void poll();
+  // Foreground = Aircraft page is showing -> poll at the scheduler's full rate.
+  // Background -> throttle to ~60 s (radar isn't visible; saves requests + heap).
+  void setForeground(bool fg) { _fg = fg; }
 
   const std::vector<Aircraft>& aircraft() const { return _ac; }
   ProviderStatus status() const { return _status; }
@@ -48,4 +51,6 @@ private:
   bool     _local = false;
   bool     _hideGround = false;
   bool     _inflight = false;
+  bool     _fg = false;            // Aircraft page in the foreground
+  uint32_t _lastPollMs = 0;        // millis() of the last issued fetch
 };

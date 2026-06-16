@@ -17,7 +17,8 @@ public:
     : _ap(ap), _loc(loc), _settings(settings) {}
 
   const char* title() const override { return "Aircraft"; }
-  void onEnter(App& app) override { _dirty = _needClear = true; }
+  void onEnter(App& app) override;
+  void onExit(App& app) override;
   void onData(App& app, ProviderId id) override;
   void onTouch(App& app, int x, int y) override;
   void tick(App& app, uint32_t nowMs) override;

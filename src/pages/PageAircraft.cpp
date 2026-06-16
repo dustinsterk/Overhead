@@ -6,8 +6,19 @@
 #include "../services/LocationService.h"
 #include "../services/Settings.h"
 #include <math.h>
+#include <time.h>
 
 static constexpr double D2R = 3.14159265358979323846 / 180.0;
+
+void PageAircraft::onEnter(App& app) {
+  _dirty = _needClear = true;
+  _ap.setForeground(true);   // full-rate polling + an immediate refresh on entry
+  _ap.poll();
+}
+
+void PageAircraft::onExit(App& app) {
+  _ap.setForeground(false);  // drop to the 60 s background cadence
+}
 
 void PageAircraft::onData(App& app, ProviderId id) {
   if (id == ProviderId::Aircraft) {
@@ -144,8 +155,12 @@ void PageAircraft::draw(App& app) {
   g.setTextColor(gTheme.fg, gTheme.bg);
   g.setTextSize(2); g.drawString("Aircraft", ix, iy); iy += 20;
   g.setTextSize(1);
-  line(String(list.size()) + " in range  " + (_ap.local() ? "local" : "cloud") +
-       (_ap.status() == ProviderStatus::Stale ? " (stale)" : ""), gTheme.dim);
+  String src = String(list.size()) + " in range  " + (_ap.local() ? "local" : "cloud");
+  if (_ap.status() == ProviderStatus::Stale && _ap.lastFetched()) {
+    int age = (int)(time(nullptr) - _ap.lastFetched());
+    if (age > 0) src += " (stale " + String(age) + "s)";
+  }
+  line(src, gTheme.dim);
 
   if (_sel >= 0 && _sel < (int)list.size()) {
     const Aircraft& a = list[_sel];

@@ -29,6 +29,10 @@ void AircraftProvider::begin(Settings* s, NetClient* net, EventBus* bus, Locatio
 
 void AircraftProvider::poll() {
   if (_inflight || !_loc->active().valid) return;
+  // Throttle when the radar isn't on screen (the scheduler still calls every few
+  // seconds, but there's no point fetching/fragmenting the heap if nobody's looking).
+  uint32_t nowMs = millis();
+  if (_lastPollMs && nowMs - _lastPollMs < (_fg ? 0u : 60000u)) return;
   _local = _s->getString("adsbMode", "cloud") == "local";
   _radiusNm = (float)_s->getInt("adsbRadiusNm", 50);
   _hideGround = _s->getInt("adsbHideGround", 0) != 0;
@@ -53,11 +57,15 @@ void AircraftProvider::poll() {
       _lastFetched = (uint32_t)time(nullptr);
       _status = ProviderStatus::Ready;
     } else {
+      // code -3 = heap-floor TLS skip (most common cause of long staleness),
+      // 429 = rate limited, <0 = connect/timeout. Keep the last contacts (Stale).
       _status = _ac.empty() ? ProviderStatus::Error : ProviderStatus::Stale;
+      Serial.printf("[adsb] poll code=%d len=%u (keep %u, stale)\n", code, (unsigned)body.length(), (unsigned)_ac.size());
     }
     if (_bus) _bus->publish(ProviderId::Aircraft);
   });
-  if (!sent) _inflight = false;          // req queue full; retry on the next poll
+  if (sent) _lastPollMs = nowMs;
+  else      _inflight = false;           // req queue full; retry on the next poll
                                          // (otherwise _inflight sticks -> "scanning" forever)
 }
 
