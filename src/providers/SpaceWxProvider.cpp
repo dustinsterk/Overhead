@@ -44,9 +44,13 @@ void SpaceWxProvider::fetchSfi() {
       if (code == 200) {
         JsonDocument d;
         if (!deserializeJson(d, body)) {
-          _sfi = (int)atof((const char*)(d["Flux"] | "-1"));
+          JsonVariant fv = d["Flux"];
+          _sfi = fv.is<const char*>() ? atoi((const char*)fv) : (fv.isNull() ? -1 : fv.as<int>());
           _cache->put("swx_sfi", body, code, (uint32_t)time(nullptr));
+          Serial.printf("[spacewx] SFI=%d\n", _sfi);
         }
+      } else {
+        Serial.printf("[spacewx] SFI fetch code=%d\n", code);
       }
       if (_bus) _bus->publish(ProviderId::SpaceWx);
     });
@@ -56,11 +60,14 @@ void SpaceWxProvider::fetchSfi() {
 // [ "time_tag", "Kp", "a_running", "station_count" ].
 bool SpaceWxProvider::parseKp(const String& body) {
   JsonDocument doc;
-  if (deserializeJson(doc, body)) return false;
+  DeserializationError err = deserializeJson(doc, body);
+  if (err) { Serial.printf("[spacewx] kp parse err: %s\n", err.c_str()); return false; }
   JsonArray rows = doc.as<JsonArray>();
-  if (rows.isNull() || rows.size() < 2) return false;
+  if (rows.isNull() || rows.size() < 2) { Serial.println("[spacewx] kp: not an array"); return false; }
   JsonArray last = rows[rows.size() - 1].as<JsonArray>();
-  if (last.isNull() || last.size() < 2) return false;
-  _kp = atof((const char*)(last[1] | "-1"));
+  if (last.isNull() || last.size() < 2) { Serial.println("[spacewx] kp: bad last row"); return false; }
+  JsonVariant kv = last[1];                          // value may be a string OR a number
+  _kp = kv.is<const char*>() ? atof((const char*)kv) : kv.as<float>();
+  Serial.printf("[spacewx] kp rows=%u last=%.2f\n", (unsigned)rows.size(), _kp);
   return _kp >= 0;
 }
