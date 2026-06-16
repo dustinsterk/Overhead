@@ -233,43 +233,82 @@ void PageAviation::drawSounding(App& app) {
     return;
   }
 
-  // Plot box: x = temp -40..40, y = alt 0..12 km.
-  const int gx = 24, gy = cy0 + 16, gw = cw - 90, gh = ch - 24;
-  const float Tmin = -40, Tmax = 40, Amax = 12000;
-  auto px = [&](float T) { return gx + (int)((T - Tmin) / (Tmax - Tmin) * gw); };
-  auto py = [&](float a) { return gy + gh - (int)(fminf(a, Amax) / Amax * gh); };
+  // Plot box: x = temp -40..40 C, y = altitude 0..40 kft (aviation-native units).
+  const float M2FT = 3.28084f;
+  const int gx = 24, gy = cy0 + 16, gw = cw - 90, gh = ch - 40;   // bottom rows: legend + analysis
+  const float Tmin = -40, Tmax = 40, AmaxFt = 40000;
+  auto px  = [&](float T)  { return gx + (int)((T - Tmin) / (Tmax - Tmin) * gw); };
+  auto pyf = [&](float ft) { return gy + gh - (int)(fminf(ft, AmaxFt) / AmaxFt * gh); };
+  auto pym = [&](float m)  { return pyf(m * M2FT); };
+  auto dash = [&](int x0, int y0, int x1, int y1, Color c) {     // dashed straight line
+    int n = max(abs(x1 - x0), abs(y1 - y0)) / 4; if (n < 1) n = 1;
+    for (int k = 0; k < n; k += 2) {
+      float f0 = (float)k / n, f1 = (float)(k + 1) / n;
+      g.drawLine(x0 + (int)((x1 - x0) * f0), y0 + (int)((y1 - y0) * f0),
+                 x0 + (int)((x1 - x0) * f1), y0 + (int)((y1 - y0) * f1), c);
+    }
+  };
   g.drawRect(gx, gy, gw, gh, gTheme.grid);
   g.setTextColor(gTheme.dim, gTheme.bg);
   if (px(0) > gx && px(0) < gx + gw) g.drawFastVLine(px(0), gy, gh, gTheme.grid);  // 0 C
-  for (int km = 3; km <= 12; km += 3) { int yy = py(km * 1000); g.drawFastHLine(gx, yy, gw, gTheme.grid); g.drawString(String(km), 4, yy - 3); }
+  for (int kft = 10; kft <= 30; kft += 10) { int yy = pyf(kft * 1000); g.drawFastHLine(gx, yy, gw, gTheme.grid); g.drawString(String(kft), 4, yy - 3); }
+
+  // Dashed dry-adiabat parcel from the surface (where it crosses temp = top of lift).
+  if (!lv.empty()) {
+    float a0 = lv.front().altM, t0 = lv.front().tempC, topM = AmaxFt / M2FT;
+    dash(px(t0), pym(a0), px(t0 - 9.8f * (topM - a0) / 1000.0f), pyf(AmaxFt), gTheme.dim);
+  }
 
   int px0t = -1, py0t = 0, px0d = -1, py0d = 0;
   for (const auto& l : lv) {
-    if (l.altM > Amax) break;
-    int xt = px(l.tempC), yt = py(l.altM);
+    if (l.altM * M2FT > AmaxFt) break;
+    int xt = px(l.tempC), yt = pym(l.altM);
     if (px0t >= 0) g.drawLine(px0t, py0t, xt, yt, gTheme.warn);
     px0t = xt; py0t = yt;
-    if (l.dewpC > -900) { int xd = px(l.dewpC), yd = py(l.altM); if (px0d >= 0) g.drawLine(px0d, py0d, xd, yd, gTheme.accent); px0d = xd; py0d = yd; }
+    if (l.dewpC > -900) { int xd = px(l.dewpC), yd = pym(l.altM); if (px0d >= 0) g.drawLine(px0d, py0d, xd, yd, gTheme.accent); px0d = xd; py0d = yd; }
   }
 
   // Freezing level.
   if (_snd.freezingLevelM() > 0) {
-    int yf = py(_snd.freezingLevelM());
+    int yf = pym(_snd.freezingLevelM());
     g.drawFastHLine(gx, yf, gw, gTheme.ok);
     g.setTextColor(gTheme.ok, gTheme.bg);
     g.setTextDatum(textdatum_t::bottom_right);
-    g.drawString(String("FZL ") + (int)(_snd.freezingLevelM() * 3.281f) + "ft", cw - 2, yf);
+    g.drawString(String("FZL ") + (int)(_snd.freezingLevelM() * M2FT) + "ft", cw - 2, yf);
     g.setTextDatum(textdatum_t::top_left);
   }
 
-  // Winds aloft (nearest levels to 1/3/6/9 km).
-  int wy = gy + 2; const int targets[] = {1000, 3000, 6000, 9000};
+  // Winds aloft (nearest levels to 3/10/20/30 kft).
+  int wy = gy + 2; const int targets[] = {3000, 10000, 20000, 30000};
   g.setTextColor(gTheme.fg, gTheme.bg);
   for (int t : targets) {
-    const SoundingLevel* best = nullptr; float bd = 1e9;
-    for (const auto& l : lv) if (l.wspd >= 0) { float d = fabsf(l.altM - t); if (d < bd) { bd = d; best = &l; } }
+    float tgtM = t / M2FT; const SoundingLevel* best = nullptr; float bd = 1e9;
+    for (const auto& l : lv) if (l.wspd >= 0) { float d = fabsf(l.altM - tgtM); if (d < bd) { bd = d; best = &l; } }
     if (best) { char b[24]; snprintf(b, sizeof(b), "%dk %03d@%d", t / 1000, best->wdir, best->wspd); g.drawString(b, cw - 60, wy); wy += 11; }
   }
+
+  // Legend.
+  int lgy = cy0 + ch - 22, lx = 4;
+  auto key = [&](Color c, const String& s) {
+    g.fillCircle(lx + 2, lgy + 3, 2, c); lx += 8;
+    g.setTextDatum(textdatum_t::top_left); g.setTextColor(gTheme.dim, gTheme.bg);
+    g.drawString(s, lx, lgy); lx += (int)s.length() * 6 + 6;
+  };
+  key(gTheme.warn, "temp"); key(gTheme.accent, "dewpt"); key(gTheme.ok, "FZL");
+  key(gTheme.dim, "parcel"); g.drawString("x:C y:kft", lx, lgy);
+
+  // Analysis line (model estimates): stability / cloud base / lift top / inversion.
+  static const char* kStab[] = {"stable", "neutral", "unstable", "strong lift"};
+  auto kft = [](float ft) { return String(ft / 1000.0f, 1) + "k"; };
+  String a;
+  if (_snd.stability() >= 0) a = kStab[_snd.stability()];
+  if (_snd.cloudBaseFt() > 0)  a += (a.length() ? " \xB7 " : "") + String("base ") + kft(_snd.cloudBaseFt());
+  float surfFt = lv.front().altM * M2FT;
+  if (_snd.thermalTopFt() > surfFt + 200) a += " \xB7 top " + kft(_snd.thermalTopFt());
+  if (_snd.inversionFt() > 0)  a += " \xB7 inv " + kft(_snd.inversionFt());
+  g.setTextDatum(textdatum_t::top_left);
+  g.setTextColor(gTheme.fg, gTheme.bg);
+  g.drawString(a.length() ? a : String("(analysis n/a)"), 4, cy0 + ch - 10);
 }
 
 void PageAviation::drawHazards(App& app) {

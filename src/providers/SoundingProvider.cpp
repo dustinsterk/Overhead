@@ -119,5 +119,48 @@ bool SoundingProvider::parse(const String& body) {
   }
   _levels = std::move(out);
   _freezeM = fz;
+  analyze();
   return true;
+}
+
+// Derived soaring/aviation analysis from the profile (low-precision estimates).
+void SoundingProvider::analyze() {
+  _cloudBaseFt = _thermalTopFt = _inversionFt = -1; _stability = -1;
+  if (_levels.size() < 2) return;
+  const float M2FT = 3.28084f, DALR = 9.8f;          // dry adiabatic lapse, C/km
+  const SoundingLevel& s = _levels.front();
+  float t0 = s.tempC, td0 = s.dewpC, a0 = s.altM;
+
+  // Cloud base (LCL): ~125 m of lift per C of surface temp-dewpoint spread.
+  if (td0 > -900) _cloudBaseFt = (a0 + 125.0f * max(0.0f, t0 - td0)) * M2FT;
+
+  // Low-level lapse rate (surface -> ~1 km up) -> stability class.
+  const SoundingLevel* hi = nullptr;
+  for (const auto& l : _levels) if (l.altM >= a0 + 1000.0f) { hi = &l; break; }
+  if (!hi) hi = &_levels.back();
+  float dz = hi->altM - a0;
+  if (dz > 50.0f) {
+    float elr = (t0 - hi->tempC) / (dz / 1000.0f);   // C/km
+    _stability = elr >= 8.5f ? 3 : elr >= 6.5f ? 2 : elr >= 4.0f ? 1 : 0;
+  }
+
+  // Top of (dry) lift: lift a surface parcel up the dry adiabat; the height where
+  // it stops being warmer than the environment. Plot axes are linear, so this is
+  // where the (straight) parcel line crosses the temperature curve.
+  float prevDiff = 0;                                // parcel == env at the surface
+  _thermalTopFt = a0 * M2FT;
+  for (size_t i = 1; i < _levels.size(); ++i) {
+    float pT = t0 - DALR * (_levels[i].altM - a0) / 1000.0f;
+    float diff = pT - _levels[i].tempC;
+    if (diff < 0) {
+      float frac = prevDiff / (prevDiff - diff);     // 0..1 between i-1 and i
+      _thermalTopFt = (_levels[i - 1].altM + frac * (_levels[i].altM - _levels[i - 1].altM)) * M2FT;
+      break;
+    }
+    prevDiff = diff;
+  }
+
+  // First inversion base (temperature rising with height) = the lift cap.
+  for (size_t i = 1; i < _levels.size(); ++i)
+    if (_levels[i].tempC > _levels[i - 1].tempC + 0.1f) { _inversionFt = _levels[i - 1].altM * M2FT; break; }
 }

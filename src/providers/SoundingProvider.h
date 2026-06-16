@@ -33,8 +33,15 @@ public:
   ProviderStatus status() const { return _status; }
   uint32_t lastFetched() const { return _lastFetched; }
 
+  // Derived soaring/aviation analysis (model estimates; -1 = n/a). MSL feet.
+  float cloudBaseFt() const { return _cloudBaseFt; }  // LCL from surface T-Td spread
+  float thermalTopFt() const { return _thermalTopFt; }// dry-parcel/env crossing
+  float inversionFt() const { return _inversionFt; }  // base of first inversion (cap)
+  int   stability() const { return _stability; }      // 0 stable 1 neutral 2 unstable 3 strong; -1 n/a
+
 private:
   bool parse(const String& gsd);
+  void analyze();          // derive cloud base / stability / lift top / inversion
 
   Settings*        _s = nullptr;
   NetClient*       _net = nullptr;
@@ -44,6 +51,8 @@ private:
 
   std::vector<SoundingLevel> _levels;
   float _freezeM = -1;
+  float _cloudBaseFt = -1, _thermalTopFt = -1, _inversionFt = -1;
+  int   _stability = -1;
   ProviderStatus _status = ProviderStatus::Loading;
   uint32_t _lastFetched = 0;
   bool _inflight = false;
