@@ -28,12 +28,13 @@ static const char* moonPhaseName(double deg) {
 // In the inner scope only close minors (a <= 1.8 AU, e.g. Starman) are shown.
 int PageSolarSystem::buildOrbit(OrbBody* out, int maxN) {
   int n = 0;
-  int planetN = _orbScope ? astro::kOrbitBodies : 4;
+  int planetN = _orbScope == 0 ? 4 : _orbScope == 1 ? 6 : astro::kOrbitBodies;  // inner/mid/all
   for (int i = 0; i < planetN && n < maxN; ++i) out[n++] = { false, i };
+  double maxAu = astro::orbitMeanAu(planetN - 1);          // outermost planet in scope
   String en = _settings.getString("orreryBodies", "Roadster,Psyche,Ceres,Vesta");
   for (int j = 0; j < astro::orbitMinorCount() && n < maxN; ++j) {
     if (en.indexOf(astro::orbitMinorName(j)) < 0) continue;
-    if (!_orbScope && astro::orbitMinorAu(j) > 1.8) continue;
+    if (astro::orbitMinorAu(j) > maxAu) continue;          // only minors inside the scope
     out[n++] = { true, j };
   }
   return n;
@@ -61,7 +62,7 @@ void PageSolarSystem::onTouch(App& app, int x, int y) {
   if (_view == 0 && x <= 80 && y >= app.contentH() - 20) { _filter = (_filter + 1) % 3; _dirty = true; return; }
   if (_view == 1) {                         // orbits
     if (x > app.contentW() - 52 && y >= app.contentH() - 16) {   // bottom-right: inner/all
-      _orbScope ^= 1;
+      _orbScope = (_orbScope + 1) % 3;                    // inner -> mid -> all
       int cnt = orbitVisibleCount();
       if (_orbSel >= cnt) _orbSel = cnt - 1;
       _dirty = true; return;
@@ -223,5 +224,6 @@ void PageSolarSystem::drawOrbit(App& app) {
   g.fillRect(cw - 50, by, 48, 14, gTheme.grid);
   g.setTextDatum(textdatum_t::middle_center);
   g.setTextColor(gTheme.fg, gTheme.grid);
-  g.drawString(_orbScope ? "all" : "inner", cw - 26, by + 7);
+  static const char* kScope[] = {"inner", "mid", "all"};
+  g.drawString(kScope[_orbScope], cw - 26, by + 7);
 }

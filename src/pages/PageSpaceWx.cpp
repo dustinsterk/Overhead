@@ -6,7 +6,18 @@
 #include "../services/TimeService.h"
 #include "../services/LocationService.h"
 #include "../astro/Sun.h"
+#include <math.h>
 #include <time.h>
+
+// Geomagnetic latitude (centred-dipole approx; pole ~80.65N, 72.68W) for aurora.
+static double geomagLat(double lat, double lon) {
+  const double D2R = 3.14159265358979323846 / 180.0;
+  const double pl = 80.65 * D2R, po = -72.68 * D2R;
+  double la = lat * D2R, lo = lon * D2R;
+  double s = sin(la) * sin(pl) + cos(la) * cos(pl) * cos(lo - po);
+  if (s > 1) s = 1; if (s < -1) s = -1;
+  return asin(s) / D2R;
+}
 
 // 0 Poor, 1 Fair, 2 Good — simple HF heuristic from SFI/Kp + day/night.
 static int bandCond(int meters, bool day, float kp, int sfi) {
@@ -59,7 +70,34 @@ void PageSpaceWx::draw(App& app) {
   g.setTextColor(gTheme.fg, gTheme.bg);
   g.setTextSize(2); g.drawString(String("SFI ") + (sfi < 0 ? String("?") : String(sfi)), 6, y);
   g.setTextSize(1); g.setTextColor(gTheme.accent, gTheme.bg); g.drawString(sl, 150, y + 6);
-  y += 26;
+  y += 24;
+
+  // Flare class + solar wind (speed / IMF Bz).
+  g.setTextColor(gTheme.dim, gTheme.bg); g.drawString("flare", 6, y);
+  String fl = _wx.flareClass();
+  Color flc = !fl.length() ? gTheme.dim : fl[0] == 'X' ? gTheme.warn : fl[0] == 'M' ? gTheme.accent : gTheme.ok;
+  g.setTextColor(flc, gTheme.bg); g.drawString(fl.length() ? fl : String("?"), 44, y);
+  g.setTextColor(gTheme.dim, gTheme.bg); g.drawString("wind", 104, y);
+  g.setTextColor(gTheme.fg, gTheme.bg);
+  g.drawString(_wx.windSpeed() >= 0 ? String(_wx.windSpeed()) + "km/s" : String("?"), 134, y);
+  g.setTextColor(gTheme.dim, gTheme.bg); g.drawString("Bz", 210, y);
+  if (_wx.bz() > -900) { g.setTextColor(_wx.bz() <= -5 ? gTheme.warn : gTheme.fg, gTheme.bg); g.drawString(String(_wx.bz()) + "nT", 230, y); }
+  else { g.setTextColor(gTheme.dim, gTheme.bg); g.drawString("?", 230, y); }
+  y += 14;
+
+  // Aurora chance (from Kp vs the observer's geomagnetic latitude).
+  if (_loc.active().valid && kp >= 0) {
+    double gm = fabs(geomagLat(_loc.active().lat, _loc.active().lon));
+    double boundary = 66.5 - 2.05 * kp;          // equatorward auroral-oval edge
+    double diff = gm - boundary;
+    const char* v = diff >= 0 ? "overhead possible" : diff >= -4 ? "low on N horizon" : "unlikely";
+    Color ac = diff >= 0 ? gTheme.ok : diff >= -4 ? gTheme.accent : gTheme.dim;
+    g.setTextColor(gTheme.dim, gTheme.bg); g.drawString("aurora", 6, y);
+    g.setTextColor(ac, gTheme.bg); g.drawString(v, 50, y);
+    g.setTextColor(gTheme.dim, gTheme.bg);
+    g.drawString(String("(gm ") + (int)round(gm) + "\xF7 need " + (int)round(boundary) + "\xF7)", 168, y);
+    y += 15;
+  }
 
   // Band table.
   bool day = true;

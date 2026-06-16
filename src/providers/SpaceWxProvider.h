@@ -17,12 +17,18 @@ public:
 
   float kp()  const { return _kp; }      // 0..9, -1 unknown
   int   sfi() const { return _sfi; }     // solar flux units, -1 unknown
+  const String& flareClass() const { return _flare; }  // GOES X-ray, e.g. "M1.2"; "" unknown
+  int   windSpeed() const { return _windKms; }         // solar wind km/s, -1 unknown
+  int   bz() const { return _bz; }                     // IMF Bz GSM (nT), -999 unknown
   ProviderStatus status() const { return _status; }
   uint32_t lastFetched() const { return _lastFetched; }
 
 private:
   void fetchKp();
   void fetchSfi();
+  void fetchXray();
+  void fetchWind();
+  void fetchMag();
   bool parseKp(const String& body);
 
   Settings*  _s = nullptr;
@@ -32,6 +38,9 @@ private:
 
   float _kp = -1;
   int   _sfi = -1;
+  String _flare;
+  int   _windKms = -1;
+  int   _bz = -999;
   ProviderStatus _status = ProviderStatus::Loading;
   uint32_t _lastFetched = 0;
 };

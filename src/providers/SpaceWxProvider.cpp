@@ -43,7 +43,51 @@ void SpaceWxProvider::refresh(bool force) {
   uint32_t now = (uint32_t)time(nullptr);
   CacheMeta m = _cache->stat("swx_kp");
   bool stale = force || !m.found || now < 1600000000UL || (now - m.fetchedAt) > ttl;
-  if (stale) { fetchKp(); fetchSfi(); }
+  if (stale) { fetchKp(); fetchSfi(); fetchXray(); fetchWind(); fetchMag(); }
+}
+
+// Latest GOES X-ray flare class (e.g. "M1.2"); tiny single-element array.
+void SpaceWxProvider::fetchXray() {
+  _net->get("https://services.swpc.noaa.gov/json/goes/primary/xray-flares-latest.json",
+    [this](int code, const String& body) {
+      if (code == 200) {
+        JsonDocument d;
+        if (!deserializeJson(d, body)) {
+          JsonArray a = d.as<JsonArray>();
+          if (!a.isNull() && a.size()) _flare = (const char*)(a[0]["current_class"] | "");
+        }
+      }
+      if (_bus) _bus->publish(ProviderId::SpaceWx);
+    });
+}
+
+// Solar-wind speed (km/s) + IMF Bz (nT) from the compact SWPC summary endpoints.
+void SpaceWxProvider::fetchWind() {
+  _net->get("https://services.swpc.noaa.gov/products/summary/solar-wind-speed.json",
+    [this](int code, const String& body) {
+      if (code == 200) {
+        JsonDocument d;
+        if (!deserializeJson(d, body)) {
+          JsonArray a = d.as<JsonArray>();
+          if (!a.isNull() && a.size()) _windKms = (int)lround((float)(a[0]["proton_speed"] | -1.0));
+        }
+      }
+      if (_bus) _bus->publish(ProviderId::SpaceWx);
+    });
+}
+
+void SpaceWxProvider::fetchMag() {
+  _net->get("https://services.swpc.noaa.gov/products/summary/solar-wind-mag-field.json",
+    [this](int code, const String& body) {
+      if (code == 200) {
+        JsonDocument d;
+        if (!deserializeJson(d, body)) {
+          JsonArray a = d.as<JsonArray>();
+          if (!a.isNull() && a.size()) _bz = (int)lround((float)(a[0]["bz_gsm"] | -999.0));
+        }
+      }
+      if (_bus) _bus->publish(ProviderId::SpaceWx);
+    });
 }
 
 void SpaceWxProvider::fetchKp() {
