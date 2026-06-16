@@ -45,9 +45,11 @@ void SpaceWxProvider::fetchSfi() {
         JsonDocument d;
         if (!deserializeJson(d, body)) {
           JsonVariant fv = d["Flux"];
+          if (fv.isNull()) fv = d["flux"];
           _sfi = fv.is<const char*>() ? atoi((const char*)fv) : (fv.isNull() ? -1 : fv.as<int>());
           _cache->put("swx_sfi", body, code, (uint32_t)time(nullptr));
-          Serial.printf("[spacewx] SFI=%d\n", _sfi);
+          if (_sfi < 0) Serial.printf("[spacewx] SFI not found, body: %.90s\n", body.c_str());
+          else          Serial.printf("[spacewx] SFI=%d\n", _sfi);
         }
       } else {
         Serial.printf("[spacewx] SFI fetch code=%d\n", code);
@@ -64,10 +66,18 @@ bool SpaceWxProvider::parseKp(const String& body) {
   if (err) { Serial.printf("[spacewx] kp parse err: %s\n", err.c_str()); return false; }
   JsonArray rows = doc.as<JsonArray>();
   if (rows.isNull() || rows.size() < 2) { Serial.println("[spacewx] kp: not an array"); return false; }
-  JsonArray last = rows[rows.size() - 1].as<JsonArray>();
-  if (last.isNull() || last.size() < 2) { Serial.println("[spacewx] kp: bad last row"); return false; }
-  JsonVariant kv = last[1];                          // value may be a string OR a number
-  _kp = kv.is<const char*>() ? atof((const char*)kv) : kv.as<float>();
-  Serial.printf("[spacewx] kp rows=%u last=%.2f\n", (unsigned)rows.size(), _kp);
-  return _kp >= 0;
+  // Scan backward for the most recent row with a real Kp (the latest slots are
+  // often blank, and the value can be a string or a number).
+  for (int i = (int)rows.size() - 1; i >= 1; --i) {
+    JsonArray r = rows[i].as<JsonArray>();
+    if (r.isNull() || r.size() < 2) continue;
+    JsonVariant kv = r[1];
+    if (kv.is<const char*>()) { const char* s = (const char*)kv; if (!s || !s[0]) continue; _kp = atof(s); }
+    else if (kv.is<float>() || kv.is<int>()) _kp = kv.as<float>();
+    else continue;
+    Serial.printf("[spacewx] Kp=%.2f (row %d/%u)\n", _kp, i, (unsigned)rows.size());
+    return _kp >= 0;
+  }
+  Serial.println("[spacewx] kp: no numeric row");
+  return false;
 }

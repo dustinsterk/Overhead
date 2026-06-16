@@ -21,10 +21,12 @@ void SoundingProvider::refresh(bool force) {
   bool stale = force || !m.found || now < 1600000000UL || (now - m.fetchedAt) > ttl;
   if (!stale) return;
 
+  // Plain HTTP: rucsoundings' HTTPS handshake fails on the ESP32 (start_ssl_client
+  // -1). It's public data, so HTTP is fine. Parens URL-encoded (%28/%29).
   char url[220];
   snprintf(url, sizeof(url),
-    "https://rucsoundings.noaa.gov/get_soundings.cgi?data_source=Op40&start=latest"
-    "&n_hrs=1&fcst_len=shortest&airport=%.3f,%.3f&text=Ascii%%20text%%20(GSD%%20format)",
+    "http://rucsoundings.noaa.gov/get_soundings.cgi?data_source=Op40&start=latest"
+    "&n_hrs=1&fcst_len=shortest&airport=%.3f,%.3f&text=Ascii%%20text%%20%%28GSD%%20format%%29",
     _loc->active().lat, _loc->active().lon);
   _inflight = true;
   _net->get(url, [this](int code, const String& body) {
