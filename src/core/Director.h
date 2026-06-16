@@ -29,7 +29,6 @@ public:
 
 private:
   void scanPasses();
-  int  ambientTarget();
 
   App*             _app = nullptr;
   Settings*        _s = nullptr;
@@ -50,4 +49,6 @@ private:
   uint32_t _lastScanMs = 0;
   uint32_t _lastDecideMs = 0;
   uint32_t _lastTourMs = 0;       // attract-tour dwell clock
+  bool     _ambNight = false;     // last day/night state (reset rotation on flip)
+  int      _ambPos = 0;           // index into the ambient page rotation
 };

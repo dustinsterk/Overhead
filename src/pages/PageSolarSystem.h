@@ -22,7 +22,7 @@ public:
   void onData(App& app, ProviderId id) override { _dirty = true; }
   void onTouch(App& app, int x, int y) override;
   void tick(App& app, uint32_t nowMs) override;
-  void autoAdvance(App& app) override;
+  bool autoAdvance(App& app) override;
 
 private:
   static constexpr int kN = 9;          // Sun, Moon, Mercury..Neptune

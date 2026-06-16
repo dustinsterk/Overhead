@@ -28,7 +28,9 @@ public:
 
   // Attract-mode step (spec §7). While the Director is resting in AUTO with no
   // specific item to highlight, it calls this on a dwell timer so the page tours
-  // its selectable objects and then its alternate views, repeating. Pages with
-  // nothing to cycle leave it a no-op.
-  virtual void autoAdvance(App& app) {}
+  // its selectable objects and then its alternate views. Returns true when the
+  // tour has just completed a FULL cycle (wrapped back to the start) — the signal
+  // for the Director to advance to the next page in a multi-page ambient rotation.
+  // Pages with nothing to cycle return true (they "complete" immediately).
+  virtual bool autoAdvance(App& app) { return true; }
 };

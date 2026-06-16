@@ -33,6 +33,16 @@ void PageStarMap::onTouch(App& app, int x, int y) {
   if (x >= third && x <= 2 * third) { _labels = !_labels; _dirty = true; }
 }
 
+bool PageStarMap::autoAdvance(App&) {
+  // No discrete objects to select; "tour" = progressively reveal fainter stars
+  // (mag 2 -> 3 -> 4), then signal a complete cycle so the rotation moves on.
+  _magLimit += 1.0f;
+  bool cycled = false;
+  if (_magLimit > 4.0f) { _magLimit = 2.0f; cycled = true; }
+  _dirty = true;
+  return cycled;
+}
+
 void PageStarMap::tick(App& app, uint32_t nowMs) {
   if (!_dirty && nowMs - _lastDraw < 30000) return; // sky rotates slowly
   _dirty = false; _lastDraw = nowMs;

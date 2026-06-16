@@ -35,5 +35,5 @@ private:
 
   JsonDocument _doc;
   static constexpr const char* kPath = "/settings.json";
-  static constexpr int kVersion = 3;
+  static constexpr int kVersion = 4;
 };

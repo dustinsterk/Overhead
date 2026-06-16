@@ -70,18 +70,20 @@ void PageSolarSystem::onTouch(App& app, int x, int y) {
   _dirty = true;
 }
 
-void PageSolarSystem::autoAdvance(App&) {
+bool PageSolarSystem::autoAdvance(App&) {
+  bool cycled = false;
   if (_view == 0) {                         // sky-dome: tour the visible bodies
     int vis = 0; for (int i = 0; i < kN; ++i) if (visible(i)) vis++;
-    if (vis == 0) { _view = 1; _tourN = 0; _orbSel = 0; _dirty = true; return; }
+    if (vis == 0) { _view = 1; _tourN = 0; _orbSel = 0; _dirty = true; return false; }
     int g = 0; do { _sel = (_sel + 1) % kN; } while (!visible(_sel) && ++g < kN);
     if (++_tourN >= vis) { _tourN = 0; _view = 1; _orbSel = 0; }   // toured all -> orbits
   } else {                                  // orbits: tour the visible bodies
     int cnt = orbitVisibleCount();
     _orbSel = (_orbSel + 1) % cnt;
-    if (++_tourN >= cnt) { _tourN = 0; _view = 0; }                // toured all -> sky-dome
+    if (++_tourN >= cnt) { _tourN = 0; _view = 0; cycled = true; } // orbits done -> full cycle
   }
   _dirty = true;
+  return cycled;
 }
 
 void PageSolarSystem::tick(App& app, uint32_t nowMs) {

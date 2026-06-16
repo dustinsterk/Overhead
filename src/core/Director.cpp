@@ -42,17 +42,6 @@ void Director::scanPasses() {
   }
 }
 
-int Director::ambientTarget() {
-  bool night = false;
-  if (_time->synced() && _loc->active().valid) {
-    double alt = astro::sunAltitudeDeg(_time->julianDate(), _loc->active().lat, _loc->active().lon);
-    night = alt < (double)_s->getInt("nightAmbientAlt", -12);
-  }
-  String t = night ? _s->getString("ambientNight", "Solar System")
-                   : _s->getString("ambientDay", "Agenda");
-  return _app->pageIndexByTitle(t.c_str());
-}
-
 void Director::tick(uint32_t nowMs) {
   if (!_s->getBool("focusEnabled", true)) return;
   if (nowMs - _lastDecideMs < 3000) return;       // decide every ~3 s
@@ -103,14 +92,41 @@ void Director::tick(uint32_t nowMs) {
     return;
   }
 
-  // Ambient resting default + attract tour: once settled on the ambient page in
-  // AUTO, step its selectable items / views on a dwell timer so it cycles through
-  // everything instead of sitting on one object (spec §7).
-  int amb = ambientTarget();
+  // Ambient resting default + multi-page attract tour. ambientDay/Night may be a
+  // comma-separated rotation of page titles (e.g. "Solar System,Star Map"): once
+  // settled on a page in AUTO, tour its items/views; when that page's tour wraps a
+  // full cycle, advance to the next page in the rotation (spec §7).
+  bool night = false;
+  if (_time->synced() && _loc->active().valid) {
+    double alt = astro::sunAltitudeDeg(_time->julianDate(), _loc->active().lat, _loc->active().lon);
+    night = alt < (double)_s->getInt("nightAmbientAlt", -12);
+  }
+  if (night != _ambNight) { _ambNight = night; _ambPos = 0; _lastTourMs = nowMs; }
+
+  String spec = night ? _s->getString("ambientNight", "Solar System,Star Map")
+                      : _s->getString("ambientDay", "Agenda");
+  int pages[6]; int np = 0;                         // resolved rotation page indices
+  for (int start = 0; np < 6 && start <= (int)spec.length(); ) {
+    int comma = spec.indexOf(',', start);
+    if (comma < 0) comma = spec.length();
+    String t = spec.substring(start, comma); t.trim();
+    int idx = t.length() ? _app->pageIndexByTitle(t.c_str()) : -1;
+    if (idx >= 0) pages[np++] = idx;
+    if (comma >= (int)spec.length()) break;
+    start = comma + 1;
+  }
+  if (np == 0) return;
+  if (_ambPos >= np) _ambPos = 0;
+  int amb = pages[_ambPos];
   _app->autoFocus(amb);
+
   uint32_t dwell = (uint32_t)_s->getInt("tourDwellSec", 6) * 1000UL;
   if (_app->mode() == App::Mode::Auto && !_app->pinned() && _app->activeIndex() == amb) {
-    if (nowMs - _lastTourMs >= dwell) { _app->autoAdvanceActive(); _lastTourMs = nowMs; }
+    if (nowMs - _lastTourMs >= dwell) {
+      bool cycled = _app->autoAdvanceActive();
+      _lastTourMs = nowMs;
+      if (cycled && np > 1) _ambPos = (_ambPos + 1) % np;   // page toured -> next in rotation
+    }
   } else {
     _lastTourMs = nowMs;     // (re)entering, or user took over -> dwell fully first
   }

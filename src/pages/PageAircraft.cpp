@@ -20,9 +20,11 @@ void PageAircraft::onExit(App& app) {
   _ap.setForeground(false);  // drop to the 60 s background cadence
 }
 
-void PageAircraft::autoAdvance(App&) {
+bool PageAircraft::autoAdvance(App&) {
   int n = (int)_ap.aircraft().size();      // single view: tour the contacts
-  if (n > 0) { _sel = (_sel + 1) % n; _needClear = _dirty = true; }
+  if (n <= 0) return true;                 // nothing to show -> let the rotation move on
+  _sel = (_sel + 1) % n; _needClear = _dirty = true;
+  return _sel == 0;                        // wrapped = full cycle
 }
 
 void PageAircraft::onData(App& app, ProviderId id) {

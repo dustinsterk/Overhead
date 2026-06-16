@@ -103,16 +103,20 @@ void PageSatellites::recomputeTrack(time_t now) {
   }
 }
 
-void PageSatellites::autoAdvance(App&) {
-  if (_order.empty()) return;
+bool PageSatellites::autoAdvance(App&) {
+  if (_order.empty()) return true;                // nothing to tour -> let rotation move on
+  bool cycled = false;
   if (_orderPos + 1 >= (int)_order.size()) {      // toured all birds -> next view, restart
+    bool wasGraph = (_view == View::Graph);
     _view = (_view == View::Polar) ? View::Ground
           : (_view == View::Ground) ? View::Graph : View::Polar;
     selectPos(0);
+    if (wasGraph) cycled = true;                  // Graph -> Polar = full cycle
   } else {
     selectPos(_orderPos + 1);
   }
   _needClear = _dirty = true;
+  return cycled;
 }
 
 void PageSatellites::onTouch(App& app, int x, int y) {

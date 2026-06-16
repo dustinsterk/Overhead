@@ -46,8 +46,9 @@ bool App::autoFocus(int index) {
   return true;
 }
 
-void App::autoAdvanceActive() {
-  if (_mode == Mode::Auto && !_pinned && _active >= 0) _pages[_active]->autoAdvance(*this);
+bool App::autoAdvanceActive() {
+  if (_mode == Mode::Auto && !_pinned && _active >= 0) return _pages[_active]->autoAdvance(*this);
+  return false;
 }
 
 void App::setBadge(int index, bool on) {

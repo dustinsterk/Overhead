@@ -18,6 +18,7 @@ public:
   void onData(App& app, ProviderId id) override { _dirty = true; }
   void onTouch(App& app, int x, int y) override;
   void tick(App& app, uint32_t nowMs) override;
+  bool autoAdvance(App& app) override;
 
 private:
   void draw(App& app);

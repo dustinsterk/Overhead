@@ -61,11 +61,14 @@ void PageAviation::onTouch(App& app, int x, int y) {
   }
 }
 
-void PageAviation::autoAdvance(App&) {
+bool PageAviation::autoAdvance(App&) {
+  bool cycled = false;
   auto nextView = [&]() {
+    bool wasHazards = (_view == View::Hazards);
     _view = _view == View::Metar ? View::Map : _view == View::Map ? View::Sounding
           : _view == View::Sounding ? View::Hazards : View::Metar;
     _tourN = 0; _sel = 0;
+    if (wasHazards) cycled = true;         // Hazards -> Metar = full cycle
   };
   int n = (int)_wx.stations().size();
   if ((_view == View::Metar || _view == View::Map) && n > 0) {
@@ -75,6 +78,7 @@ void PageAviation::autoAdvance(App&) {
     nextView();                            // Sounding/Hazards (no items): one dwell, next view
   }
   _needClear = _dirty = true;
+  return cycled;
 }
 
 void PageAviation::tick(App& app, uint32_t nowMs) {
@@ -127,12 +131,13 @@ void PageAviation::drawMetar(App& app) {
   }
   line(m.name.substring(0, maxc) + "  " + (int)round(m.distNm) + "nm  [tap mid: map]", gTheme.dim);
   if (m.wspd >= 0) line(m.wspd == 0 ? String("wind calm")
-        : String("wind ") + (m.wdir < 0 ? String("VRB") : String(m.wdir)) + "\xF7 @ " + m.wspd + " kt", gTheme.fg);
+        : String("wind ") + (m.wdir < 0 ? String("VRB") : String(m.wdir)) + "\xF7 @ " + m.wspd
+          + " kt (" + (int)round(m.wspd * 1.15078f) + " mph)", gTheme.fg);
   if (m.visSm >= 0)   line(String("vis ") + String(m.visSm, 0) + " sm", gTheme.fg);
   line(m.ceilingFt >= 0 ? String("ceiling ") + m.ceilingFt + " ft" : String("ceiling: none"), gTheme.fg);
   if (m.tempC > -999) line(String("temp ") + m.tempC + " (" + (m.tempC * 9 / 5 + 32) + "F)  dewpt "
                            + m.dewpC + " (" + (m.dewpC * 9 / 5 + 32) + "F)", gTheme.fg);
-  if (m.altimHpa > 0) line(String("QNH ") + m.altimHpa + " hPa", gTheme.fg);
+  if (m.altimHpa > 0) line(String("QNH ") + m.altimHpa + " hPa (" + String(m.altimHpa / 33.8639f, 2) + " inHg)", gTheme.fg);
   if (m.wx.length())  line(String("wx ") + m.wx, gTheme.warn);
   line(String(_sel + 1) + "/" + list.size(), gTheme.dim);
   y += 3; g.setTextColor(gTheme.dim, gTheme.bg); g.drawString("METAR", x0, y); y += 11;

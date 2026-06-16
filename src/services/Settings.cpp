@@ -62,7 +62,7 @@ void Settings::seedDefaults() {
   // Director / Intelligent Focus (spec §7.10)
   _doc["focusEnabled"]  = true;
   _doc["ambientDay"]    = "Agenda";         // page title for day ambient
-  _doc["ambientNight"]  = "Solar System";   // page title for night ambient
+  _doc["ambientNight"]  = "Solar System,Star Map";   // night ambient rotation (CSV of page titles)
   _doc["nightAmbientAlt"] = -12;      // Sun alt to switch to the night ambient tab
   _doc["passLeadMin"]   = 5;          // minutes before AOS to seize focus
   _doc["launchLeadMin"] = 10;         // minutes before T-0 to seize focus
@@ -82,6 +82,10 @@ void Settings::migrate() {
   // -> v3: the day-ambient default is the Agenda home tab (force; the old default
   // was Launches and the v2 conditional migration didn't take on some units).
   if (v < 3) _doc["ambientDay"] = "Agenda";
+  // -> v4: night ambient is a rotation (Solar System + Star Map). Only upgrade the
+  // old single default; leave a user's custom choice alone.
+  if (v < 4 && String((const char*)(_doc["ambientNight"] | "")) == "Solar System")
+    _doc["ambientNight"] = "Solar System,Star Map";
   _doc["settingsVersion"] = kVersion;
   save();
 }
