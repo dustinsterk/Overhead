@@ -21,6 +21,7 @@ void PageAircraft::onData(App& app, ProviderId id) {
 
 void PageAircraft::onTouch(App& app, int x, int y) {
   if (handleRadiusTap(app, x, y)) return;          // bottom-left range badge
+  if (handleGroundTap(app, x, y)) return;          // ground-filter badge (right of it)
   int n = (int)_ap.aircraft().size();
   if (n == 0) { _sel = -1; return; }
   int third = app.contentW() / 3;
@@ -30,9 +31,9 @@ void PageAircraft::onTouch(App& app, int x, int y) {
 }
 
 bool PageAircraft::handleRadiusTap(App& app, int x, int yRel) {
-  if (x > 80 || yRel < app.contentH() - 20) return false;
+  if (x > 64 || yRel < app.contentH() - 20) return false;
   int r = (int)_settings.getInt("adsbRadiusNm", 50);
-  int next = (r <= 25) ? 50 : (r <= 50) ? 100 : (r <= 100) ? 150 : (r <= 150) ? 250 : 25;
+  int next = (r <= 10) ? 15 : (r <= 15) ? 25 : (r <= 25) ? 50 : 10;   // 10/15/25/50
   _settings.set("adsbRadiusNm", (long)next);
   _settings.save();
   _ap.poll();                                      // refetch with the new radius
@@ -40,14 +41,35 @@ bool PageAircraft::handleRadiusTap(App& app, int x, int yRel) {
   return true;
 }
 
+bool PageAircraft::handleGroundTap(App& app, int x, int yRel) {
+  if (x < 68 || x > 132 || yRel < app.contentH() - 20) return false;
+  bool hide = _settings.getInt("adsbHideGround", 0) != 0;
+  _settings.set("adsbHideGround", (long)(hide ? 0 : 1));
+  _settings.save();
+  _ap.poll();                                      // refetch / re-filter
+  _dirty = _needClear = true;
+  return true;
+}
+
 void PageAircraft::drawRadiusBadge(App& app) {
   auto& g = app.display().gfx();
   int y = app.contentY() + app.contentH() - 16;
-  g.fillRect(4, y, 72, 14, gTheme.grid);
+  g.fillRect(4, y, 56, 14, gTheme.grid);
   g.setTextDatum(textdatum_t::middle_left);
   g.setTextColor(gTheme.fg, gTheme.grid);
   g.setTextSize(1);
   g.drawString(String((int)_ap.radiusNm()) + " nm", 8, y + 7);
+}
+
+void PageAircraft::drawGroundBadge(App& app) {
+  auto& g = app.display().gfx();
+  int y = app.contentY() + app.contentH() - 16;
+  bool hide = _ap.hideGround();
+  g.fillRect(64, y, 64, 14, gTheme.grid);
+  g.setTextDatum(textdatum_t::middle_left);
+  g.setTextColor(hide ? gTheme.dim : gTheme.fg, gTheme.grid);   // dim when filtered out
+  g.setTextSize(1);
+  g.drawString(hide ? "gnd: off" : "gnd: on", 68, y + 7);
 }
 
 void PageAircraft::tick(App& app, uint32_t nowMs) {
@@ -72,7 +94,10 @@ void PageAircraft::draw(App& app) {
   if (list.empty()) {
     drawMessage(app, _ap.status() == ProviderStatus::Error ? "feed unavailable"
                   : _ap.status() == ProviderStatus::Loading ? "scanning..."
+                  : _ap.hideGround() ? "no airborne aircraft in range"
                   : "no aircraft in range");
+    drawRadiusBadge(app);    // keep the badges tappable so the user can widen
+    drawGroundBadge(app);    // range or re-enable ground traffic from here
     return;
   }
   if (_sel >= (int)list.size()) _sel = list.size() - 1;
@@ -130,6 +155,8 @@ void PageAircraft::draw(App& app) {
     g.drawString(a.flight.length() ? a.flight : a.hex, ix, iy); iy += 20;
     g.setTextSize(1);
     line(String(_sel + 1) + "/" + list.size() + "  (tap edges)", gTheme.dim);
+    if (a.type.length() || a.category.length())
+      line(String("type ") + (a.type.length() ? a.type : a.category), gTheme.fg);
     line(a.onGround ? String("on ground") : String("alt ") + (int)a.altFt + " ft", gTheme.fg);
     line(String("gs ") + (int)a.gsKt + " kt  trk " + (int)a.trackDeg, gTheme.fg);
     line(String("dist ") + (int)round(a.distNm) + " nm  brg " + (int)round(a.bearingDeg), gTheme.fg);
@@ -140,4 +167,5 @@ void PageAircraft::draw(App& app) {
   }
 
   drawRadiusBadge(app);
+  drawGroundBadge(app);
 }

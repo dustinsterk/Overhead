@@ -26,7 +26,9 @@ private:
   void draw(App& app);
   void drawMessage(App& app, const char* msg);
   void drawRadiusBadge(App& app);
+  void drawGroundBadge(App& app);
   bool handleRadiusTap(App& app, int x, int yRel);
+  bool handleGroundTap(App& app, int x, int yRel);
 
   AircraftProvider& _ap;
   LocationService&  _loc;

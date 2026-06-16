@@ -31,6 +31,7 @@ void AircraftProvider::poll() {
   if (_inflight || !_loc->active().valid) return;
   _local = _s->getString("adsbMode", "cloud") == "local";
   _radiusNm = (float)_s->getInt("adsbRadiusNm", 50);
+  _hideGround = _s->getInt("adsbHideGround", 0) != 0;
 
   String url;
   if (_local) {
@@ -67,7 +68,7 @@ void AircraftProvider::parse(const String& body) {
   for (const char* key : {"ac", "aircraft"}) {
     JsonObject e = filter[key].add<JsonObject>();
     e["hex"] = e["flight"] = e["lat"] = e["lon"] = e["alt_baro"] = true;
-    e["gs"] = e["track"] = e["squawk"] = e["category"] = e["seen"] = true;
+    e["gs"] = e["track"] = e["squawk"] = e["category"] = e["seen"] = e["t"] = true;
   }
   JsonDocument doc;
   if (deserializeJson(doc, body, DeserializationOption::Filter(filter))) return;
@@ -95,8 +96,10 @@ void AircraftProvider::parse(const String& body) {
     a.trackDeg= o["track"] | 0.0f;
     a.squawk  = (const char*)(o["squawk"] | "");
     a.category= (const char*)(o["category"] | "");
+    a.type    = (const char*)(o["t"] | "");
     a.seenS   = o["seen"] | 0.0f;
     if (a.seenS > 60) continue;                            // stale contact
+    if (_hideGround && a.onGround) continue;               // ground-traffic filter
     if (maxAlt > 0 && a.altFt > maxAlt) continue;          // altitude filter
     relPos(olat, olon, a.lat, a.lon, a.distNm, a.bearingDeg);
     if (a.distNm > _radiusNm * 1.2f) continue;
