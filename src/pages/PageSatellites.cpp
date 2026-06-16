@@ -103,6 +103,18 @@ void PageSatellites::recomputeTrack(time_t now) {
   }
 }
 
+void PageSatellites::autoAdvance(App&) {
+  if (_order.empty()) return;
+  if (_orderPos + 1 >= (int)_order.size()) {      // toured all birds -> next view, restart
+    _view = (_view == View::Polar) ? View::Ground
+          : (_view == View::Ground) ? View::Graph : View::Polar;
+    selectPos(0);
+  } else {
+    selectPos(_orderPos + 1);
+  }
+  _needClear = _dirty = true;
+}
+
 void PageSatellites::onTouch(App& app, int x, int y) {
   if (handleMinElTap(app, x, y)) return;          // small bottom-left badge
   if (_order.empty()) return;

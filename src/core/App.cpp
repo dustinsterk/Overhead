@@ -46,6 +46,10 @@ bool App::autoFocus(int index) {
   return true;
 }
 
+void App::autoAdvanceActive() {
+  if (_mode == Mode::Auto && !_pinned && _active >= 0) _pages[_active]->autoAdvance(*this);
+}
+
 void App::setBadge(int index, bool on) {
   if (index >= 0 && index < (int)_badge.size() && _badge[index] != on) {
     _badge[index] = on; _statusDirty = true;

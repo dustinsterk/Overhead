@@ -61,6 +61,22 @@ void PageAviation::onTouch(App& app, int x, int y) {
   }
 }
 
+void PageAviation::autoAdvance(App&) {
+  auto nextView = [&]() {
+    _view = _view == View::Metar ? View::Map : _view == View::Map ? View::Sounding
+          : _view == View::Sounding ? View::Hazards : View::Metar;
+    _tourN = 0; _sel = 0;
+  };
+  int n = (int)_wx.stations().size();
+  if ((_view == View::Metar || _view == View::Map) && n > 0) {
+    _sel = (_sel + 1) % n;
+    if (++_tourN >= n) nextView();         // toured all stations -> next view
+  } else {
+    nextView();                            // Sounding/Hazards (no items): one dwell, next view
+  }
+  _needClear = _dirty = true;
+}
+
 void PageAviation::tick(App& app, uint32_t nowMs) {
   if (!_dirty && nowMs - _lastDraw < 5000) return;
   _dirty = false; _lastDraw = nowMs;

@@ -49,4 +49,5 @@ private:
 
   uint32_t _lastScanMs = 0;
   uint32_t _lastDecideMs = 0;
+  uint32_t _lastTourMs = 0;       // attract-tour dwell clock
 };

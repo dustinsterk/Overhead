@@ -21,6 +21,7 @@ public:
   void onData(App& app, ProviderId id) override;
   void onTouch(App& app, int x, int y) override;
   void tick(App& app, uint32_t nowMs) override;
+  void autoAdvance(App& app) override;
 
 private:
   enum class View { Metar, Map, Sounding, Hazards };
@@ -37,6 +38,7 @@ private:
   View  _view = View::Metar;
   int   _sel = 0;
   int   _mapZoom = 0;          // airport-map zoom index (top-left badge cycles)
+  int   _tourN = 0;            // attract-tour: stations stepped in this view
   bool  _dirty = true;
   bool  _needClear = true;
   bool  _wasEmpty = true;

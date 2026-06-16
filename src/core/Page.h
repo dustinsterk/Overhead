@@ -25,4 +25,10 @@ public:
   virtual void tick(App& app, uint32_t nowMs) {}   // dirty-rect redraws
   virtual void onTouch(App& app, int x, int y) {}
   virtual void onData(App& app, ProviderId id) {}  // EventBus delivery
+
+  // Attract-mode step (spec §7). While the Director is resting in AUTO with no
+  // specific item to highlight, it calls this on a dwell timer so the page tours
+  // its selectable objects and then its alternate views, repeating. Pages with
+  // nothing to cycle leave it a no-op.
+  virtual void autoAdvance(App& app) {}
 };

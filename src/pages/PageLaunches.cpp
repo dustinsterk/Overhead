@@ -33,6 +33,11 @@ void PageLaunches::onTouch(App& app, int x, int y) {
   _dirty = true;
 }
 
+void PageLaunches::autoAdvance(App&) {
+  int n = (int)_lp.launches().size();      // single view: tour the upcoming launches
+  if (n > 0) { _sel = (_sel + 1) % n; _needClear = _dirty = true; }
+}
+
 void PageLaunches::tick(App& app, uint32_t nowMs) {
   if (!_dirty && nowMs - _lastDraw < 1000) return;
   _dirty = false;

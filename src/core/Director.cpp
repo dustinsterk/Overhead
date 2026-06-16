@@ -85,8 +85,10 @@ void Director::tick(uint32_t nowMs) {
   int avIdx = _app->pageIndexByTitle("Aviation");
   if (avIdx >= 0) _app->setBadge(avIdx, _avwx && _avwx->hasSpeci());
 
-  // Interrupt: pass wins ties if it starts first.
+  // Interrupt: pass wins ties if it starts first. A specific item is highlighted
+  // (the bird / launch) rather than touring, so hold the tour clock.
   if (passNow && (!launchNow || _passAos <= lnet)) {
+    _lastTourMs = nowMs;
     bool onSat = (_app->activeIndex() == satIdx);
     if (_app->autoFocus(satIdx)) onSat = true;
     else if (!onSat) _app->setBadge(satIdx, true);
@@ -96,10 +98,20 @@ void Director::tick(uint32_t nowMs) {
     return;
   }
   if (launchNow) {
+    _lastTourMs = nowMs;
     if (!_app->autoFocus(lchIdx) && _app->activeIndex() != lchIdx) _app->setBadge(lchIdx, true);
     return;
   }
 
-  // Ambient resting default.
-  _app->autoFocus(ambientTarget());
+  // Ambient resting default + attract tour: once settled on the ambient page in
+  // AUTO, step its selectable items / views on a dwell timer so it cycles through
+  // everything instead of sitting on one object (spec §7).
+  int amb = ambientTarget();
+  _app->autoFocus(amb);
+  uint32_t dwell = (uint32_t)_s->getInt("tourDwellSec", 6) * 1000UL;
+  if (_app->mode() == App::Mode::Auto && !_app->pinned() && _app->activeIndex() == amb) {
+    if (nowMs - _lastTourMs >= dwell) { _app->autoAdvanceActive(); _lastTourMs = nowMs; }
+  } else {
+    _lastTourMs = nowMs;     // (re)entering, or user took over -> dwell fully first
+  }
 }

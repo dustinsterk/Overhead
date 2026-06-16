@@ -32,6 +32,7 @@ public:
   int  activeIndex() const { return _active; }
   int  pageIndexByTitle(const char* title) const;
   bool autoFocus(int index);            // switch only if AUTO & unpinned; true if switched
+  void autoAdvanceActive();             // step active page's tour (only when AUTO & unpinned)
   void setBadge(int index, bool on);
   void setInactivityMs(uint32_t ms) { _inactivityMs = ms; }
   uint32_t idleMs(uint32_t now) const { return now - _lastInteractMs; }

@@ -22,6 +22,7 @@ public:
   void onData(App& app, ProviderId id) override { _dirty = true; }
   void onTouch(App& app, int x, int y) override;
   void tick(App& app, uint32_t nowMs) override;
+  void autoAdvance(App& app) override;
 
 private:
   static constexpr int kN = 9;          // Sun, Moon, Mercury..Neptune
@@ -41,6 +42,7 @@ private:
   int   _orbSel = 2;                     // selected orbit body (0..8, 2=Earth)
   int   _orbScope = 1;                   // orbit view: 0 inner (Me..Ma), 1 all (..Pluto)
   int   _view = 0;                       // 0 sky-dome, 1 orbits
+  int   _tourN = 0;                      // attract-tour: items stepped in this view
   int   _filter = 1;                    // 0 all, 1 above-horizon, 2 naked-eye
   bool  _dirty = true;
   uint32_t _lastDraw = 0;
