@@ -24,10 +24,11 @@ public:
   bool autoAdvance(App& app) override;
 
 private:
-  enum class View { Metar, Map, Sounding, Hazards };
+  enum class View { Metar, Map, Taf, Sounding, Hazards };
   void draw(App& app);
   void drawMetar(App& app);
   void drawMap(App& app);
+  void drawTaf(App& app);
   void drawSounding(App& app);
   void drawHazards(App& app);
 

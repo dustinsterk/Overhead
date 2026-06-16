@@ -46,8 +46,8 @@ void PageAviation::onData(App& app, ProviderId id) {
 void PageAviation::onTouch(App& app, int x, int y) {
   int third = app.contentW() / 3;
   if (x >= third && x <= 2 * third) {               // centre: cycle view (Map first)
-    _view = _view == View::Map ? View::Metar : _view == View::Metar ? View::Sounding
-          : _view == View::Sounding ? View::Hazards : View::Map;
+    _view = _view == View::Map ? View::Metar : _view == View::Metar ? View::Taf
+          : _view == View::Taf ? View::Sounding : _view == View::Sounding ? View::Hazards : View::Map;
     _needClear = _dirty = true; return;
   }
   if (_view == View::Map && x < 50 && y < 16) {     // top-left badge: cycle map zoom
@@ -55,7 +55,7 @@ void PageAviation::onTouch(App& app, int x, int y) {
     _needClear = _dirty = true; return;
   }
   int n = (int)_wx.stations().size();
-  if (n && (_view == View::Metar || _view == View::Map)) {   // edges step stations
+  if (n && (_view == View::Metar || _view == View::Map || _view == View::Taf)) {   // edges step stations
     _sel = (x < third) ? (_sel - 1 + n) % n : (_sel + 1) % n;
     _needClear = _dirty = true;
   }
@@ -65,13 +65,13 @@ bool PageAviation::autoAdvance(App&) {
   bool cycled = false;
   auto nextView = [&]() {
     bool wasHazards = (_view == View::Hazards);
-    _view = _view == View::Map ? View::Metar : _view == View::Metar ? View::Sounding
-          : _view == View::Sounding ? View::Hazards : View::Map;
+    _view = _view == View::Map ? View::Metar : _view == View::Metar ? View::Taf
+          : _view == View::Taf ? View::Sounding : _view == View::Sounding ? View::Hazards : View::Map;
     _tourN = 0; _sel = 0;
     if (wasHazards) cycled = true;         // Hazards -> Map = full cycle
   };
   int n = (int)_wx.stations().size();
-  if ((_view == View::Metar || _view == View::Map) && n > 0) {
+  if ((_view == View::Metar || _view == View::Map || _view == View::Taf) && n > 0) {
     _sel = (_sel + 1) % n;
     if (++_tourN >= n) nextView();         // toured all stations -> next view
   } else {
@@ -93,6 +93,7 @@ void PageAviation::draw(App& app) {
   if (_needClear) { g.fillRect(0, cy0, cw, ch, gTheme.bg); _needClear = false; }
   if (_view == View::Metar)         drawMetar(app);
   else if (_view == View::Map)      drawMap(app);
+  else if (_view == View::Taf)      drawTaf(app);
   else if (_view == View::Sounding) drawSounding(app);
   else                              drawHazards(app);
 }
@@ -129,7 +130,7 @@ void PageAviation::drawMetar(App& app) {
     char z[10], l[10]; strftime(z, sizeof(z), "%d%H%MZ", &gu); strftime(l, sizeof(l), "%I:%M%p", &lo);
     line(String(z) + " / " + l, gTheme.dim);
   }
-  line(m.name.substring(0, maxc) + "  " + (int)round(m.distNm) + "nm  [tap mid: sounding]", gTheme.dim);
+  line(m.name.substring(0, maxc) + "  " + (int)round(m.distNm) + "nm  [tap mid: taf]", gTheme.dim);
   if (m.wspd >= 0) line(m.wspd == 0 ? String("wind calm")
         : String("wind ") + (m.wdir < 0 ? String("VRB") : String(m.wdir)) + "\xF7 @ " + m.wspd
           + " kt (" + (int)round(m.wspd * 1.15078f) + " mph)", gTheme.fg);
@@ -218,6 +219,73 @@ void PageAviation::drawMap(App& app) {
     if (s.raw.length())                            // full raw METAR, wrapped (2 lines)
       drawWrapped(g, s.raw, 4, by + 11, (cw - 8) / 6, 2, gTheme.dim);
   }
+}
+
+// --- compact TAF token decode ---
+static String tafWind(const String& t) {
+  if (!t.endsWith("KT") || t.length() < 7) return "";
+  if (t == "00000KT") return "calm";
+  String dir = t.substring(0, 3);
+  if (dir != "VRB") for (int k = 0; k < 3; ++k) if (!isdigit(dir[k])) return "";
+  int gi = t.indexOf('G');
+  String spd = t.substring(3, gi > 0 ? gi : t.length() - 2);
+  String s = dir + "@" + String(spd.toInt());
+  if (gi > 0) s += "g" + String(t.substring(gi + 1, t.length() - 2).toInt());
+  return s + "kt";
+}
+static String tafVis(const String& t) {
+  if (!t.endsWith("SM") || t.length() < 3) return "";
+  String v = t.substring(0, t.length() - 2), pre;
+  if (v.startsWith("P")) { pre = ">"; v = v.substring(1); }
+  else if (v.startsWith("M")) { pre = "<"; v = v.substring(1); }
+  if (!v.length() || !(isdigit(v[0]))) return "";
+  return pre + v + "sm";
+}
+static String tafTok(const String& t) {                 // wind/vis decoded; rest passed through
+  String w = tafWind(t); if (w.length()) return w;
+  String v = tafVis(t);  if (v.length()) return v;
+  return t;                                              // FEW/SCT/BKN/OVC, wx, CAVOK, SKC...
+}
+
+void PageAviation::drawTaf(App& app) {
+  auto& g = app.display().gfx();
+  const int cw = app.contentW(), cy0 = app.contentY(), ch = app.contentH();
+  const auto& list = _wx.stations();
+  g.setTextDatum(textdatum_t::top_left);
+  g.setTextColor(gTheme.accent, gTheme.bg);
+  if (list.empty() || _sel >= (int)list.size()) {
+    g.drawString("TAF  [tap mid: sounding]", 6, cy0 + 2);
+    g.setTextColor(gTheme.dim, gTheme.bg); g.drawString("no station", 6, cy0 + ch / 2); return;
+  }
+  const Metar& m = list[_sel];
+  g.drawString(m.icao + " TAF  [tap mid: sounding]", 6, cy0 + 2);
+  if (!m.taf.length()) { g.setTextColor(gTheme.dim, gTheme.bg); g.drawString("no TAF for this field", 6, cy0 + ch / 2); return; }
+
+  const String& t = m.taf; int i = 0, n = t.length();
+  int y = cy0 + 16; const int maxc = (cw - 10) / 6;
+  String label = "now", parts, tok; bool gotIcao = false;
+  auto nextTok = [&](String& o) -> bool { while (i < n && t[i] == ' ') i++; if (i >= n) return false; int s = i; while (i < n && t[i] != ' ') i++; o = t.substring(s, i); return true; };
+  auto rng = [&](const String& r) -> String { return (r.length() == 9 && r[4] == '/') ? r.substring(2, 4) + "-" + r.substring(7, 9) : r; };
+  auto emit = [&]() {
+    if (!parts.length() || y > cy0 + ch - 12) { parts = ""; return; }
+    g.setTextColor(gTheme.warn, gTheme.bg); g.drawString(padRight(label, 9).substring(0, 9), 6, y);
+    g.setTextColor(gTheme.fg, gTheme.bg);   g.drawString(parts.substring(0, maxc - 9), 6 + 9 * 6, y);
+    y += 12; parts = "";
+  };
+  bool haveValid = false;
+  while (nextTok(tok)) {
+    if (tok == "TAF" || tok == "AMD" || tok == "COR") continue;
+    if (!gotIcao && tok.length() == 4) { gotIcao = true; continue; }     // ICAO
+    if (tok.endsWith("Z") && tok.length() >= 6) continue;                // issue time
+    if (!haveValid && tok.length() == 9 && tok[4] == '/') { haveValid = true; continue; }  // overall valid
+    if (tok.startsWith("FM") && tok.length() == 8) { emit(); label = "FM" + tok.substring(2, 4) + "z"; continue; }
+    if (tok == "BECMG") { emit(); String r; label = nextTok(r) ? "bcmg " + rng(r) : "becmg"; continue; }
+    if (tok == "TEMPO") { emit(); String r; label = nextTok(r) ? "tmpo " + rng(r) : "tempo"; continue; }
+    if (tok.startsWith("PROB")) { emit(); String r; label = "p" + tok.substring(4); if (nextTok(r)) label += " " + rng(r); continue; }
+    parts += tafTok(tok) + " ";
+  }
+  emit();
+  if (y == cy0 + 16) { g.setTextColor(gTheme.dim, gTheme.bg); g.drawString("(could not parse)", 6, y); }
 }
 
 void PageAviation::drawSounding(App& app) {
