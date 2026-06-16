@@ -27,6 +27,9 @@ void AircraftProvider::begin(Settings* s, NetClient* net, EventBus* bus, Locatio
   _s = s; _net = net; _bus = bus; _loc = loc;
 }
 
+double AircraftProvider::centerLat() const { return _ctrSet ? _ctrLat : _loc->active().lat; }
+double AircraftProvider::centerLon() const { return _ctrSet ? _ctrLon : _loc->active().lon; }
+
 void AircraftProvider::poll() {
   if (_inflight || !_loc->active().valid) return;
   // Throttle when the radar isn't on screen (the scheduler still calls every few
@@ -45,7 +48,7 @@ void AircraftProvider::poll() {
   } else {
     char b[96];
     snprintf(b, sizeof(b), "https://api.airplanes.live/v2/point/%.4f/%.4f/%d",
-             _loc->active().lat, _loc->active().lon, (int)_radiusNm);
+             centerLat(), centerLon(), (int)_radiusNm);
     url = b;
   }
 
@@ -85,7 +88,7 @@ void AircraftProvider::parse(const String& body) {
   if (arr.isNull()) arr = doc["aircraft"].as<JsonArray>();
   if (arr.isNull()) return;
 
-  double olat = _loc->active().lat, olon = _loc->active().lon;
+  double olat = centerLat(), olon = centerLon();
   int maxAlt = (int)_s->getInt("adsbMaxAltFt", 0);
 
   std::vector<Aircraft> out;

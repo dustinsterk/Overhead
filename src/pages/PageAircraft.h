@@ -3,6 +3,7 @@
 #include <Arduino.h>
 
 class AircraftProvider;
+class AviationWxProvider;
 class LocationService;
 class Settings;
 
@@ -13,8 +14,8 @@ class Settings;
 // OurAirports subset), category/altitude filter chips, tap-on-blip selection.
 class PageAircraft : public Page {
 public:
-  PageAircraft(AircraftProvider& ap, LocationService& loc, Settings& settings)
-    : _ap(ap), _loc(loc), _settings(settings) {}
+  PageAircraft(AircraftProvider& ap, AviationWxProvider& wx, LocationService& loc, Settings& settings)
+    : _ap(ap), _wx(wx), _loc(loc), _settings(settings) {}
 
   const char* title() const override { return "Aircraft"; }
   void onEnter(App& app) override;
@@ -26,18 +27,27 @@ public:
 
 private:
   void draw(App& app);
-  void drawMessage(App& app, const char* msg);
+  void drawMessage(App& app, const char* msg, int topY);
   void drawRadiusBadge(App& app);
   void drawGroundBadge(App& app);
+  int  drawChips(App& app);                      // centre selector row; returns its height
   bool handleRadiusTap(App& app, int x, int yRel);
   bool handleGroundTap(App& app, int x, int yRel);
+  bool handleChipTap(App& app, int x, int yRel);
+  void applyCenter();                            // push _centerIcao to the provider + poll
 
-  AircraftProvider& _ap;
-  LocationService&  _loc;
-  Settings&         _settings;
+  AircraftProvider&   _ap;
+  AviationWxProvider& _wx;
+  LocationService&    _loc;
+  Settings&           _settings;
   int   _sel = -1;
+  String _centerIcao;        // "" = observer (HOME); else recentre on this airport
   bool  _dirty = true;
   bool  _needClear = true;   // full-clear only on structural change (anti-flicker)
   bool  _wasEmpty = true;    // track empty<->populated to clear only on transition
   uint32_t _lastDraw = 0;
+
+  static constexpr int kMaxChips = 8;
+  int    _chipX[kMaxChips] = {0}, _chipW[kMaxChips] = {0}, _chipCount = 0;
+  String _chipIcao[kMaxChips];
 };

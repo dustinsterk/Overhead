@@ -3,6 +3,7 @@
 #include "../core/Theme.h"
 #include "../hal/Display.h"
 #include "../providers/AircraftProvider.h"
+#include "../providers/AviationWxProvider.h"
 #include "../services/LocationService.h"
 #include "../services/Settings.h"
 #include <math.h>
@@ -13,7 +14,16 @@ static constexpr double D2R = 3.14159265358979323846 / 180.0;
 void PageAircraft::onEnter(App& app) {
   _dirty = _needClear = true;
   _ap.setForeground(true);   // full-rate polling + an immediate refresh on entry
-  _ap.poll();
+  applyCenter();             // sync provider centre with the selected chip, then poll
+}
+
+void PageAircraft::applyCenter() {
+  if (_centerIcao.length()) {
+    for (const auto& s : _wx.stations())
+      if (s.icao == _centerIcao) { _ap.setCenter(s.lat, s.lon); _ap.poll(); return; }
+    _centerIcao = "";        // selected airport no longer in range
+  }
+  _ap.clearCenter(); _ap.poll();
 }
 
 void PageAircraft::onExit(App& app) {
@@ -38,6 +48,7 @@ void PageAircraft::onData(App& app, ProviderId id) {
 }
 
 void PageAircraft::onTouch(App& app, int x, int y) {
+  if (handleChipTap(app, x, y)) return;            // top centre-selector chips
   if (handleRadiusTap(app, x, y)) return;          // bottom-left range badge
   if (handleGroundTap(app, x, y)) return;          // ground-filter badge (right of it)
   int n = (int)_ap.aircraft().size();
@@ -97,38 +108,87 @@ void PageAircraft::tick(App& app, uint32_t nowMs) {
   draw(app);
 }
 
-void PageAircraft::drawMessage(App& app, const char* msg) {
+void PageAircraft::drawMessage(App& app, const char* msg, int topY) {
   auto& g = app.display().gfx();
-  g.fillRect(0, app.contentY(), app.contentW(), app.contentH(), gTheme.bg);
+  const int cw = app.contentW(), bottom = app.contentY() + app.contentH();
+  g.fillRect(0, topY, cw, bottom - topY, gTheme.bg);
   g.setTextDatum(textdatum_t::middle_center);
   g.setTextColor(gTheme.dim, gTheme.bg);
   g.setTextSize(1);
-  g.drawString(msg, app.contentW() / 2, app.contentY() + app.contentH() / 2);
+  g.drawString(msg, cw / 2, (topY + bottom) / 2);
+}
+
+// Centre-selector chip row (top): HOME + nearby airports. Tap to recentre the
+// radar on that airport. Records hit-boxes for handleChipTap.
+int PageAircraft::drawChips(App& app) {
+  const auto& st = _wx.stations();
+  _chipCount = 0;
+  if (st.empty()) return 0;
+  // Drop a stale selection (the chosen airport left the station list).
+  if (_centerIcao.length()) {
+    bool found = false;
+    for (const auto& s : st) if (s.icao == _centerIcao) { found = true; break; }
+    if (!found) { _centerIcao = ""; _ap.clearCenter(); }
+  }
+  auto& g = app.display().gfx();
+  const int cw = app.contentW(), cy0 = app.contentY();
+  const int h = 13;
+  int x = 2;
+  g.setTextSize(1);
+  g.setTextDatum(textdatum_t::middle_left);
+  auto chip = [&](const String& label, bool sel, const String& icao) -> bool {
+    int w = (int)label.length() * 6 + 8;
+    if (x + w > cw - 2 || _chipCount >= kMaxChips) return false;
+    g.fillRect(x, cy0, w, h, sel ? gTheme.accent : gTheme.grid);
+    g.setTextColor(sel ? gTheme.bg : gTheme.fg, sel ? gTheme.accent : gTheme.grid);
+    g.drawString(label, x + 4, cy0 + h / 2);
+    _chipX[_chipCount] = x; _chipW[_chipCount] = w; _chipIcao[_chipCount] = icao; _chipCount++;
+    x += w + 3;
+    return true;
+  };
+  chip("HOME", _centerIcao.length() == 0, "");
+  for (const auto& s : st) if (!chip(s.icao, _centerIcao == s.icao, s.icao)) break;
+  return h + 1;
+}
+
+bool PageAircraft::handleChipTap(App& app, int x, int yRel) {
+  if (yRel >= 14) return false;                    // chip row is the top band
+  for (int i = 0; i < _chipCount; ++i)
+    if (x >= _chipX[i] && x < _chipX[i] + _chipW[i]) {
+      _centerIcao = _chipIcao[i];
+      applyCenter();
+      _sel = 0; _needClear = _dirty = true;
+      return true;
+    }
+  return false;
 }
 
 void PageAircraft::draw(App& app) {
-  if (!_loc.active().valid) { drawMessage(app, "no location"); return; }
+  auto& g = app.display().gfx();
+  const int cw = app.contentW(), ch = app.contentH(), cy0 = app.contentY();
+  if (!_loc.active().valid) { drawMessage(app, "no location", cy0); return; }
+  if (_needClear) { g.fillRect(0, cy0, cw, ch, gTheme.bg); _needClear = false; }
+
+  int chipH = drawChips(app);                      // centre selector (top)
+  int top = cy0 + chipH;
+
   const auto& list = _ap.aircraft();
   if (list.empty()) {
     drawMessage(app, _ap.status() == ProviderStatus::Error ? "feed unavailable"
                   : _ap.status() == ProviderStatus::Loading ? "scanning..."
                   : _ap.hideGround() ? "no airborne aircraft in range"
-                  : "no aircraft in range");
+                  : "no aircraft in range", top);
     drawRadiusBadge(app);    // keep the badges tappable so the user can widen
     drawGroundBadge(app);    // range or re-enable ground traffic from here
     return;
   }
   if (_sel >= (int)list.size()) _sel = list.size() - 1;
 
-  auto& g = app.display().gfx();
-  const int cw = app.contentW(), ch = app.contentH(), cy0 = app.contentY();
-  if (_needClear) { g.fillRect(0, cy0, cw, ch, gTheme.bg); _needClear = false; }
-
   // Radar on the left. Clear just the circle's bbox each tick (blips move);
   // the info column on the right redraws in place (padded) so it stays stable.
-  int size = min(ch - 8, cw / 2 - 8);
+  int size = min(ch - 8 - chipH, cw / 2 - 8);
   int R = size / 2 - 12;
-  int cx = 8 + R + 8, cy = cy0 + ch / 2;
+  int cx = 8 + R + 8, cy = top + (ch - chipH) / 2;
   float maxR = _ap.radiusNm();
   g.fillRect(cx - R - 4, cy - R - 10, 2 * R + 8, 2 * R + 20, gTheme.bg);
 
@@ -155,14 +215,15 @@ void PageAircraft::draw(App& app) {
   }
 
   // Info column.
-  int ix = cw / 2 + 8, iy = cy0 + 6;
+  int ix = cw / 2 + 8, iy = top + 6;
   g.setTextDatum(textdatum_t::top_left);
   g.setTextSize(1);
   auto line = [&](const String& s, Color col) { g.setTextColor(col, gTheme.bg); g.drawString(padRight(s, 20), ix, iy); iy += 14; };
   g.setTextColor(gTheme.fg, gTheme.bg);
   g.setTextSize(2); g.drawString("Aircraft", ix, iy); iy += 20;
   g.setTextSize(1);
-  String src = String(list.size()) + " in range  " + (_ap.local() ? "local" : "cloud");
+  String src = String(list.size()) + " @" + (_centerIcao.length() ? _centerIcao : String("HOME"))
+             + "  " + (_ap.local() ? "local" : "cloud");
   if (_ap.status() == ProviderStatus::Stale && _ap.lastFetched()) {
     int age = (int)(time(nullptr) - _ap.lastFetched());
     if (age > 0) src += " (stale " + String(age) + "s)";

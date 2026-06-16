@@ -29,6 +29,13 @@ public:
   // Background -> throttle to ~60 s (radar isn't visible; saves requests + heap).
   void setForeground(bool fg) { _fg = fg; }
 
+  // Recenter the query/radar on an arbitrary point (e.g. a nearby airport) instead
+  // of the observer. Range/bearing are computed from this centre. clearCenter()
+  // returns to the observer's location.
+  void setCenter(double lat, double lon) { _ctrLat = lat; _ctrLon = lon; _ctrSet = true; }
+  void clearCenter() { _ctrSet = false; }
+  bool centered() const { return _ctrSet; }
+
   const std::vector<Aircraft>& aircraft() const { return _ac; }
   ProviderStatus status() const { return _status; }
   uint32_t       lastFetched() const { return _lastFetched; }
@@ -38,6 +45,8 @@ public:
 
 private:
   void parse(const String& body);
+  double centerLat() const;
+  double centerLon() const;
 
   Settings*        _s = nullptr;
   NetClient*       _net = nullptr;
@@ -53,4 +62,6 @@ private:
   bool     _inflight = false;
   bool     _fg = false;            // Aircraft page in the foreground
   uint32_t _lastPollMs = 0;        // millis() of the last issued fetch
+  bool     _ctrSet = false;        // centre override active (else observer)
+  double   _ctrLat = 0, _ctrLon = 0;
 };

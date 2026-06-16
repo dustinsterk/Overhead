@@ -206,7 +206,7 @@ void setup() {
   // UI carousel, ground->space order: Launches, Aircraft, Satellites, Diagnostics.
   agendaPage = new PageAgenda(timeSvc, locSvc, weatherProv, tleProv, launchProv, settings);
   launchesPage = new PageLaunches(launchProv, timeSvc);
-  aircraftPage = new PageAircraft(aircraftProv, locSvc, settings);
+  aircraftPage = new PageAircraft(aircraftProv, avwxProv, locSvc, settings);
   aviationPage = new PageAviation(avwxProv, sndProv, hazProv, locSvc);
   satsPage = new PageSatellites(tleProv, locSvc, timeSvc, settings);
   solarPage = new PageSolarSystem(timeSvc, locSvc, settings);
