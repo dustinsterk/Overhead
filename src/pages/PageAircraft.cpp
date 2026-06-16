@@ -222,13 +222,12 @@ void PageAircraft::draw(App& app) {
   g.setTextColor(gTheme.fg, gTheme.bg);
   g.setTextSize(2); g.drawString("Aircraft", ix, iy); iy += 20;
   g.setTextSize(1);
-  String src = String(list.size()) + " @" + (_centerIcao.length() ? _centerIcao : String("HOME"))
-             + "  " + (_ap.local() ? "local" : "cloud");
-  if (_ap.status() == ProviderStatus::Stale && _ap.lastFetched()) {
+  line(String(list.size()) + " @" + (_centerIcao.length() ? _centerIcao : String("HOME"))
+       + "  " + (_ap.local() ? "local" : "cloud"), gTheme.dim);
+  if (_ap.status() == ProviderStatus::Stale && _ap.lastFetched()) {     // own line (was overflowing)
     int age = (int)(time(nullptr) - _ap.lastFetched());
-    if (age > 0) src += " (stale " + String(age) + "s)";
+    if (age > 0) line("stale " + String(age) + "s", gTheme.warn);
   }
-  line(src, gTheme.dim);
 
   if (_sel >= 0 && _sel < (int)list.size()) {
     const Aircraft& a = list[_sel];

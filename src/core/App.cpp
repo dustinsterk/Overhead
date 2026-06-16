@@ -74,6 +74,24 @@ void App::nextPage() { if (!_pages.empty()) setPage((_active + 1) % _pages.size(
 void App::prevPage() { if (!_pages.empty()) setPage((_active - 1 + _pages.size()) % _pages.size()); }
 
 void App::tick(uint32_t nowMs) {
+  _display.serviceShot();          // debug screenshot capture (UI thread, no SPI race)
+
+  // Injected input from the debug web API (processed here on the UI thread).
+  if (_injTapX >= 0) {
+    int x = _injTapX, y = _injTapY; _injTapX = -1;
+    _lastInteractMs = nowMs; _statusDirty = true;
+    if (y < contentY()) {                                  // status-strip tap (mode toggle)
+      if (_pinned) _pinned = false; else _mode = (_mode == Mode::Auto) ? Mode::Manual : Mode::Auto;
+    } else {                                               // content tap -> active page
+      _mode = Mode::Manual;
+      if (_active >= 0) _pages[_active]->onTouch(*this, x, y - contentY());
+    }
+  }
+  if (_injSwipe) {
+    int d = _injSwipe; _injSwipe = 0; _lastInteractMs = nowMs; _mode = Mode::Manual;
+    if (d < 0) prevPage(); else nextPage();
+  }
+
   // Touch: distinguish a horizontal swipe (carousel page change) from a tap
   // (delivered to the active page). Hold/pin + the Director arrive later.
   int16_t tx, ty;

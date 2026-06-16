@@ -36,6 +36,8 @@ public:
   bool autoAdvanceActive();             // step active page's tour; true if it completed a full cycle
   void setBadge(int index, bool on);
   void setAlert(const String& s);       // Director cross-tab alert in the status strip
+  void injectTap(int x, int y) { _injTapX = x; _injTapY = y; }   // debug: synthetic touch
+  void injectSwipe(int dir) { _injSwipe = dir; }                 // debug: -1 prev, +1 next
   void setInactivityMs(uint32_t ms) { _inactivityMs = ms; }
   uint32_t idleMs(uint32_t now) const { return now - _lastInteractMs; }
 
@@ -66,6 +68,8 @@ private:
   uint32_t _lastStatusMs = 0;
   bool     _statusDirty  = true;
   String   _alert;               // Director alert text (shown in the status strip)
+  volatile int _injTapX = -1, _injTapY = -1;   // pending injected touch (debug web API)
+  volatile int _injSwipe = 0;                  // pending injected swipe (-1/+1)
 
   Mode     _mode = Mode::Auto;
   bool     _pinned = false;

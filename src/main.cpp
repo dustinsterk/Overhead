@@ -171,6 +171,7 @@ void setup() {
   hazProv.begin(&settings, &net, &cache, &bus, &locSvc);
 
   web.setStatusJsonProvider(fillStatusJson);
+  web.setDebug(&app, &display);     // /api/screen.bmp, /api/tap, /api/swipe
   web.begin(&settings, gHostname);
 
   // The location resolves asynchronously a few seconds after boot; kick the
