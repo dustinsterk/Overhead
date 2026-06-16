@@ -45,7 +45,7 @@ void AircraftProvider::poll() {
   }
 
   _inflight = true;
-  _net->get(url, [this](int code, const String& body) {
+  bool sent = _net->get(url, [this](int code, const String& body) {
     _inflight = false;
     if (code == 200 && body.length() > 2) {
       parse(body);
@@ -56,6 +56,8 @@ void AircraftProvider::poll() {
     }
     if (_bus) _bus->publish(ProviderId::Aircraft);
   });
+  if (!sent) _inflight = false;          // req queue full; retry on the next poll
+                                         // (otherwise _inflight sticks -> "scanning" forever)
 }
 
 void AircraftProvider::parse(const String& body) {

@@ -51,14 +51,27 @@ void PageAgenda::recompute() {
         _eng.loadTle(s.name.c_str(), s.line1.c_str(), s.line2.c_str());
         astro::SatPass p = _eng.nextPass(now, (double)minEl, 40);
         if (p.valid && p.aos < horizon)
-          _events.push_back({ p.aos, s.name + " " + (int)round(p.maxElDeg) + (char)247, false });
+          _events.push_back({ p.aos, s.name + " " + (int)round(p.maxElDeg) + (char)247, 0 });
         break;
       }
     }
   }
   for (const auto& l : _launch.launches())
     if (l.net && l.net > now && l.net < horizon)
-      _events.push_back({ l.net, l.name, true });
+      _events.push_back({ l.net, l.name, 1 });
+
+  // Sun/Moon rise & set crossings (from the hourly sun-altitude / moon-up arrays).
+  // Sun crossings are interpolated within the hour for a sub-hour time; the moon
+  // up/down flip is reported at hour resolution.
+  for (int h = 1; h < kHours; ++h) {
+    if ((_sunAlt[h - 1] < 0) != (_sunAlt[h] < 0)) {
+      float f = _sunAlt[h - 1] / (_sunAlt[h - 1] - _sunAlt[h]);     // 0..1 in the hour
+      time_t t = _base + (time_t)((h - 1 + f) * 3600.0f);
+      _events.push_back({ t, _sunAlt[h] >= 0 ? "Sunrise" : "Sunset", 2 });
+    }
+    if (_moonUp[h] != _moonUp[h - 1])
+      _events.push_back({ _base + (time_t)h * 3600, _moonUp[h] ? "Moonrise" : "Moonset", 2 });
+  }
   std::sort(_events.begin(), _events.end(), [](const Event& a, const Event& b) { return a.t < b.t; });
 
   // Verdict: first window that is dark (sun < -12) and mostly clear (< 35%).
@@ -125,16 +138,29 @@ void PageAgenda::draw(App& app) {
     g.drawFastVLine(x, sy, sh, gTheme.grid);
     g.drawString(hh == 0 ? "now" : String("+") + hh, x + 1, sy + sh + 1);
   }
-  // Event markers on the strip.
+  // Event markers on the strip (accent=pass, warn=launch, ok=sun/moon).
   for (const auto& e : _events) {
     int hoff = (int)((e.t - _base) / 3600);
     if (hoff < 0 || hoff >= kHours) continue;
     int x = sx + sw * hoff / kHours;
-    g.drawFastVLine(x, sy, sh, e.launch ? gTheme.warn : gTheme.accent);
+    g.drawFastVLine(x, sy, sh, e.kind == 1 ? gTheme.warn : e.kind == 2 ? gTheme.ok : gTheme.accent);
   }
 
+  // --- Legend ---
+  int ly = sy + sh + 11;
+  g.setTextDatum(textdatum_t::top_left);
+  int lx = sx;
+  auto swatch = [&](Color c, const char* s) {
+    g.drawFastVLine(lx, ly + 1, 7, c); lx += 3;
+    g.setTextColor(gTheme.dim, gTheme.bg); g.drawString(s, lx, ly);
+    lx += (int)strlen(s) * 6 + 7;
+  };
+  swatch(gTheme.accent, "pass"); swatch(gTheme.warn, "launch"); swatch(gTheme.ok, "sun/moon");
+  g.setTextColor(gTheme.dim, gTheme.bg);
+  g.drawString("shade=darkness  grey top=cloud  amber base=moon up", sx, ly + 11);
+
   // --- Verdict ---
-  int y = sy + sh + 14;
+  int y = sy + sh + 36;
   g.setTextColor(gTheme.ok, gTheme.bg);
   g.drawString(_verdict, sx, y); y += 15;
 
@@ -146,7 +172,7 @@ void PageAgenda::draw(App& app) {
     struct tm tm; time_t t = e.t; localtime_r(&t, &tm);
     char hm[8]; snprintf(hm, sizeof(hm), "%02d:%02d", tm.tm_hour, tm.tm_min);
     g.setTextDatum(textdatum_t::top_left);
-    g.setTextColor(e.launch ? gTheme.warn : gTheme.accent, gTheme.bg);
+    g.setTextColor(e.kind == 1 ? gTheme.warn : e.kind == 2 ? gTheme.ok : gTheme.accent, gTheme.bg);
     g.drawString(hm, sx, y);
     int cl = _wx.cloudCoverAt(e.t);
     int labelX = sx + 40, cloudX = cw - 4, cloudW = cl >= 0 ? 34 : 0;  // "NN% cld"

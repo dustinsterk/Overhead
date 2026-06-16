@@ -32,7 +32,7 @@ public:
 
 private:
   static constexpr int kHours = 24;
-  struct Event { time_t t; String label; bool launch; };
+  struct Event { time_t t; String label; uint8_t kind; };  // 0 pass, 1 launch, 2 sun/moon
 
   void recompute();
   void draw(App& app);

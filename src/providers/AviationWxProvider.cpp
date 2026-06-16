@@ -48,7 +48,7 @@ void AviationWxProvider::fetchMetars() {
     la - 0.9, lo - 1.2, la + 0.9, lo + 1.2);
   if (_stations.empty()) _status = ProviderStatus::Loading;
   _inflight = true;
-  _net->get(url, [this](int code, const String& body) {
+  bool sent = _net->get(url, [this](int code, const String& body) {
     _inflight = false;
     if (code == 200 && parseMetars(body)) {
       _cache->put("avwx_metar", body, code, (uint32_t)time(nullptr));
@@ -60,6 +60,7 @@ void AviationWxProvider::fetchMetars() {
     }
     if (_bus) _bus->publish(ProviderId::Weather);
   });
+  if (!sent) _inflight = false;          // req queue full; retry on the next refresh
 }
 
 void AviationWxProvider::fetchTafs() {

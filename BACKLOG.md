@@ -112,8 +112,10 @@ Center API (aviationweather.gov/api/data/...) + rucsoundings.
   the Director flagging an imminent eclipse. (Moon PHASE + illumination already
   done: Solar System tab + astro::SolarSystem + Agenda moon-up shading.)
 - Sun/Moon rise/set + transit (peak/culmination) as DIRECTOR inputs: golden-hour
-  cue at sunset, moonrise/moonset notices, sun/moon transit ("peak") markers on the
-  Agenda Sky Window. Compute from astro::Sun / astro::SolarSystem altitude crossings.
+  cue at sunset, sun/moon transit ("peak") markers. (DONE: sunrise/sunset/moonrise/
+  moonset now surface as Agenda events + Sky Window markers, from the hourly sun-alt
+  / moon-up crossings. Remaining: transit/peak markers and wiring these into the
+  Director as focus inputs.)
 - Aviation weather: METAR/TAF + atmospheric soundings (Skew-T, lapse rate,
   inversion, lifted index) for glider/soaring analysis. NOAA AWC (no key) +
   RAOB/RAP soundings. Director triggers: new METAR/TAF, SPECI, new sounding.
