@@ -3,6 +3,8 @@
 #include <esp_heap_caps.h>
 #if BACKLIGHT_VIA_EXPANDER
   #include <Wire.h>
+#else
+  static constexpr int kBlChannel = 7;   // LEDC channel for the backlight PWM
 #endif
 
 bool Display::begin() {
@@ -18,6 +20,13 @@ bool Display::begin() {
 
   _lcd.setRotation(DISPLAY_DEFAULT_ROTATION);
   _lcd.fillScreen(TFT_BLACK);
+#if !BACKLIGHT_VIA_EXPANDER
+  // Drive the backlight PWM ourselves (LovyanGFX's Light_PWM didn't actually vary
+  // brightness on the cyd28 unit — stuck dim). Same channel as the LGFX config;
+  // re-attaching after init() hands control to us. Core 2.x ledc API (the CYDs).
+  ledcSetup(kBlChannel, BACKLIGHT_PWM_FREQ, 8);
+  ledcAttachPin(PIN_TFT_BL, kBlChannel);
+#endif
   setBacklight(255);
   return true;
 }
@@ -62,7 +71,7 @@ void Display::setBacklight(uint8_t level) {
     Wire.endTransmission();
   }
 #else
-  _lcd.setBrightness(level);
+  ledcWrite(kBlChannel, BACKLIGHT_ACTIVE_HIGH ? level : 255 - level);
 #endif
 }
 
