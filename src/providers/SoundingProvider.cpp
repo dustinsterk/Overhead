@@ -33,8 +33,10 @@ void SoundingProvider::refresh(bool force) {
       _cache->put("sounding", body, code, (uint32_t)time(nullptr));
       _lastFetched = (uint32_t)time(nullptr);
       _status = ProviderStatus::Ready;
-    } else if (_levels.empty()) {
-      _status = ProviderStatus::Error;
+      Serial.printf("[sounding] %u levels, FZL=%.0fm\n", (unsigned)_levels.size(), _freezeM);
+    } else {
+      Serial.printf("[sounding] fetch failed code=%d len=%u\n", code, (unsigned)body.length());
+      if (_levels.empty()) _status = ProviderStatus::Error;
     }
     if (_bus) _bus->publish(ProviderId::Weather);
   });

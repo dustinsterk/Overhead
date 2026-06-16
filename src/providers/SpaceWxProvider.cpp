@@ -29,8 +29,10 @@ void SpaceWxProvider::fetchKp() {
         _cache->put("swx_kp", body, code, (uint32_t)time(nullptr));
         _lastFetched = (uint32_t)time(nullptr);
         _status = ProviderStatus::Ready;
-      } else if (_kp < 0) {
-        _status = ProviderStatus::Error;
+        Serial.printf("[spacewx] Kp=%.1f\n", _kp);
+      } else {
+        Serial.printf("[spacewx] Kp fetch failed code=%d len=%u\n", code, (unsigned)body.length());
+        if (_kp < 0) _status = ProviderStatus::Error;
       }
       if (_bus) _bus->publish(ProviderId::SpaceWx);
     });

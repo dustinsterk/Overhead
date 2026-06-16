@@ -42,6 +42,10 @@ void NetClient::taskLoop() {
     if (xQueueReceive(_reqQ, &job, portMAX_DELAY) == pdTRUE) {
       perform(job);
       xQueueSend(_respQ, &job, portMAX_DELAY);
+      // Let the UI thread drain (free) this response body before the next TLS
+      // fetch checks the heap floor — otherwise a lingering large body trips the
+      // guard and the next provider gets skipped (the boot fetch-storm problem).
+      vTaskDelay(pdMS_TO_TICKS(120));
     }
   }
 }
@@ -53,8 +57,9 @@ void NetClient::perform(Job* job) {
   // fragmented OOMs and can corrupt the heap (lfs_close assert). Skip instead
   // and let the provider serve stale / retry later (cyd-radio §15 mbedtls floor).
   if (job->url.startsWith("https://") &&
-      heap_caps_get_largest_free_block(MALLOC_CAP_8BIT) < 45000) {
+      heap_caps_get_largest_free_block(MALLOC_CAP_8BIT) < 40000) {
     job->code = -3;
+    Serial.printf("[net] skip (low heap) %.40s\n", job->url.c_str());
     return;
   }
 

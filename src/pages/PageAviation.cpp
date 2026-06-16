@@ -175,8 +175,7 @@ void PageAviation::drawHazards(App& app) {
   }
   for (const auto& h : hz) {
     if (y > cy0 + ch - 12) break;
-    g.setTextColor(h.pirep ? gTheme.dim : gTheme.warn, gTheme.bg);
-    y = drawWrapped(g, (h.pirep ? "PIREP " : "") + h.text, 6, y, maxc, 2, h.pirep ? gTheme.dim : gTheme.warn);
-    y += 2;
+    y = drawWrapped(g, (h.pirep ? "PIREP " : "") + h.text, 6, y, maxc, 3, h.pirep ? gTheme.dim : gTheme.warn);
+    y += 3;
   }
 }

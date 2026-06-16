@@ -35,6 +35,7 @@ void HazardProvider::fetchAirsig() {
       JsonDocument filter;
       JsonObject e = filter.add<JsonObject>();
       e["airSigmetType"] = e["hazard"] = e["severity"] = e["altitudeLow1"] = e["altitudeHi1"] = true;
+      e["rawAirSigmet"] = true;
       JsonObject c = e["coords"].add<JsonObject>(); c["lat"] = c["lon"] = true;
       JsonDocument doc;
       if (!deserializeJson(doc, body, DeserializationOption::Filter(filter))) {
@@ -49,9 +50,12 @@ void HazardProvider::fetchAirsig() {
           }
           if (olat < mnLa - 0.7 || olat > mxLa + 0.7 || olon < mnLo - 0.7 || olon > mxLo + 0.7) continue;
           Hazard h; h.pirep = false;
-          h.text = String((const char*)(o["airSigmetType"] | "AIRMET")) + " "
-                 + (const char*)(o["hazard"] | "?") + " " + (const char*)(o["severity"] | "")
-                 + " " + (int)(o["altitudeLow1"] | 0) + "-" + (int)(o["altitudeHi1"] | 0) + "ft";
+          String hdr = String((const char*)(o["airSigmetType"] | "AIRMET")) + " "
+                     + (const char*)(o["hazard"] | "?") + " " + (const char*)(o["severity"] | "")
+                     + " " + (int)(o["altitudeLow1"] | 0) + "-" + (int)(o["altitudeHi1"] | 0) + "ft";
+          String raw = (const char*)(o["rawAirSigmet"] | "");
+          raw.replace("\n", " ");
+          h.text = raw.length() ? hdr + " - " + raw.substring(0, 90) : hdr;
           _airsig.push_back(h);
           if (_airsig.size() >= 8) break;
         }
