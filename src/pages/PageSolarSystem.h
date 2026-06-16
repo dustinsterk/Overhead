@@ -28,7 +28,9 @@ private:
   void recompute();
   void draw(App& app);
   void drawOrbit(App& app);             // top-down orrery view
-  bool visible(int i) const;            // passes the current filter
+  bool visible(int i) const;            // passes the current filter (sky-dome)
+  const int* orbitSet(int& count) const;  // visible orbit bodies for the scope
+  int orbitVisibleCount() const;
 
   TimeService&     _time;
   LocationService& _loc;

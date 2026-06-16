@@ -195,6 +195,13 @@ static HelioPos pluto(double d) {
   return { rev(lon), r };
 }
 
+// SpaceX Roadster / "Starman" (JPL Horizons -143205). Heliocentric osculating
+// elements @ 2026-06-15 (e/a/i/node/peri ~constant); M propagated with the mean
+// motion n=0.64600329 deg/day, M0 reduced to the Schlyter epoch (2451543.5).
+static HelioPos roadster(double d) {
+  return helioElements(316.8734, 1.07483, 177.7818, 1.325296, 0.255933, 50.22008 + 0.64600329 * d);
+}
+
 HelioPos heliocentricBody(int idx, double jd) {
   double d = schlyterDay(jd);
   switch (idx) {
@@ -207,17 +214,18 @@ HelioPos heliocentricBody(int idx, double jd) {
     case 6: return helioElements(74.0005 + 1.3978e-5 * d, 0.7733 + 1.9e-8 * d, 96.6612 + 3.0565e-5 * d, 19.18171 - 1.55e-8 * d, 0.047318 + 7.45e-9 * d, 142.5905 + 0.011725806 * d);
     case 7: return helioElements(131.7806 + 3.0173e-5 * d, 1.7700 - 2.55e-7 * d, 272.8461 - 6.027e-6 * d, 30.05826 + 3.313e-8 * d, 0.008606 + 2.15e-9 * d, 260.2471 + 0.005995147 * d);
     case 8: return pluto(d);
+    case 9: return roadster(d);          // SpaceX Roadster (Starman)
   }
   return {};
 }
 
 double orbitMeanAu(int idx) {
-  static const double a[kOrbitBodies] = { 0.3871, 0.7233, 1.0000, 1.5237, 5.2026, 9.5547, 19.182, 30.058, 39.482 };
+  static const double a[kOrbitBodies] = { 0.3871, 0.7233, 1.0000, 1.5237, 5.2026, 9.5547, 19.182, 30.058, 39.482, 1.3253 };
   return (idx >= 0 && idx < kOrbitBodies) ? a[idx] : 1.0;
 }
 
 const char* orbitBodyName(int idx) {
-  static const char* n[kOrbitBodies] = { "Me", "Ve", "Ea", "Ma", "Ju", "Sa", "Ur", "Ne", "Pl" };
+  static const char* n[kOrbitBodies] = { "Me", "Ve", "Ea", "Ma", "Ju", "Sa", "Ur", "Ne", "Pl", "Rd" };
   return (idx >= 0 && idx < kOrbitBodies) ? n[idx] : "?";
 }
 

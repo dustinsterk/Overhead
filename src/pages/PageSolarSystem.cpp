@@ -23,6 +23,17 @@ static const char* moonPhaseName(double deg) {
   return "New";
 }
 
+// Orbit-view visible body sets (indices into astro::heliocentricBody).
+// inner: Mercury, Venus, Earth, Mars, Roadster.  all: + Jupiter..Pluto.
+static const int kInnerSet[] = { 0, 1, 2, 3, astro::kRoadster };
+static const int kAllSet[]   = { 0, 1, 2, 3, 4, 5, 6, 7, 8, astro::kRoadster };
+
+const int* PageSolarSystem::orbitSet(int& count) const {
+  if (_orbScope) { count = (int)(sizeof(kAllSet) / sizeof(int)); return kAllSet; }
+  count = (int)(sizeof(kInnerSet) / sizeof(int)); return kInnerSet;
+}
+int PageSolarSystem::orbitVisibleCount() const { int n; orbitSet(n); return n; }
+
 bool PageSolarSystem::visible(int i) const {
   if (_filter == 1) return _st[i].above;
   if (_filter == 2) return i < 7;        // naked-eye: drop Uranus/Neptune
@@ -45,12 +56,12 @@ void PageSolarSystem::onTouch(App& app, int x, int y) {
   if (_view == 1) {                         // orbits
     if (x > app.contentW() - 52 && y >= app.contentH() - 16) {   // bottom-right: inner/all
       _orbScope ^= 1;
-      int cnt = _orbScope ? astro::kOrbitBodies : 4;
+      int cnt = orbitVisibleCount();
       if (_orbSel >= cnt) _orbSel = cnt - 1;
       _dirty = true; return;
     }
-    int cnt = _orbScope ? astro::kOrbitBodies : 4;
-    if (x < third) _orbSel = (_orbSel - 1 + cnt) % cnt;          // step Me..(Pluto)
+    int cnt = orbitVisibleCount();
+    if (x < third) _orbSel = (_orbSel - 1 + cnt) % cnt;          // step visible bodies
     else           _orbSel = (_orbSel + 1) % cnt;
   } else {                                  // sky-dome: step visible bodies
     if (x < third)          { do { _sel = (_sel - 1 + kN) % kN; } while (!visible(_sel) && _filter); }
@@ -150,34 +161,41 @@ void PageSolarSystem::drawOrbit(App& app) {
 
   int cx = cw / 2, cy = cy0 + (ch - 14) / 2 + 12;
   int maxR = min(cw / 2, (ch - 26) / 2) - 8;
-  int count = _orbScope ? astro::kOrbitBodies : 4;               // all (..Pluto) or inner
-  double maxAu = astro::orbitMeanAu(count - 1);                  // outermost ring shown
+  int count; const int* set = orbitSet(count);
+  double maxAu = 0;                                              // outermost ring shown
+  for (int i = 0; i < count; ++i) maxAu = max(maxAu, astro::orbitMeanAu(set[i]));
   auto rad = [&](double au) { return (int)round(sqrt(au / maxAu) * maxR); };
 
   g.fillCircle(cx, cy, 3, gTheme.warn);                          // Sun
 
   astro::HelioPos sel{};
   for (int i = 0; i < count; ++i) {
-    int rr = rad(astro::orbitMeanAu(i));
-    g.drawCircle(cx, cy, rr, gTheme.grid);                       // orbit ring
-    astro::HelioPos hp = astro::heliocentricBody(i, jd);
+    int body = set[i];
+    bool road = (body == astro::kRoadster);
+    int rr = rad(astro::orbitMeanAu(body));
+    if (road) for (int t = 0; t < 360; t += 18) g.drawPixel(cx + (int)round(rr * cosf(t * D2R)), cy - (int)round(rr * sinf(t * D2R)), gTheme.grid); // dashed orbit
+    else      g.drawCircle(cx, cy, rr, gTheme.grid);             // orbit ring
+    astro::HelioPos hp = astro::heliocentricBody(body, jd);
     double a = hp.lonDeg * D2R;
     int px = cx + (int)round(rr * cos(a));
     int py = cy - (int)round(rr * sin(a));
     bool s = (i == _orbSel);
-    Color c = s ? gTheme.ok : (i == 2 ? gTheme.accent : gTheme.fg);   // Earth accent
+    Color c = s ? gTheme.ok : road ? gTheme.warn : (body == 2 ? gTheme.accent : gTheme.fg);  // Roadster=warn, Earth=accent
     g.fillCircle(px, py, s ? 3 : 2, c);
     g.setTextDatum(textdatum_t::middle_left);
     g.setTextColor(c, gTheme.bg);
-    g.drawString(astro::orbitBodyName(i), px + 4, py);
+    g.drawString(astro::orbitBodyName(body), px + 4, py);
     if (s) sel = hp;
   }
 
   // Selected-body readout (bottom-left) + inner/all scope badge (bottom-right).
+  if (_orbSel >= count) _orbSel = count - 1;
+  int selBody = set[_orbSel];
+  const char* selName = (selBody == astro::kRoadster) ? "Roadster" : astro::orbitBodyName(selBody);
   g.setTextDatum(textdatum_t::bottom_left);
   g.setTextColor(gTheme.ok, gTheme.bg);
-  char b[40];
-  snprintf(b, sizeof(b), "%s  %.2f AU  lon %d", astro::orbitBodyName(_orbSel), sel.rAu, (int)round(sel.lonDeg));
+  char b[44];
+  snprintf(b, sizeof(b), "%s  %.2f AU  lon %d", selName, sel.rAu, (int)round(sel.lonDeg));
   g.drawString(b, 4, cy0 + ch - 2);
   int by = cy0 + ch - 15;
   g.fillRect(cw - 50, by, 48, 14, gTheme.grid);

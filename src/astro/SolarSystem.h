@@ -24,9 +24,11 @@ double moonPhaseDeg(double jd);          // 0 new, 90 first qtr, 180 full, 270 l
 const char* planetName(Planet p);
 
 // Heliocentric ecliptic position for the top-down orrery (Solar System orbit view).
-// idx 0..8 -> Mercury, Venus, Earth, Mars, Jupiter, Saturn, Uranus, Neptune, Pluto.
+// idx 0..9 -> Mercury, Venus, Earth, Mars, Jupiter, Saturn, Uranus, Neptune, Pluto,
+// SpaceX Roadster ("Starman", idx 9).
 struct HelioPos { double lonDeg, rAu; };
-constexpr int kOrbitBodies = 9;
+constexpr int kOrbitBodies = 10;
+constexpr int kRoadster = 9;
 HelioPos    heliocentricBody(int idx, double jd);
 double      orbitMeanAu(int idx);        // semi-major axis = orbit-ring radius
 const char* orbitBodyName(int idx);      // 2-char label
