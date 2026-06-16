@@ -23,9 +23,10 @@ public:
   void tick(App& app, uint32_t nowMs) override;
 
 private:
-  enum class View { Metar, Sounding, Hazards };
+  enum class View { Metar, Map, Sounding, Hazards };
   void draw(App& app);
   void drawMetar(App& app);
+  void drawMap(App& app);
   void drawSounding(App& app);
   void drawHazards(App& app);
 

@@ -1,6 +1,7 @@
 #pragma once
 #include <Arduino.h>
 #include <vector>
+#include <time.h>
 #include "TleProvider.h"   // ProviderStatus
 
 class Settings;
@@ -20,6 +21,7 @@ struct Metar {
   int    tempC = -999, dewpC = -999, wdir = -1, wspd = -1, altimHpa = -1;
   float  visSm = -1;
   int    ceilingFt = -1;        // lowest BKN/OVC base; -1 = none/clear
+  time_t obsTime = 0;           // observation time (epoch UTC)
   String cat;                   // VFR | MVFR | IFR | LIFR
 };
 

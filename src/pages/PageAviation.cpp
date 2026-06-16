@@ -8,6 +8,8 @@
 #include "../services/LocationService.h"
 #include <math.h>
 
+static constexpr double D2R = 3.14159265358979323846 / 180.0;
+
 static Color catColor(const String& c) {
   if (c == "VFR")  return gTheme.ok;
   if (c == "MVFR") return gTheme.accent;
@@ -39,11 +41,12 @@ void PageAviation::onData(App& app, ProviderId id) {
 void PageAviation::onTouch(App& app, int x, int y) {
   int third = app.contentW() / 3;
   if (x >= third && x <= 2 * third) {               // centre: cycle view
-    _view = _view == View::Metar ? View::Sounding : _view == View::Sounding ? View::Hazards : View::Metar;
+    _view = _view == View::Metar ? View::Map : _view == View::Map ? View::Sounding
+          : _view == View::Sounding ? View::Hazards : View::Metar;
     _needClear = _dirty = true; return;
   }
   int n = (int)_wx.stations().size();
-  if (n && _view == View::Metar) {
+  if (n && (_view == View::Metar || _view == View::Map)) {   // edges step stations
     _sel = (x < third) ? (_sel - 1 + n) % n : (_sel + 1) % n;
     _needClear = _dirty = true;
   }
@@ -60,6 +63,7 @@ void PageAviation::draw(App& app) {
   const int cw = app.contentW(), cy0 = app.contentY(), ch = app.contentH();
   if (_needClear) { g.fillRect(0, cy0, cw, ch, gTheme.bg); _needClear = false; }
   if (_view == View::Metar)         drawMetar(app);
+  else if (_view == View::Map)      drawMap(app);
   else if (_view == View::Sounding) drawSounding(app);
   else                              drawHazards(app);
 }
@@ -86,16 +90,23 @@ void PageAviation::drawMetar(App& app) {
   g.setTextSize(2); g.drawString(m.icao, x0, y);
   g.setTextDatum(textdatum_t::top_right);
   g.setTextColor(catColor(m.cat), gTheme.bg); g.drawString(m.cat, cw - 6, y + 2);
-  g.setTextDatum(textdatum_t::top_left); y += 22;
+  g.setTextDatum(textdatum_t::top_left); y += 20;
   g.setTextSize(1);
   auto line = [&](const String& s, Color c) { g.setTextColor(c, gTheme.bg); g.drawString(padRight(s, maxc), x0, y); y += 12; };
 
-  line(m.name.substring(0, maxc) + "  " + (int)round(m.distNm) + "nm  [tap mid: sounding]", gTheme.dim);
+  // Observation time: Zulu + local, e.g. 160354Z / 8:54PM.
+  if (m.obsTime) {
+    struct tm gu, lo; time_t t = m.obsTime; gmtime_r(&t, &gu); localtime_r(&t, &lo);
+    char z[10], l[10]; strftime(z, sizeof(z), "%d%H%MZ", &gu); strftime(l, sizeof(l), "%I:%M%p", &lo);
+    line(String(z) + " / " + l, gTheme.dim);
+  }
+  line(m.name.substring(0, maxc) + "  " + (int)round(m.distNm) + "nm  [tap mid: map]", gTheme.dim);
   if (m.wspd >= 0) line(m.wspd == 0 ? String("wind calm")
         : String("wind ") + (m.wdir < 0 ? String("VRB") : String(m.wdir)) + "\xF7 @ " + m.wspd + " kt", gTheme.fg);
   if (m.visSm >= 0)   line(String("vis ") + String(m.visSm, 0) + " sm", gTheme.fg);
   line(m.ceilingFt >= 0 ? String("ceiling ") + m.ceilingFt + " ft" : String("ceiling: none"), gTheme.fg);
-  if (m.tempC > -999) line(String("temp ") + m.tempC + "  dewpt " + m.dewpC + " C", gTheme.fg);
+  if (m.tempC > -999) line(String("temp ") + m.tempC + " (" + (m.tempC * 9 / 5 + 32) + "F)  dewpt "
+                           + m.dewpC + " (" + (m.dewpC * 9 / 5 + 32) + "F)", gTheme.fg);
   if (m.altimHpa > 0) line(String("QNH ") + m.altimHpa + " hPa", gTheme.fg);
   if (m.wx.length())  line(String("wx ") + m.wx, gTheme.warn);
   line(String(_sel + 1) + "/" + list.size(), gTheme.dim);
@@ -104,6 +115,68 @@ void PageAviation::drawMetar(App& app) {
   if (m.taf.length() && y < cy0 + ch - 24) {
     y += 2; g.setTextColor(gTheme.dim, gTheme.bg); g.drawString("TAF", x0, y); y += 11;
     drawWrapped(g, m.taf, x0, y, maxc, (cy0 + ch - y) / 11, gTheme.dim);
+  }
+}
+
+void PageAviation::drawMap(App& app) {
+  auto& g = app.display().gfx();
+  const int cw = app.contentW(), cy0 = app.contentY(), ch = app.contentH();
+  const auto& list = _wx.stations();
+  g.setTextDatum(textdatum_t::top_left);
+  g.setTextColor(gTheme.accent, gTheme.bg);
+  g.drawString("Airports  [tap mid: sounding]", 4, cy0 + 2);
+  if (list.empty() || !_loc.active().valid) {
+    g.setTextColor(gTheme.dim, gTheme.bg);
+    g.drawString(_loc.active().valid ? "no stations" : "no location", 4, cy0 + ch / 2);
+    return;
+  }
+
+  double olat = _loc.active().lat, olon = _loc.active().lon;
+  const double latR = 0.95, lonR = 1.25;            // half-ranges (~ fetch bbox)
+  int mapY = cy0 + 14, mapH = ch - 14 - 26;
+  int cx = cw / 2, cyc = mapY + mapH / 2;
+  auto SX = [&](double lon) { return cx + (int)((lon - olon) / lonR * (cw / 2 - 8)); };
+  auto SY = [&](double lat) { return cyc - (int)((lat - olat) / latR * (mapH / 2 - 8)); };
+
+  g.drawRect(2, mapY, cw - 4, mapH, gTheme.grid);
+  g.drawFastHLine(2, cyc, cw - 4, gTheme.grid);
+  g.drawFastVLine(cx, mapY, mapH, gTheme.grid);
+  g.drawFastHLine(cx - 3, cyc, 7, gTheme.ok);       // observer
+  g.drawFastVLine(cx, cyc - 3, 7, gTheme.ok);
+
+  for (int i = 0; i < (int)list.size(); ++i) {
+    const Metar& s = list[i];
+    int x = SX(s.lon), y = SY(s.lat);
+    if (x < 4 || x > cw - 4 || y < mapY + 2 || y > mapY + mapH - 2) continue;
+    Color c = catColor(s.cat);
+    if (s.wspd > 0 && s.wdir >= 0) {                 // wind vector toward the FROM dir
+      int L = 4 + min(s.wspd, 30) / 2;
+      g.drawLine(x, y, x + (int)(L * sin(s.wdir * D2R)), y - (int)(L * cos(s.wdir * D2R)), c);
+    }
+    int rad = (i == _sel) ? 4 : 2;
+    g.fillCircle(x, y, rad, c);
+    if (i == _sel) g.drawCircle(x, y, rad + 2, gTheme.fg);
+  }
+
+  // Legend (top-right).
+  g.setTextDatum(textdatum_t::top_right);
+  g.setTextColor(gTheme.ok, gTheme.bg);  g.drawString("VFR", cw - 4, cy0 + 2);
+  g.setTextColor(gTheme.accent, gTheme.bg); g.drawString("MVFR", cw - 30, cy0 + 2);
+  g.setTextColor(gTheme.warn, gTheme.bg); g.drawString("I/LIFR", cw - 64, cy0 + 2);
+
+  // Selected detail.
+  if (_sel >= 0 && _sel < (int)list.size()) {
+    const Metar& s = list[_sel];
+    int by = mapY + mapH + 2;
+    g.setTextDatum(textdatum_t::top_left);
+    g.setTextColor(catColor(s.cat), gTheme.bg);
+    g.drawString(s.icao + " " + s.cat, 4, by);
+    g.setTextColor(gTheme.fg, gTheme.bg);
+    char b[64];
+    snprintf(b, sizeof(b), "vis%.0f cig%d %d/%dC w%d@%d", s.visSm, s.ceilingFt,
+             s.tempC, s.dewpC, s.wdir < 0 ? 0 : s.wdir, s.wspd < 0 ? 0 : s.wspd);
+    g.setTextDatum(textdatum_t::top_right);
+    g.drawString(b, cw - 4, by);
   }
 }
 

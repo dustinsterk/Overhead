@@ -78,7 +78,7 @@ bool AviationWxProvider::parseMetars(const String& body) {
   JsonDocument filter;
   JsonObject e = filter.add<JsonObject>();
   e["icaoId"] = e["name"] = e["lat"] = e["lon"] = e["temp"] = e["dewp"] = true;
-  e["wdir"] = e["wspd"] = e["visib"] = e["altim"] = e["wxString"] = e["rawOb"] = true;
+  e["wdir"] = e["wspd"] = e["visib"] = e["altim"] = e["wxString"] = e["rawOb"] = e["obsTime"] = true;
   JsonObject c = e["clouds"].add<JsonObject>();
   c["cover"] = c["base"] = true;
 
@@ -103,6 +103,7 @@ bool AviationWxProvider::parseMetars(const String& body) {
     m.visSm = atof(String((const char*)(o["visib"] | "-1")).c_str());
     m.wx = (const char*)(o["wxString"] | "");
     m.raw = (const char*)(o["rawOb"] | "");
+    m.obsTime = (time_t)(o["obsTime"] | 0);
     int ceil = -1;
     for (JsonObject cl : o["clouds"].as<JsonArray>()) {
       String cov = (const char*)(cl["cover"] | "");
