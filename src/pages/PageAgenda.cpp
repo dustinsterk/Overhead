@@ -16,6 +16,13 @@
 #include <time.h>
 
 static Color darknessShade(float sunAlt) {
+  if (gTheme.mono) {                                // red dark-adapt: red-channel ramp
+    if (sunAlt > -0.5) return rgb565(48, 8, 4);     // day
+    if (sunAlt > -6)   return rgb565(32, 5, 2);     // civil
+    if (sunAlt > -12)  return rgb565(20, 3, 1);     // nautical
+    if (sunAlt > -18)  return rgb565(12, 2, 0);     // astronomical
+    return rgb565(6, 1, 0);                         // night
+  }
   if (sunAlt > -0.5) return rgb565(46, 52, 66);     // day
   if (sunAlt > -6)   return rgb565(32, 36, 50);     // civil
   if (sunAlt > -12)  return rgb565(20, 22, 34);     // nautical
@@ -126,9 +133,9 @@ void PageAgenda::draw(App& app) {
     g.fillRect(x0, sy, w, sh, darknessShade(_sunAlt[h]));      // darkness band
     if (_cloud[h] >= 0) {                                       // cloud heat (top)
       int gch = 20 + _cloud[h] * 180 / 100;
-      g.fillRect(x0, sy, w, 14, rgb565(gch, gch, gch + 10));
+      g.fillRect(x0, sy, w, 14, gTheme.mono ? rgb565(gch, gch / 4, 0) : rgb565(gch, gch, gch + 10));
     }
-    if (_moonUp[h]) g.fillRect(x0, sy + sh - 4, w, 4, rgb565(70, 60, 30)); // moon-up
+    if (_moonUp[h]) g.fillRect(x0, sy + sh - 4, w, 4, gTheme.mono ? rgb565(90, 22, 0) : rgb565(70, 60, 30)); // moon-up
   }
   g.drawRect(sx, sy, sw, sh, gTheme.grid);
   // Hour ticks.

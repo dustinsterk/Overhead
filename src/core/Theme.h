@@ -16,6 +16,7 @@ struct Theme {
   Color grid;
   Color warn;
   Color ok;
+  bool  mono;     // red dark-adapt palette: pages with custom gradients go red-only
 };
 
 // RGB565 helper (constexpr so palettes are compile-time).
@@ -32,6 +33,7 @@ namespace themes {
     /*grid*/   rgb565(40, 48, 60),
     /*warn*/   rgb565(255, 170, 40),
     /*ok*/     rgb565(80, 220, 120),
+    /*mono*/   false,
   };
   // Red dark-adapt palette for night visual/ham ops (offered in milestone 7).
   constexpr Theme redNight = {
@@ -42,6 +44,7 @@ namespace themes {
     /*grid*/   rgb565(60, 12, 8),
     /*warn*/   rgb565(255, 140, 60),
     /*ok*/     rgb565(220, 80, 50),
+    /*mono*/   true,
   };
 }
 

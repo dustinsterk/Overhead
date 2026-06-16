@@ -132,23 +132,23 @@ int PageAircraft::drawChips(App& app) {
   }
   auto& g = app.display().gfx();
   const int cw = app.contentW(), cy0 = app.contentY();
-  const int h = 13;
+  const int h = 13, top = cy0 + 3;          // small gap below the status strip
   int x = 2;
   g.setTextSize(1);
   g.setTextDatum(textdatum_t::middle_left);
   auto chip = [&](const String& label, bool sel, const String& icao) -> bool {
     int w = (int)label.length() * 6 + 8;
     if (x + w > cw - 2 || _chipCount >= kMaxChips) return false;
-    g.fillRect(x, cy0, w, h, sel ? gTheme.accent : gTheme.grid);
+    g.fillRect(x, top, w, h, sel ? gTheme.accent : gTheme.grid);
     g.setTextColor(sel ? gTheme.bg : gTheme.fg, sel ? gTheme.accent : gTheme.grid);
-    g.drawString(label, x + 4, cy0 + h / 2);
+    g.drawString(label, x + 4, top + h / 2);
     _chipX[_chipCount] = x; _chipW[_chipCount] = w; _chipIcao[_chipCount] = icao; _chipCount++;
     x += w + 3;
     return true;
   };
   chip("HOME", _centerIcao.length() == 0, "");
   for (const auto& s : st) if (!chip(s.icao, _centerIcao == s.icao, s.icao)) break;
-  return h + 1;
+  return h + 5;                              // 3 top gap + chip + 1 bottom
 }
 
 bool PageAircraft::handleChipTap(App& app, int x, int yRel) {
