@@ -337,13 +337,23 @@ void PageStarMap::draw(App& app) {
     g.drawString("zoom \xB7 tap to exit", 4, cy0 + 2);
   }
 
-  // Constellation name banner while zoomed (auto-tour).
+  // Constellation name banner + brightest-star subtitle while touring.
   if (_tour && _tourCon >= 0 && t > 0.25f) {
     g.setTextDatum(textdatum_t::top_center);
     g.setTextColor(gTheme.accent, gTheme.bg);
     g.setTextSize(2);
     g.drawString(kCons[_tourCon].name, cw / 2, cy0 + 3);
     g.setTextSize(1);
+    const Star* br = nullptr;                       // brightest member star
+    for (const char* nm : kCons[_tourCon].stars) {
+      if (!nm) break;
+      const Star* s = findStar(nm);
+      if (s && (!br || s->mag < br->mag)) br = s;
+    }
+    if (br) {
+      g.setTextColor(gTheme.dim, gTheme.bg);
+      g.drawString(String("brightest: ") + br->name + " m" + String(br->mag, 1), cw / 2, cy0 + 21);
+    }
   }
 
   // Badge: magnitude limit.
