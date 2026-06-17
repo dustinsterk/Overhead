@@ -456,7 +456,7 @@ void PageAviation::drawTrends(App& app) {
   const int gx = 62, gw = cw - gx - 6;
   const int top = cy0 + 15, rowH = (ch - 15 - 15) / 4;
 
-  auto sparkRow = [&](int r, const char* name, std::function<int(int)> get, const String& cur, Color c) {
+  auto sparkRow = [&](int r, const char* name, std::function<int(int)> get, const String& cur, const String& cur2, Color c) {
     int y0 = top + r * rowH;
     int mn = 32767, mx = -32768;
     for (int i = now; i <= now + span; ++i) { int v = get(i); if (v == SENT) continue; if (v < mn) mn = v; if (v > mx) mx = v; }
@@ -465,6 +465,7 @@ void PageAviation::drawTrends(App& app) {
     g.setTextDatum(textdatum_t::top_left);
     g.setTextColor(gTheme.dim, gTheme.bg); g.drawString(name, 4, y0);
     g.setTextColor(c, gTheme.bg);          g.drawString(cur, 4, y0 + 10);
+    if (cur2.length()) { g.setTextColor(gTheme.dim, gTheme.bg); g.drawString(cur2, 4, y0 + 20); }  // imperial
     int ph = rowH - 6, py = y0 + 2, px = -1, pv = 0;
     g.drawFastVLine(gx, py, ph, gTheme.grid);          // "now" baseline
     for (int i = now; i <= now + span; ++i) {
@@ -476,11 +477,16 @@ void PageAviation::drawTrends(App& app) {
     }
   };
 
-  char cv[14];
-  snprintf(cv, sizeof(cv), "%d\xF7" "C", gT(now) == SENT ? 0 : gT(now)); sparkRow(0, "temp", gT, cv, gTheme.warn);
-  snprintf(cv, sizeof(cv), "%d\xF7" "C", gD(now) == SENT ? 0 : gD(now)); sparkRow(1, "dewpt", gD, cv, gTheme.accent);
-  snprintf(cv, sizeof(cv), "%d%%", gC(now) == SENT ? 0 : gC(now));       sparkRow(2, "cloud", gC, cv, gTheme.fg);
-  snprintf(cv, sizeof(cv), "%dhPa", gP(now) == SENT ? 0 : gP(now));      sparkRow(3, "press", gP, cv, gTheme.ok);
+  char cv[16], cv2[16];
+  int tc = gT(now) == SENT ? 0 : gT(now), dc = gD(now) == SENT ? 0 : gD(now), pp = gP(now) == SENT ? 0 : gP(now);
+  snprintf(cv, sizeof(cv), "%d\xF7" "C", tc); snprintf(cv2, sizeof(cv2), "%d\xF7" "F", tc * 9 / 5 + 32);
+  sparkRow(0, "temp", gT, cv, cv2, gTheme.warn);
+  snprintf(cv, sizeof(cv), "%d\xF7" "C", dc); snprintf(cv2, sizeof(cv2), "%d\xF7" "F", dc * 9 / 5 + 32);
+  sparkRow(1, "dewpt", gD, cv, cv2, gTheme.accent);
+  snprintf(cv, sizeof(cv), "%d%%", gC(now) == SENT ? 0 : gC(now));
+  sparkRow(2, "cloud", gC, cv, "", gTheme.fg);
+  snprintf(cv, sizeof(cv), "%dhPa", pp); snprintf(cv2, sizeof(cv2), "%.2fin", pp * 0.02953f);
+  sparkRow(3, "press", gP, cv, cv2, gTheme.ok);
 
   // Conclusion from now -> +6h.
   int dP = (gP(now + 6) != SENT && gP(now) != SENT) ? gP(now + 6) - gP(now) : 0;
