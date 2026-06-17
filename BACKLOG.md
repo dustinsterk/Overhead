@@ -34,7 +34,7 @@ is the *remaining* work as of the latest sweep.
 - Doppler: uplink correction + tuning readout; rotor Az-El output.
 
 ## M4 — Launches
-- On-device filter chips: time window (24h/7d/30d), hide-TBD, by provider/site/country.
+- More filter chips: by provider/site/country. (Time window 24h/7d/30d/all + hide-TBD done.)
 - Detail view on centre-tap (full mission text, window open/close, weather, image).
 - RocketLaunch.Live fallback parser: verify pad/location/mission paths on a live 429.
 - Streaming JSON parse off the UI thread for the larger detailed mode.
@@ -73,9 +73,10 @@ is the *remaining* work as of the latest sweep.
 - Eclipse / supermoon: small static table of upcoming dates surfaced in Agenda + a
   Director flag for an imminent eclipse.
 - Scoring with urgency/viewability bonuses + hysteresis + anti-flap dwell/cooldown
-  (current Director is simple priority: pass > launch > ambient tour).
-- Cloud-gated viewability: reduce a visual pass's "worth it" when overcast; observing-
-  window banner ("clearing 22:00-00:30") — WeatherProvider exists, not wired in.
+  (current Director is simple priority: pass > launch > ambient tour + notice pages).
+- Observing-window banner ("clearing 22:00-00:30"). (Cloud-gating a visual pass ->
+  "VIS(cloud)" when overcast is done; AUTO now also rotates through badged notice
+  pages and jumps to a SPECI.)
 - Pulsing/lead-time tab badges (currently a steady warn dot); aircraft-emergency trigger.
 - Tune the day / red dark-adapt palettes per-panel (red toggle + brightness now on Health).
 
@@ -92,10 +93,10 @@ Done: airport map (category dots + wind vectors + zoom + raw METAR), decoded MET
 (Skew-T temp/dewpoint vs ft, FZL, winds-aloft at altitude, dry-parcel line, soaring
 analysis: stability / cloud base / top-of-lift / inversion), AIRMET/SIGMET + PIREP
 hazards, SPECI Director badge. Remaining:
-- Decode AIRMET/SIGMET into plain phrases (currently raw text).
 - Home-field pin / favourite; nearby-field flight-category strip.
-- Pressure trend (SLP rising/falling) from the METAR.
+- Pressure trend (SLP rising/falling) from the METAR (needs successive-METAR history).
 - Proper Skew-T skew + isotherms; lifted index; wind barbs (vs the text winds).
+  (AIRMET/SIGMET now decode to plain phrases; winds-aloft sit at their altitudes.)
 - Optional: decode TAF cloud layers as a forecast ceiling timeline (Open-Meteo stays the
   primary cloud source for the Agenda Sky Window — TAF is airport-only + coded).
 
@@ -107,14 +108,15 @@ hazards, SPECI Director badge. Remaining:
 
 ## M10 — Agenda + observability
 - Sky Window: moon illumination shading intensity; precip overlay; finer (30-min) buckets.
-- Tap a Sky Window event to jump to its tab pre-focused.
+  (Local-time labels on the +6/+12/+18 ticks done; tapping an event jumps to its tab.)
+- Pre-focus the target on jump (pass -> select that bird, not just the Satellites tab).
 - Context title Today/Tonight by time of day; meteor-shower peak markers.
 
 ## M11 — System/Health
 - Make Health a corner-glyph MODAL OVERLAY (with Settings + Location) once overlay chrome exists.
 - Per-provider "next poll" + last HTTP status (need providers to expose them; /api/status
   now reports adsb/tle/avwx/kp/sfi for remote diagnosis).
-- Confirm dialog before Reboot; toast after Refresh.
+- Toast after Refresh. (Two-tap Reboot confirm done.)
 
 ## Remote control / debug (shipped — tuning left)
 - /remote = live full-res JPEG + click-to-tap + swipe; /api/screen.jpg, /api/tap,
