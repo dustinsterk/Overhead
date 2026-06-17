@@ -11,6 +11,7 @@
 #include "../astro/Sun.h"
 #include "../astro/Time.h"
 #include "../astro/SolarSystem.h"
+#include "../assets/MeteorShowers.h"
 #include <ArduinoJson.h>
 #include <algorithm>
 #include <time.h>
@@ -199,7 +200,22 @@ void PageAgenda::draw(App& app) {
   // --- Verdict ---
   int y = sy + sh + 36;
   g.setTextColor(gTheme.ok, gTheme.bg);
-  g.drawString(_verdict, sx, y); y += 15;
+  g.drawString(_verdict, sx, y); y += 13;
+
+  // --- Meteor showers: active shower or a countdown to the next peak ---
+  {
+    ShowerInfo ms = meteorShowerInfo(_base);
+    char b[60];
+    if (ms.active) {
+      if (ms.daysToPeak > 0)       snprintf(b, sizeof(b), "Meteors: %s active, peak in %dd (ZHR %d)", ms.name, ms.daysToPeak, ms.zhr);
+      else if (ms.daysToPeak == 0) snprintf(b, sizeof(b), "Meteors: %s PEAK tonight (ZHR %d)", ms.name, ms.zhr);
+      else                         snprintf(b, sizeof(b), "Meteors: %s active, peak %dd ago (ZHR %d)", ms.name, -ms.daysToPeak, ms.zhr);
+    } else {
+      snprintf(b, sizeof(b), "Meteors: next %s in %dd (ZHR %d)", ms.name, ms.daysToPeak, ms.zhr);
+    }
+    g.setTextColor(ms.active ? gTheme.accent : gTheme.dim, gTheme.bg);
+    g.drawString(b, sx, y); y += 13;
+  }
 
   // --- Event list ---
   g.setTextColor(gTheme.dim, gTheme.bg);
