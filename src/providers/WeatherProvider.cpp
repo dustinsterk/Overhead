@@ -5,6 +5,7 @@
 #include "../services/LocationService.h"
 #include "../core/EventBus.h"
 #include <ArduinoJson.h>
+#include <math.h>
 #include <time.h>
 
 // "YYYY-MM-DDTHH:MM" (UTC, timezone=GMT) -> epoch.
@@ -33,10 +34,11 @@ void WeatherProvider::refresh(bool force) {
   bool stale = force || !m.found || now < 1600000000UL || (now - m.fetchedAt) > ttl;
   if (!stale) return;
 
-  char url[200];
+  char url[260];
   snprintf(url, sizeof(url),
     "https://api.open-meteo.com/v1/forecast?latitude=%.4f&longitude=%.4f"
-    "&hourly=cloud_cover,precipitation_probability&forecast_days=2&timezone=GMT",
+    "&hourly=cloud_cover,precipitation_probability,temperature_2m,dew_point_2m,surface_pressure"
+    "&forecast_days=2&timezone=GMT",
     _loc->active().lat, _loc->active().lon);
   _inflight = true;
   _net->get(url, [this](int code, const String& body) {
@@ -57,6 +59,9 @@ bool WeatherProvider::parse(const String& body) {
   filter["hourly"]["time"] = true;
   filter["hourly"]["cloud_cover"] = true;
   filter["hourly"]["precipitation_probability"] = true;
+  filter["hourly"]["temperature_2m"] = true;
+  filter["hourly"]["dew_point_2m"] = true;
+  filter["hourly"]["surface_pressure"] = true;
   JsonDocument doc;
   if (deserializeJson(doc, body, DeserializationOption::Filter(filter))) return false;
 
@@ -66,9 +71,15 @@ bool WeatherProvider::parse(const String& body) {
   if (t.isNull() || c.isNull() || t.size() < 2) return false;
 
   _base = isoToEpoch((const char*)(t[0] | ""));
-  _cloud.clear(); _precip.clear();
+  _cloud.clear(); _precip.clear(); _temp.clear(); _dewp.clear(); _pres.clear();
   for (JsonVariant v : c) _cloud.push_back((int8_t)(int)(v | -1));
   if (!p.isNull()) for (JsonVariant v : p) _precip.push_back((int8_t)(int)(v | -1));
+  JsonArray tp = doc["hourly"]["temperature_2m"].as<JsonArray>();
+  JsonArray dp = doc["hourly"]["dew_point_2m"].as<JsonArray>();
+  JsonArray pr = doc["hourly"]["surface_pressure"].as<JsonArray>();
+  if (!tp.isNull()) for (JsonVariant v : tp) _temp.push_back((int8_t)lround(v | 0.0f));
+  if (!dp.isNull()) for (JsonVariant v : dp) _dewp.push_back((int8_t)lround(v | 0.0f));
+  if (!pr.isNull()) for (JsonVariant v : pr) _pres.push_back((int16_t)lround(v | 0.0f));
   return !_cloud.empty() && _base > 0;
 }
 

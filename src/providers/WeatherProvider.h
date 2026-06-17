@@ -23,6 +23,13 @@ public:
   ProviderStatus status() const { return _status; }
   uint32_t lastFetched() const { return _lastFetched; }
 
+  // Hourly series (forecast window from baseTime()) for the Aviation Trends view.
+  const std::vector<int8_t>&  tempSeries()  const { return _temp; }   // degC
+  const std::vector<int8_t>&  dewpSeries()  const { return _dewp; }   // degC
+  const std::vector<int16_t>& presSeries()  const { return _pres; }   // hPa
+  const std::vector<int8_t>&  cloudSeries() const { return _cloud; }  // %
+  time_t baseTime() const { return _base; }
+
 private:
   bool parse(const String& body);
 
@@ -35,6 +42,8 @@ private:
   time_t _base = 0;                      // epoch of hourly[0]
   std::vector<int8_t> _cloud;
   std::vector<int8_t> _precip;
+  std::vector<int8_t> _temp, _dewp;      // degC (Aviation Trends)
+  std::vector<int16_t> _pres;            // hPa
   ProviderStatus _status = ProviderStatus::Loading;
   uint32_t _lastFetched = 0;
   bool _inflight = false;

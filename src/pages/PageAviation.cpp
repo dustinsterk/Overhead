@@ -5,8 +5,10 @@
 #include "../providers/AviationWxProvider.h"
 #include "../providers/SoundingProvider.h"
 #include "../providers/HazardProvider.h"
+#include "../providers/WeatherProvider.h"
 #include "../services/LocationService.h"
 #include <math.h>
+#include <functional>
 
 static constexpr double D2R = 3.14159265358979323846 / 180.0;
 
@@ -53,7 +55,8 @@ void PageAviation::onTouch(App& app, int x, int y) {
   int third = app.contentW() / 3;
   if (x >= third && x <= 2 * third) {               // centre: cycle view (Map first)
     _view = _view == View::Map ? View::Metar : _view == View::Metar ? View::Taf
-          : _view == View::Taf ? View::Sounding : _view == View::Sounding ? View::Hazards : View::Map;
+          : _view == View::Taf ? View::Sounding : _view == View::Sounding ? View::Hazards
+          : _view == View::Hazards ? View::Trends : View::Map;
     _needClear = _dirty = true; return;
   }
   if (_view == View::Map && x < 50 && y < 16) {     // top-left badge: cycle map zoom
@@ -70,11 +73,12 @@ void PageAviation::onTouch(App& app, int x, int y) {
 bool PageAviation::autoAdvance(App&) {
   bool cycled = false;
   auto nextView = [&]() {
-    bool wasHazards = (_view == View::Hazards);
+    bool wasLast = (_view == View::Trends);
     _view = _view == View::Map ? View::Metar : _view == View::Metar ? View::Taf
-          : _view == View::Taf ? View::Sounding : _view == View::Sounding ? View::Hazards : View::Map;
+          : _view == View::Taf ? View::Sounding : _view == View::Sounding ? View::Hazards
+          : _view == View::Hazards ? View::Trends : View::Map;
     _tourN = 0; _sel = 0;
-    if (wasHazards) cycled = true;         // Hazards -> Map = full cycle
+    if (wasLast) cycled = true;            // Trends -> Map = full cycle
   };
   int n = (int)_wx.stations().size();
   if ((_view == View::Metar || _view == View::Map || _view == View::Taf) && n > 0) {
@@ -101,7 +105,8 @@ void PageAviation::draw(App& app) {
   else if (_view == View::Map)      drawMap(app);
   else if (_view == View::Taf)      drawTaf(app);
   else if (_view == View::Sounding) drawSounding(app);
-  else                              drawHazards(app);
+  else if (_view == View::Hazards)  drawHazards(app);
+  else                              drawTrends(app);
 }
 
 void PageAviation::drawMetar(App& app) {
@@ -416,4 +421,77 @@ void PageAviation::drawHazards(App& app) {
     y = drawWrapped(g, (h.pirep ? "PIREP " : "") + h.text, 6, y, maxc, 3, h.pirep ? gTheme.dim : gTheme.warn);
     y += 3;
   }
+}
+
+// Area weather trends from the Open-Meteo hourly series (one request, shared with
+// the Agenda Sky Window): temp / dewpoint / cloud / pressure sparklines over the
+// next ~24h, plus a rule-based conclusion. "Area" = the observer location (Open-
+// Meteo is point-based); per-airport current values live in the METAR card.
+void PageAviation::drawTrends(App& app) {
+  auto& g = app.display().gfx();
+  const int cw = app.contentW(), cy0 = app.contentY(), ch = app.contentH();
+  g.setTextDatum(textdatum_t::top_left);
+  g.setTextSize(1);
+  g.setTextColor(gTheme.fg, gTheme.bg);
+  g.drawString("Area trends 24h  [tap mid: map]", 4, cy0 + 2);
+
+  const auto& temp = _wxo.tempSeries();
+  const auto& dewp = _wxo.dewpSeries();
+  const auto& cloud = _wxo.cloudSeries();
+  const auto& pres = _wxo.presSeries();
+  time_t base = _wxo.baseTime();
+  if (base == 0 || temp.size() < 3 || pres.size() < 3) {
+    g.setTextColor(gTheme.dim, gTheme.bg);
+    g.drawString(_wxo.status() == ProviderStatus::Error ? "weather unavailable" : "loading trends...", 4, cy0 + ch / 2);
+    return;
+  }
+  const int SENT = -32768;
+  auto gT = [&](int i) { return (i >= 0 && i < (int)temp.size())  ? (int)temp[i]  : SENT; };
+  auto gD = [&](int i) { return (i >= 0 && i < (int)dewp.size())  ? (int)dewp[i]  : SENT; };
+  auto gC = [&](int i) { return (i >= 0 && i < (int)cloud.size()) ? (int)cloud[i] : SENT; };
+  auto gP = [&](int i) { return (i >= 0 && i < (int)pres.size())  ? (int)pres[i]  : SENT; };
+
+  int now = (int)((time(nullptr) - base) / 3600); if (now < 0) now = 0;
+  const int span = 24;
+  const int gx = 62, gw = cw - gx - 6;
+  const int top = cy0 + 15, rowH = (ch - 15 - 15) / 4;
+
+  auto sparkRow = [&](int r, const char* name, std::function<int(int)> get, const String& cur, Color c) {
+    int y0 = top + r * rowH;
+    int mn = 32767, mx = -32768;
+    for (int i = now; i <= now + span; ++i) { int v = get(i); if (v == SENT) continue; if (v < mn) mn = v; if (v > mx) mx = v; }
+    if (mn > mx) return;
+    if (mn == mx) mx = mn + 1;
+    g.setTextDatum(textdatum_t::top_left);
+    g.setTextColor(gTheme.dim, gTheme.bg); g.drawString(name, 4, y0);
+    g.setTextColor(c, gTheme.bg);          g.drawString(cur, 4, y0 + 10);
+    int ph = rowH - 6, py = y0 + 2, px = -1, pv = 0;
+    g.drawFastVLine(gx, py, ph, gTheme.grid);          // "now" baseline
+    for (int i = now; i <= now + span; ++i) {
+      int v = get(i); if (v == SENT) { px = -1; continue; }
+      int x = gx + (int)((long)(i - now) * gw / span);
+      int yy = py + ph - (int)((long)(v - mn) * ph / (mx - mn));
+      if (px >= 0) g.drawLine(px, pv, x, yy, c);
+      px = x; pv = yy;
+    }
+  };
+
+  char cv[14];
+  snprintf(cv, sizeof(cv), "%d\xF7" "C", gT(now) == SENT ? 0 : gT(now)); sparkRow(0, "temp", gT, cv, gTheme.warn);
+  snprintf(cv, sizeof(cv), "%d\xF7" "C", gD(now) == SENT ? 0 : gD(now)); sparkRow(1, "dewpt", gD, cv, gTheme.accent);
+  snprintf(cv, sizeof(cv), "%d%%", gC(now) == SENT ? 0 : gC(now));       sparkRow(2, "cloud", gC, cv, gTheme.fg);
+  snprintf(cv, sizeof(cv), "%dhPa", gP(now) == SENT ? 0 : gP(now));      sparkRow(3, "press", gP, cv, gTheme.ok);
+
+  // Conclusion from now -> +6h.
+  int dP = (gP(now + 6) != SENT && gP(now) != SENT) ? gP(now + 6) - gP(now) : 0;
+  int spread = (gT(now) != SENT && gD(now) != SENT) ? gT(now) - gD(now) : 99;
+  int dC = (gC(now + 6) != SENT && gC(now) != SENT) ? gC(now + 6) - gC(now) : 0;
+  String concl = dP <= -2 ? "pressure falling - unsettled"
+               : dP >= 2  ? "pressure rising - improving" : "pressure steady";
+  if (spread <= 2)      concl += "; fog/low-cld risk";
+  else if (dC >= 25)    concl += "; clouding over";
+  else if (dC <= -25)   concl += "; clearing";
+  g.setTextDatum(textdatum_t::bottom_left);
+  g.setTextColor(gTheme.accent, gTheme.bg);
+  g.drawString(concl.substring(0, (cw - 8) / 6), 4, cy0 + ch - 2);
 }
