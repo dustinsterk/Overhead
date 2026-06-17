@@ -515,8 +515,25 @@ void PageSolarSystem::drawShowers(App& app) {
   auto& g = app.display().gfx();
   const int cw = app.contentW(), cy0 = app.contentY(), ch = app.contentH();
   g.setTextDatum(textdatum_t::top_left);
-  g.setTextColor(gTheme.fg, gTheme.bg);
-  g.drawString("Meteor showers  [tap mid: sky]", 4, cy0 + 1);
+  g.setTextColor(gTheme.accent, gTheme.bg);
+  g.setTextSize(2); g.drawString("Meteor Showers", 4, cy0 + 1); g.setTextSize(1);
+  g.setTextColor(gTheme.dim, gTheme.bg);
+  g.setTextDatum(textdatum_t::top_right); g.drawString("tap mid: sky", cw - 4, cy0 + 4);
+
+  // Colour legend: the "when" column is coloured by how well the radiant is placed.
+  int ly = cy0 + 21;
+  g.setTextDatum(textdatum_t::top_left);
+  g.setTextColor(gTheme.ok, gTheme.bg);     g.drawString("great", 4, ly);
+  g.setTextColor(gTheme.accent, gTheme.bg); g.drawString("good", 48, ly);
+  g.setTextColor(gTheme.warn, gTheme.bg);   g.drawString("low", 86, ly);
+  g.setTextColor(gTheme.dim, gTheme.bg);    g.drawString("poor", 116, ly);
+  g.drawString("= radiant from here", 152, ly);
+
+  // Fixed-X columns (the device font is proportional, so space-padding won't align).
+  const int cN = 4, cP = 132, cZ = 186, cW = 238;
+  int hy = cy0 + 34;
+  g.setTextColor(gTheme.dim, gTheme.bg);
+  g.drawString("shower", cN, hy); g.drawString("peak", cP, hy); g.drawString("ZHR", cZ, hy); g.drawString("when", cW, hy);
 
   time_t now = time(nullptr);
   struct tm tmn; localtime_r(&now, &tmn);
@@ -534,23 +551,25 @@ void PageSolarSystem::drawShowers(App& app) {
     order[j + 1] = k;
   }
 
-  int y = cy0 + 16;
+  int y = cy0 + 47;
+  char b[16];
   for (int oi = 0; oi < kShowerCount && y < cy0 + ch - 2; ++oi) {
     const MeteorShower& s = kShowers[order[oi]];
     int d = dtp[order[oi]];
     int st = meteorDOY(s.stM, s.stD), en = meteorDOY(s.enM, s.enD);
     bool active = (st <= en) ? (doy >= st && doy <= en) : (doy >= st || doy <= en);
-    int maxAlt = 90 - (int)fabs(lat - s.radDec);            // radiant culmination altitude
-    const char* vis = maxAlt > 50 ? "great" : maxAlt > 25 ? "good" : maxAlt > 5 ? "low" : "poor";
+    int maxAlt = 90 - (int)fabs(lat - s.radDec);
     Color vc = maxAlt > 50 ? gTheme.ok : maxAlt > 25 ? gTheme.accent : maxAlt > 5 ? gTheme.warn : gTheme.dim;
-    char b[44];
-    snprintf(b, sizeof(b), "%-13s %2d/%02d %s Z%-3d", s.name, s.pkM, s.pkD,
-             active ? "NOW" : d == 0 ? "PK " : "   ", s.zhr);
+    g.setTextDatum(textdatum_t::top_left);
     g.setTextColor(active ? gTheme.warn : gTheme.fg, gTheme.bg);
-    g.drawString(b, 4, y);
+    g.drawString(s.name, cN, y);
+    g.setTextColor(gTheme.dim, gTheme.bg);
+    snprintf(b, sizeof(b), "%d/%02d", s.pkM, s.pkD); g.drawString(b, cP, y);
+    snprintf(b, sizeof(b), "%d", s.zhr);             g.drawString(b, cZ, y);
     g.setTextColor(vc, gTheme.bg);
-    String tail = (active || d == 0) ? String(vis) : String("+") + d + "d";
-    g.drawString(tail, cw - 46, y);
+    if (active)      g.drawString("NOW", cW, y);
+    else if (d == 0) g.drawString("peak", cW, y);
+    else { snprintf(b, sizeof(b), "+%dd", d); g.drawString(b, cW, y); }
     y += 13;
   }
 }

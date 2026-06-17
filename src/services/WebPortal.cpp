@@ -11,14 +11,20 @@ static const char kIndexHtml[] PROGMEM = R"HTML(
 <!doctype html><html><head><meta charset=utf-8>
 <meta name=viewport content="width=device-width,initial-scale=1">
 <title>Overhead</title>
+<link rel=stylesheet href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>body{font:15px system-ui;margin:1rem;max-width:40rem;background:#0b1018;color:#e6e8f0}
 a{color:#50aaff}h3{margin:1.1rem 0 .3rem;border-bottom:1px solid #233;color:#9bf}
 label{display:flex;justify-content:space-between;align-items:center;gap:1rem;padding:.18rem 0}
 input,select{background:#11161f;color:#e6e8f0;border:1px solid #334;border-radius:4px;padding:.25rem;min-width:11rem}
 button{background:#2563c0;color:#fff;border:0;border-radius:6px;padding:.5rem 1rem;font-size:15px;margin-top:.6rem}
-#msg{color:#5d2}</style></head>
+#map{height:220px;margin:.4rem 0;border:1px solid #334;border-radius:6px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:.1rem 1rem}
+.grid label{justify-content:flex-start;gap:.5rem}#msg{color:#5d2}</style></head>
 <body><h2>Overhead settings</h2>
 <p><a href=/remote>Remote control</a> · <a href=/update>Firmware update (OTA)</a> · <a href=/api/status>status JSON</a></p>
+<h3>Location</h3><p style=margin:.2rem;color:#9bf>click the map to set your spot</p>
+<div id=map></div>
 <form id=f></form><button onclick=save()>Save</button> <span id=msg></span>
 <script>
 const F=[
@@ -30,25 +36,48 @@ const F=[
  ['nightAmbientAlt','night ambient sun-alt','n'],['inactivitySec','inactivity->auto (s)','n'],
  ['Aircraft'],['adsbMode','mode','sel',['cloud','local']],['adsbHost','local host','t'],['adsbRadiusNm','radius (nm)','n'],
  ['Refresh'],['refreshLaunchMin','launches (min)','n'],['refreshTleHour','TLE (h)','n'],['refreshSpaceWxMin','space wx (min)','n'],['refreshWeatherMin','weather (min)','n'],
+ ['Network'],['hostname','mDNS name (x.local)','t'],
  ['Web/OTA'],['otaUser','user','t'],['otaPass','password','t'],
 ];
 const ORRERY=['Roadster','Psyche','Ceres','Vesta'];  // selectable minor bodies (astro catalog)
-let cur={};
-fetch('/api/settings').then(r=>r.json()).then(d=>{cur=d;build()});
+// Satellite presets: [display, watchlist token]. Token matches Celestrak names
+// (case-insensitive CONTAINS), so designations w/o a catalog token use the real name.
+const SATS=[['ISS','ISS'],['Tiangong (CSS)','CSS'],['Hubble','HST'],['SO-50','SO-50'],
+ ['AO-91','FOX-1B'],['SatGus','SATGUS'],['NOAA-15','NOAA 15'],['NOAA-18','NOAA 18'],
+ ['NOAA-19','NOAA 19'],['METEOR-M2','METEOR-M2'],['Starlink','STARLINK'],['GOES-18','GOES 18']];
+let cur={},map,mk;
+fetch('/api/settings').then(r=>r.json()).then(d=>{cur=d;build();initMap();});
 function build(){let h='';for(const r of F){if(r.length==1){h+=`<h3>${r[0]}</h3>`;continue;}
  const[k,l,t,o]=r,v=cur[k];
  if(t=='c')h+=`<label>${l}<input type=checkbox id=_${k} ${v?'checked':''}></label>`;
  else if(t=='sel')h+=`<label>${l}<select id=_${k}>${o.map(x=>`<option ${x==v?'selected':''}>${x}</option>`).join('')}</select></label>`;
  else h+=`<label>${l}<input id=_${k} type=${t=='n'?'number':'text'} step=any value="${v??''}"></label>`;}
- h+='<h3>Orrery bodies</h3>';const ob=cur.orreryBodies||'';
- for(const b of ORRERY)h+=`<label>${b}<input type=checkbox id=_orr_${b} ${ob.includes(b)?'checked':''}></label>`;
- h+='<h3>Satellite watchlist</h3><label>names (comma-sep)'
-   +`<input id=_watchlist type=text value="${(cur.watchlist||[]).join(', ')}"></label>`;
+ const wl=(cur.watchlist||[]).map(s=>s.toUpperCase());
+ h+='<h3>Satellites to track</h3><div class=grid>';
+ for(const[lbl,val]of SATS)h+=`<label><input type=checkbox id=_sat_${val.replace(/\W/g,'')} ${wl.some(w=>w.includes(val.toUpperCase()))?'checked':''}>${lbl}</label>`;
+ h+='</div><label>more (comma-sep names)'
+   +`<input id=_satx type=text value="${(cur.watchlist||[]).filter(s=>!SATS.some(p=>s.toUpperCase().includes(p[1].toUpperCase()))).join(', ')}"></label>`;
+ h+='<h3>Celestial bodies (orrery)</h3><div class=grid>';const ob=cur.orreryBodies||'';
+ for(const b of ORRERY)h+=`<label><input type=checkbox id=_orr_${b} ${ob.includes(b)?'checked':''}>${b}</label>`;
+ h+='</div>';
  f.innerHTML=h;}
+function initMap(){try{
+ const lat=Number(document.getElementById('_locLat').value)||34, lon=Number(document.getElementById('_locLon').value)||-118;
+ map=L.map('map').setView([lat,lon],4);
+ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:13}).addTo(map);
+ mk=L.marker([lat,lon],{draggable:true}).addTo(map);
+ const setll=ll=>{document.getElementById('_locLat').value=ll.lat.toFixed(4);
+  document.getElementById('_locLon').value=(((ll.lng+540)%360)-180).toFixed(4);
+  const ms=document.getElementById('_locMode');if(ms)ms.value='preset';};
+ map.on('click',e=>{mk.setLatLng(e.latlng);setll(e.latlng);});
+ mk.on('dragend',()=>setll(mk.getLatLng()));
+}catch(e){}}
 function save(){const o={};for(const r of F){if(r.length==1)continue;const[k,l,t]=r,e=document.getElementById('_'+k);
  if(t=='n'){if(e.value==='')continue;o[k]=Number(e.value);}else o[k]=t=='c'?e.checked:e.value;}
  o.orreryBodies=ORRERY.filter(b=>document.getElementById('_orr_'+b).checked).join(',');
- o.watchlist=document.getElementById('_watchlist').value.split(',').map(s=>s.trim()).filter(Boolean);
+ const sats=SATS.filter(p=>document.getElementById('_sat_'+p[1].replace(/\W/g,'')).checked).map(p=>p[1]);
+ const extra=document.getElementById('_satx').value.split(',').map(s=>s.trim()).filter(Boolean);
+ o.watchlist=[...new Set([...sats,...extra])];
  fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(o)})
  .then(r=>r.json()).then(_=>{msg.textContent='saved (some settings apply on reboot)';});}
 </script></body></html>
@@ -87,9 +116,11 @@ ref();
 bool WebPortal::begin(Settings* s, const String& hostname) {
   _s = s;
 
-  if (MDNS.begin(hostname.c_str())) {
+  String host = _s->getString("hostname", hostname.c_str());   // editable mDNS name (settings)
+  host.trim(); if (!host.length()) host = hostname;
+  if (MDNS.begin(host.c_str())) {
     MDNS.addService("http", "tcp", 80);
-    Serial.printf("[web] http://%s.local/\n", hostname.c_str());
+    Serial.printf("[web] http://%s.local/\n", host.c_str());
   }
 
   _server.on("/", HTTP_GET, [](AsyncWebServerRequest* req) {

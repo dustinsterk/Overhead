@@ -157,9 +157,19 @@ hazards, SPECI Director badge. Remaining:
 - **Web settings UI revamp**: set geolocation on a *map*; pick satellites from a
   checkbox/preset list (not name-search); checkbox the trackable celestial bodies
   (Roadster/Psyche/asteroids); editable mDNS hostname. (task)
-- **Aviation surface-fronts map** — Tier 1: parse the WPC Coded Surface Bulletin for
-  H/L pressure centres (+mb) and plot labelled markers on the coastline map. Tier 2:
-  front polylines (cold/warm/stationary), region-filtered + vertex-capped (heap).
+- **Aviation surface-fronts map** — BLOCKED on a confirmed data source: the WPC
+  "Coded Surface Bulletin" endpoints I tried (codsus.php / codsus_disc.php) 404, and
+  I won't guess the coded lat/lon/mb format (would risk fabricated positions) or add
+  a flaky HTTPS provider to a heap-starved board on a hunch. Need to first confirm a
+  reachable, parseable fronts/H-L product (URL + format). Tier 1 (H/L centre markers
+  on the coastline map) then Tier 2 (front polylines, region-filtered + vertex-capped).
+  VIABLE PATH (recommended, no new data source): build a makeshift H/L pressure map
+  from METAR altimeter/SLP — one aviationweather.gov request for a fixed spread of
+  major airports (KLAX, KSFO, KDEN, KORD, KMSP, KDFW, KIAH, KATL, KMIA, KJFK, KBOS,
+  KSEA, KMCI, KSLC, ...). Plot each on the coastline map coloured by pressure
+  (blue=high, red=low), label the max as H and min as L (makeshift centres), and a
+  crude gradient. Same proven feed as AviationWxProvider; small body; no fronts data
+  needed. (Nearby-METAR interpolation gives the *local* gradient too.)
 - **Solar System "upcoming showers/comets" page** — list all upcoming meteor showers
   (and comets) in date order even if far out, with per-location visibility notes;
   promote to the Agenda when within a few days (the Agenda already shows the next one).
@@ -174,6 +184,11 @@ hazards, SPECI Director badge. Remaining:
   light-time + heliocentric distance. Mostly static facts refreshed occasionally +
   a light status feed; light on heap. Strongly on-mission (bring far missions to the
   bedside). (See also M6 "live spacecraft" panel.)
+  - **Moon-missions view** — Moon phase/illumination + distance + a list of upcoming
+    lunar missions (Artemis II, CLPS landers, etc.). NEEDS a real data source —
+    lunar launch dates shift constantly, so don't hard-code/fabricate; pull from a
+    feed or a maintained data file rather than guessing. Could ride the Missions page
+    as a 3rd sub-view.
   - **Rover/space imagery (PSRAM boards only):** NASA mars-photos latest photo + APOD
     would be amazing on the bedside, but JPEG download + decode + a full framebuffer
     needs PSRAM — gate to CrowPanel. No-PSRAM CYD stays text-only (rover summary feed).
