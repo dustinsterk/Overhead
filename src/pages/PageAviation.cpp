@@ -317,7 +317,7 @@ void PageAviation::drawSounding(App& app) {
   const auto& lv = _snd.levels();
   g.setTextDatum(textdatum_t::top_left);
   g.setTextColor(gTheme.accent, gTheme.bg);
-  g.drawString("Sounding (model)  [tap mid: hazards]", 6, cy0 + 2);
+  g.drawString(String("Model sounding @") + _loc.active().name + "  [tap: hazards]", 6, cy0 + 2);
   if (lv.size() < 3) {
     g.setTextColor(gTheme.dim, gTheme.bg);
     g.drawString(_snd.status() == ProviderStatus::Error ? "sounding unavailable" : "loading sounding...", 6, cy0 + ch / 2);
@@ -560,12 +560,16 @@ void PageAviation::drawPressure(App& app) {
     Color c = cloud ? (p.cloud >= 70 ? gTheme.dim : p.cloud >= 30 ? gTheme.accent : gTheme.ok)
                     : (p.hpa >= 1019 ? gTheme.accent : p.hpa <= 1009 ? gTheme.warn : gTheme.fg);
     g.fillCircle(x, y, 2, c);
-    char b[8];
-    if (cloud)               snprintf(b, sizeof(b), "%d", p.cloud);
-    else if (_presMode == 1) snprintf(b, sizeof(b), "%02d", (int)lround(p.hpa * 0.02953f * 100) % 100);  // inHg*100 last 2
-    else                     snprintf(b, sizeof(b), "%02d", p.hpa % 100);
-    g.setTextDatum(textdatum_t::middle_left); g.setTextColor(c, gTheme.bg);
-    g.drawString(b, x + 3, y);
+    if (!cloud && p.cloud >= 40)                              // pressure mode: overlay cloud as a ring
+      g.drawCircle(x, y, 4, p.cloud >= 70 ? gTheme.fg : gTheme.dim);  // overcast=bright, broken=dim
+    String id = p.icao; if (id.length() == 4 && id[0] == 'K') id = id.substring(1);  // drop US K
+    g.setTextDatum(textdatum_t::top_left);
+    g.setTextColor(gTheme.dim, gTheme.bg); g.drawString(id, x + 3, y - 9);   // id above
+    char b[12];
+    if (cloud)               snprintf(b, sizeof(b), "%d%%", p.cloud);
+    else if (_presMode == 1) snprintf(b, sizeof(b), "%.2f", p.hpa * 0.02953f); // full inHg (e.g. 30.15)
+    else                     snprintf(b, sizeof(b), "%d", p.hpa);              // full hPa (e.g. 1013)
+    g.setTextColor(c, gTheme.bg); g.drawString(b, x + 3, y - 1);              // readout below id
   }
   if (!cloud) {                                                // H / L markers
     if (hi >= 0) { g.setTextDatum(textdatum_t::middle_center); g.setTextColor(gTheme.accent, gTheme.bg); g.drawString("H", SX(pts[hi].lon), SY(pts[hi].lat) - 8); }
@@ -581,6 +585,6 @@ void PageAviation::drawPressure(App& app) {
   }
   g.setTextDatum(textdatum_t::bottom_left); g.setTextColor(gTheme.dim, gTheme.bg);
   if (cloud)               g.drawString("cloud %  green clear / blue part / dim overcast", 4, cy0 + ch - 1);
-  else if (_presMode == 1) g.drawString(String("H ") + String(hv * 0.02953f, 2) + "  L " + String(lv * 0.02953f, 2) + " inHg  blue=high red=low", 4, cy0 + ch - 1);
-  else                     g.drawString(String("H ") + hv + "  L " + lv + " hPa  blue=high red=low", 4, cy0 + ch - 1);
+  else if (_presMode == 1) g.drawString(String("H ") + String(hv * 0.02953f, 2) + " L " + String(lv * 0.02953f, 2) + " inHg  blue=hi red=lo  ring=cloud", 4, cy0 + ch - 1);
+  else                     g.drawString(String("H ") + hv + " L " + lv + " hPa  blue=hi red=lo  ring=cloud", 4, cy0 + ch - 1);
 }
