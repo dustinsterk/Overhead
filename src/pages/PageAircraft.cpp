@@ -19,6 +19,33 @@ static const char* squawkAlert(const String& sq) {
   return nullptr;
 }
 
+// ADS-B emitter category code -> class: 0 unknown, 1 airliner, 2 GA, 3 heli, 4 mil.
+static int catClass(const String& c) {
+  if (c == "A3" || c == "A4" || c == "A5") return 1;          // large/heavy
+  if (c == "A1" || c == "A2" || c == "B1" || c == "B2" || c == "B4") return 2;  // light/glider/ultralight
+  if (c == "A7") return 3;                                    // rotorcraft
+  if (c == "A6") return 4;                                    // high-performance (mil/fast)
+  return 0;
+}
+static const char* kAltLabel[] = {"alt:all", "alt:<10k", "alt:10-25k", "alt:>25k"};
+static const char* kCatLabel[] = {"cat:all", "cat:airline", "cat:GA", "cat:heli", "cat:mil"};
+
+// Build _filt: indices into _ap.aircraft() passing the altitude + category filters.
+void PageAircraft::rebuildFilt() {
+  _filt.clear();
+  const auto& list = _ap.aircraft();
+  for (int i = 0; i < (int)list.size(); ++i) {
+    const Aircraft& a = list[i];
+    float alt = a.onGround ? 0.0f : a.altFt;
+    if (_altF == 1 && !(alt < 10000)) continue;
+    if (_altF == 2 && !(alt >= 10000 && alt < 25000)) continue;
+    if (_altF == 3 && !(alt >= 25000)) continue;
+    if (_catF != 0 && catClass(a.category) != _catF) continue;
+    _filt.push_back(i);
+  }
+  if (_sel >= (int)_filt.size()) _sel = _filt.empty() ? 0 : (int)_filt.size() - 1;
+}
+
 void PageAircraft::onEnter(App& app) {
   _dirty = _needClear = true;
   _ap.setForeground(true);   // full-rate polling + an immediate refresh on entry
@@ -39,7 +66,8 @@ void PageAircraft::onExit(App& app) {
 }
 
 bool PageAircraft::autoAdvance(App&) {
-  int n = (int)_ap.aircraft().size();      // single view: tour the contacts
+  rebuildFilt();                           // single view: tour the filtered contacts
+  int n = (int)_filt.size();
   if (n <= 0) return true;                 // nothing to show -> let the rotation move on
   _sel = (_sel + 1) % n; _needClear = _dirty = true;
   return _sel == 0;                        // wrapped = full cycle
@@ -58,20 +86,24 @@ void PageAircraft::onData(App& app, ProviderId id) {
 void PageAircraft::onTouch(App& app, int x, int y) {
   if (handleChipTap(app, x, y)) return;            // top centre-selector chips
   if (handleRadiusTap(app, x, y)) return;          // bottom-left range badge
-  if (handleGroundTap(app, x, y)) return;          // ground-filter badge (right of it)
+  if (handleGroundTap(app, x, y)) return;          // ground-filter badge
+  if (handleAltTap(app, x, y)) return;             // altitude-band filter chip
+  if (handleCatTap(app, x, y)) return;             // category filter chip
+  rebuildFilt();
   const auto& list = _ap.aircraft();
-  int n = (int)list.size();
+  int n = (int)_filt.size();
   if (n == 0) { _sel = -1; return; }
   // Tap on (near) a radar blip selects it.
   if (_rR > 0 && x < app.contentW() / 2) {
     int ty = y + app.contentY();                    // onTouch y is content-relative
     int best = -1, bestd2 = 15 * 15;
-    for (int i = 0; i < n; ++i) {
-      float rr = list[i].distNm / _rMaxR * _rR; if (rr > _rR) rr = _rR;
-      int ax = _rCx + (int)round(rr * sin(list[i].bearingDeg * D2R));
-      int ay = _rCy - (int)round(rr * cos(list[i].bearingDeg * D2R));
+    for (int k = 0; k < n; ++k) {
+      const Aircraft& a = list[_filt[k]];
+      float rr = a.distNm / _rMaxR * _rR; if (rr > _rR) rr = _rR;
+      int ax = _rCx + (int)round(rr * sin(a.bearingDeg * D2R));
+      int ay = _rCy - (int)round(rr * cos(a.bearingDeg * D2R));
       int d2 = (ax - x) * (ax - x) + (ay - ty) * (ay - ty);
-      if (d2 < bestd2) { bestd2 = d2; best = i; }
+      if (d2 < bestd2) { bestd2 = d2; best = k; }
     }
     if (best >= 0) { _sel = best; _needClear = _dirty = true; return; }
   }
@@ -79,6 +111,30 @@ void PageAircraft::onTouch(App& app, int x, int y) {
   if (x < third)          { _sel = (_sel <= 0 ? n - 1 : _sel - 1); _needClear = true; }
   else if (x > 2 * third) { _sel = (_sel + 1) % n;                 _needClear = true; }
   _dirty = true;
+}
+
+bool PageAircraft::handleAltTap(App& app, int x, int yRel) {
+  if (x < 134 || x >= 215 || yRel < app.contentH() - 20) return false;
+  _altF = (_altF + 1) % 4; _sel = 0; _dirty = _needClear = true; return true;
+}
+
+bool PageAircraft::handleCatTap(App& app, int x, int yRel) {
+  if (x < 215 || yRel < app.contentH() - 20) return false;
+  _catF = (_catF + 1) % 5; _sel = 0; _dirty = _needClear = true; return true;
+}
+
+void PageAircraft::drawFilterBadges(App& app) {
+  auto& g = app.display().gfx();
+  const int cw = app.contentW();
+  int y = app.contentY() + app.contentH() - 16;
+  g.setTextSize(1);
+  g.setTextDatum(textdatum_t::middle_left);
+  g.fillRect(134, y, 79, 14, gTheme.grid);
+  g.setTextColor(_altF ? gTheme.ok : gTheme.fg, gTheme.grid);
+  g.drawString(kAltLabel[_altF], 138, y + 7);
+  g.fillRect(215, y, cw - 215 - 2, 14, gTheme.grid);
+  g.setTextColor(_catF ? gTheme.ok : gTheme.fg, gTheme.grid);
+  g.drawString(kCatLabel[_catF], 219, y + 7);
 }
 
 bool PageAircraft::handleRadiusTap(App& app, int x, int yRel) {
@@ -202,9 +258,15 @@ void PageAircraft::draw(App& app) {
                   : "no aircraft in range", top);
     drawRadiusBadge(app);    // keep the badges tappable so the user can widen
     drawGroundBadge(app);    // range or re-enable ground traffic from here
+    drawFilterBadges(app);
     return;
   }
-  if (_sel >= (int)list.size()) _sel = list.size() - 1;
+  rebuildFilt();
+  if (_filt.empty()) {
+    drawMessage(app, "no aircraft match filters", cy0 + chipH);
+    drawRadiusBadge(app); drawGroundBadge(app); drawFilterBadges(app);
+    return;
+  }
 
   // Emergency-squawk alert strip (full width, below the chips). The page clears
   // fully when the emergency state flips so a cleared strip leaves no residue.
@@ -244,20 +306,21 @@ void PageAircraft::draw(App& app) {
   g.drawString("N", cx, cy - R - 6);
   g.drawString(String((int)maxR) + "nm", cx + R - 8, cy - 6);
 
-  for (int i = 0; i < (int)list.size(); ++i) {
-    const Aircraft& a = list[i];
+  for (int k = 0; k < (int)_filt.size(); ++k) {
+    const Aircraft& a = list[_filt[k]];
+    bool sel = (k == _sel);
     float rr = a.distNm / maxR * R; if (rr > R) rr = R;
     int ax = cx + (int)round(rr * sin(a.bearingDeg * D2R));
     int ay = cy - (int)round(rr * cos(a.bearingDeg * D2R));
     bool emerg = squawkAlert(a.squawk) != nullptr;
-    Color c = emerg ? gTheme.warn : (i == _sel) ? gTheme.ok : (a.onGround ? gTheme.dim : gTheme.accent);
+    Color c = emerg ? gTheme.warn : sel ? gTheme.ok : (a.onGround ? gTheme.dim : gTheme.accent);
     // Heading tick in the track direction.
     int tx = ax + (int)round(7 * sin(a.trackDeg * D2R));
     int ty = ay - (int)round(7 * cos(a.trackDeg * D2R));
     g.drawLine(ax, ay, tx, ty, c);
-    g.fillCircle(ax, ay, (i == _sel) ? 3 : 2, c);
+    g.fillCircle(ax, ay, sel ? 3 : 2, c);
     if (emerg) g.drawCircle(ax, ay, 6, gTheme.warn);  // ring an emergency contact
-    if (i == _sel) {                                  // label the selected blip
+    if (sel) {                                        // label the selected blip
       String cs = a.flight.length() ? a.flight : a.hex;
       g.setTextDatum(textdatum_t::bottom_left);
       g.setTextColor(gTheme.ok, gTheme.bg);
@@ -273,26 +336,32 @@ void PageAircraft::draw(App& app) {
   g.setTextColor(gTheme.fg, gTheme.bg);
   g.setTextSize(2); g.drawString("Aircraft", ix, iy); iy += 20;
   g.setTextSize(1);
-  line(String(list.size()) + " @" + (_centerIcao.length() ? _centerIcao : String("HOME"))
+  line(String(_filt.size()) + "/" + list.size() + " @" + (_centerIcao.length() ? _centerIcao : String("HOME"))
        + "  " + (_ap.local() ? "local" : "cloud"), gTheme.dim);
   if (_ap.status() == ProviderStatus::Stale && _ap.lastFetched()) {     // own line (was overflowing)
     int age = (int)(time(nullptr) - _ap.lastFetched());
     if (age > 0) line("stale " + String(age) + "s", gTheme.warn);
   }
 
-  if (_sel >= 0 && _sel < (int)list.size()) {
-    const Aircraft& a = list[_sel];
+  if (_sel >= 0 && _sel < (int)_filt.size()) {
+    const Aircraft& a = list[_filt[_sel]];
     iy += 4;
     g.setTextColor(gTheme.ok, gTheme.bg);
     g.setTextSize(2);
     g.drawString(a.flight.length() ? a.flight : a.hex, ix, iy); iy += 20;
     g.setTextSize(1);
-    line(String(_sel + 1) + "/" + list.size() + "  (tap edges)", gTheme.dim);
+    line(String(_sel + 1) + "/" + _filt.size() + "  (tap edges)", gTheme.dim);
     if (a.type.length() || a.category.length())
       line(String("type ") + (a.type.length() ? a.type : a.category), gTheme.fg);
     line(a.onGround ? String("on ground") : String("alt ") + (int)a.altFt + " ft", gTheme.fg);
     line(String("gs ") + (int)a.gsKt + " kt  trk " + (int)a.trackDeg, gTheme.fg);
     line(String("dist ") + (int)round(a.distNm) + " nm  brg " + (int)round(a.bearingDeg), gTheme.fg);
+    // Look angle from the observer: az = bearing, el from altitude over ground range.
+    if (!a.onGround) {
+      double distFt = a.distNm * 6076.115;
+      double el = distFt > 1 ? atan2((double)a.altFt, distFt) / D2R : 90.0;
+      line(String("look az ") + (int)round(a.bearingDeg) + "\xF7 el " + (int)round(el) + "\xF7", gTheme.accent);
+    }
     if (a.squawk.length()) {
       const char* em = squawkAlert(a.squawk);
       line(String("squawk ") + a.squawk + (em ? String("  ") + em : String()), em ? gTheme.warn : gTheme.dim);
@@ -301,4 +370,5 @@ void PageAircraft::draw(App& app) {
 
   drawRadiusBadge(app);
   drawGroundBadge(app);
+  drawFilterBadges(app);
 }

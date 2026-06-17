@@ -1,6 +1,7 @@
 #pragma once
 #include "../core/Page.h"
 #include <Arduino.h>
+#include <vector>
 
 class AircraftProvider;
 class AviationWxProvider;
@@ -33,14 +34,21 @@ private:
   int  drawChips(App& app);                      // centre selector row; returns its height
   bool handleRadiusTap(App& app, int x, int yRel);
   bool handleGroundTap(App& app, int x, int yRel);
+  bool handleAltTap(App& app, int x, int yRel);  // altitude-band filter chip
+  bool handleCatTap(App& app, int x, int yRel);  // category filter chip
   bool handleChipTap(App& app, int x, int yRel);
+  void drawFilterBadges(App& app);               // alt + category filter chips (bottom)
+  void rebuildFilt();                            // _filt = contacts passing alt/cat filters
   void applyCenter();                            // push _centerIcao to the provider + poll
 
   AircraftProvider&   _ap;
   AviationWxProvider& _wx;
   LocationService&    _loc;
   Settings&           _settings;
-  int   _sel = -1;
+  int   _sel = -1;           // index into _filt (the filtered contact list)
+  std::vector<int> _filt;    // indices into _ap.aircraft() passing the alt/cat filters
+  int   _altF = 0;           // 0 all, 1 <10k, 2 10-25k, 3 >25k ft
+  int   _catF = 0;           // 0 all, 1 airliner, 2 GA, 3 heli, 4 mil
   String _centerIcao;        // "" = observer (HOME); else recentre on this airport
   bool  _dirty = true;
   bool  _needClear = true;   // full-clear only on structural change (anti-flicker)
