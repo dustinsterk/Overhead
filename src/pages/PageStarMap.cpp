@@ -305,6 +305,28 @@ void PageStarMap::draw(App& app) {
     }
   }
 
+  // Constellation names for any figure in view while zoomed (drawn at the centroid
+  // of its on-screen member stars).
+  if (_zoom && _zoomT > 0.5f) {
+    for (int ci = 0; ci < kConCount; ++ci) {
+      long sxs = 0, sys = 0; int n = 0;
+      for (const char* nm : kCons[ci].stars) {
+        if (!nm) break;
+        const Star* s = findStar(nm); if (!s) continue;
+        int px, py; float alt;
+        if (!project(*s, jd, latRad, lst, cx, cy, R, px, py, alt)) continue;
+        int tx, ty; xf(px, py, tx, ty);
+        if (tx < 0 || tx > cw || ty < cy0 || ty > cy0 + ch) continue;   // on-screen only
+        sxs += tx; sys += ty; n++;
+      }
+      if (n >= 2) {
+        g.setTextDatum(textdatum_t::middle_center);
+        g.setTextColor(gTheme.warn, gTheme.bg);
+        g.drawString(kCons[ci].name, sxs / n, sys / n);
+      }
+    }
+  }
+
   // Tap-to-zoom hint.
   if (_zoom && _zoomT > 0.5f) {
     g.setTextDatum(textdatum_t::top_left);
