@@ -12,18 +12,19 @@ struct MeteorShower {
   uint8_t  stM, stD;      // active-window start
   uint8_t  enM, enD;      // active-window end
   uint16_t zhr;           // nominal zenithal hourly rate
+  int8_t   radDec;        // radiant declination (deg) — for the visibility note
 };
 static const MeteorShower kShowers[] = {
-  {"Quadrantids",     1, 3,  12,28,  1,12, 120},
-  {"Lyrids",          4,22,  4,16,   4,25,  18},
-  {"Eta Aquariids",   5, 6,  4,19,   5,28,  50},
-  {"Delta Aquariids", 7,30,  7,12,   8,23,  25},
-  {"Perseids",        8,12,  7,17,   8,24, 100},
-  {"Draconids",      10, 8, 10, 6,  10,10,  10},
-  {"Orionids",       10,21, 10, 2,  11, 7,  20},
-  {"Leonids",        11,17, 11, 6,  11,30,  15},
-  {"Geminids",       12,14, 12, 4,  12,17, 150},
-  {"Ursids",         12,22, 12,17,  12,26,  10},
+  {"Quadrantids",     1, 3,  12,28,  1,12, 120,  49},
+  {"Lyrids",          4,22,  4,16,   4,25,  18,  34},
+  {"Eta Aquariids",   5, 6,  4,19,   5,28,  50,  -1},
+  {"Delta Aquariids", 7,30,  7,12,   8,23,  25, -16},
+  {"Perseids",        8,12,  7,17,   8,24, 100,  58},
+  {"Draconids",      10, 8, 10, 6,  10,10,  10,  54},
+  {"Orionids",       10,21, 10, 2,  11, 7,  20,  16},
+  {"Leonids",        11,17, 11, 6,  11,30,  15,  22},
+  {"Geminids",       12,14, 12, 4,  12,17, 150,  33},
+  {"Ursids",         12,22, 12,17,  12,26,  10,  76},
 };
 static const int kShowerCount = sizeof(kShowers) / sizeof(kShowers[0]);
 

@@ -8,6 +8,7 @@
 #include "../astro/Moons.h"
 #include "../astro/Time.h"
 #include "../assets/StarCatalog.h"
+#include "../assets/MeteorShowers.h"
 #include <math.h>
 #include <string.h>
 #include <time.h>
@@ -180,7 +181,9 @@ bool PageSolarSystem::autoAdvance(App&) {
     if (++_tourN >= cnt) { _tourN = 0; _view = 2; }               // orbits done -> Jupiter
   } else if (_view == 2) {                  // Jupiter -> Saturn
     _view = 3;
-  } else {                                  // Saturn: one dwell -> full cycle
+  } else if (_view == 3) {                  // Saturn -> Showers
+    _view = 4;
+  } else {                                  // Showers: one dwell -> full cycle
     _view = 0; cycled = true;
   }
   _dirty = true;
@@ -218,6 +221,7 @@ void PageSolarSystem::draw(App& app) {
   if (_view == 1) { drawOrbit(app);   return; }
   if (_view == 2) { drawJupiter(app); return; }
   if (_view == 3) { drawSaturn(app);  return; }
+  if (_view == 4) { drawShowers(app); return; }
 
   // --- Horizon half-dome (top ~55%) ---
   const int domeH = ch * 55 / 100;
@@ -472,7 +476,7 @@ void PageSolarSystem::drawSaturn(App& app) {
 
   g.setTextDatum(textdatum_t::top_left);
   g.setTextColor(gTheme.fg, gTheme.bg);
-  g.drawString("Saturn - rings  [tap mid: sky]", 4, cy0 + 1);
+  g.drawString("Saturn - rings  [tap mid: showers]", 4, cy0 + 1);
   g.setTextColor(gTheme.dim, gTheme.bg);
   g.drawString(String(_st[6].above ? "up" : "below horizon") + "   el " + (int)round(_st[6].elDeg)
                + "\xF7  az " + (int)round(_st[6].azDeg) + "\xF7", 4, cy0 + 16);
@@ -502,4 +506,51 @@ void PageSolarSystem::drawSaturn(App& app) {
   g.setTextDatum(textdatum_t::bottom_left);
   g.setTextColor(gTheme.dim, gTheme.bg);
   g.drawString(String("zenith up \xB7 field tilt ") + (int)round(q / D2R) + "\xF7 for your sky", 4, cy0 + ch - 2);
+}
+
+// Upcoming meteor showers in date order (even far out), with ZHR, days-to-peak, and
+// whether the radiant is well placed from the observer's latitude. Active showers
+// are highlighted; the Agenda surfaces the next one when it's a few days away.
+void PageSolarSystem::drawShowers(App& app) {
+  auto& g = app.display().gfx();
+  const int cw = app.contentW(), cy0 = app.contentY(), ch = app.contentH();
+  g.setTextDatum(textdatum_t::top_left);
+  g.setTextColor(gTheme.fg, gTheme.bg);
+  g.drawString("Meteor showers  [tap mid: sky]", 4, cy0 + 1);
+
+  time_t now = time(nullptr);
+  struct tm tmn; localtime_r(&now, &tmn);
+  int doy = tmn.tm_yday + 1;
+  double lat = _loc.active().valid ? _loc.active().lat : 0.0;
+
+  int order[kShowerCount], dtp[kShowerCount];
+  for (int i = 0; i < kShowerCount; ++i) {
+    order[i] = i;
+    dtp[i] = (meteorDOY(kShowers[i].pkM, kShowers[i].pkD) - doy + 365) % 365;
+  }
+  for (int i = 1; i < kShowerCount; ++i) {                 // insertion sort by days-to-peak
+    int k = order[i], j = i - 1;
+    while (j >= 0 && dtp[order[j]] > dtp[k]) { order[j + 1] = order[j]; --j; }
+    order[j + 1] = k;
+  }
+
+  int y = cy0 + 16;
+  for (int oi = 0; oi < kShowerCount && y < cy0 + ch - 2; ++oi) {
+    const MeteorShower& s = kShowers[order[oi]];
+    int d = dtp[order[oi]];
+    int st = meteorDOY(s.stM, s.stD), en = meteorDOY(s.enM, s.enD);
+    bool active = (st <= en) ? (doy >= st && doy <= en) : (doy >= st || doy <= en);
+    int maxAlt = 90 - (int)fabs(lat - s.radDec);            // radiant culmination altitude
+    const char* vis = maxAlt > 50 ? "great" : maxAlt > 25 ? "good" : maxAlt > 5 ? "low" : "poor";
+    Color vc = maxAlt > 50 ? gTheme.ok : maxAlt > 25 ? gTheme.accent : maxAlt > 5 ? gTheme.warn : gTheme.dim;
+    char b[44];
+    snprintf(b, sizeof(b), "%-13s %2d/%02d %s Z%-3d", s.name, s.pkM, s.pkD,
+             active ? "NOW" : d == 0 ? "PK " : "   ", s.zhr);
+    g.setTextColor(active ? gTheme.warn : gTheme.fg, gTheme.bg);
+    g.drawString(b, 4, y);
+    g.setTextColor(vc, gTheme.bg);
+    String tail = (active || d == 0) ? String(vis) : String("+") + d + "d";
+    g.drawString(tail, cw - 46, y);
+    y += 13;
+  }
 }

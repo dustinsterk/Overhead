@@ -32,6 +32,7 @@ private:
   void drawOrbit(App& app);             // top-down orrery view
   void drawJupiter(App& app);           // Galilean moons, tilted to the observer's sky
   void drawSaturn(App& app);            // rings, tilted to the observer's sky
+  void drawShowers(App& app);           // upcoming meteor showers + visibility
   bool visible(int i) const;            // passes the current filter (sky-dome)
   struct OrbBody { bool minor; int idx; };
   static constexpr int kMaxOrb = 16;
@@ -50,8 +51,8 @@ private:
   int   _sel = 0;
   int   _orbSel = 2;                     // selected orbit body (0..8, 2=Earth)
   int   _orbScope = 2;                   // orbit view: 0 inner (Me..Ma), 1 mid (..Saturn), 2 all (..Pluto)
-  int   _view = 0;                       // 0 sky-dome, 1 orbits, 2 Jupiter moons, 3 Saturn rings
-  static constexpr int kViews = 4;
+  int   _view = 0;                       // 0 sky-dome,1 orbits,2 Jupiter,3 Saturn,4 showers
+  static constexpr int kViews = 5;
   int   _tourN = 0;                      // attract-tour: items stepped in this view
   int   _filter = 1;                    // 0 all, 1 above-horizon, 2 naked-eye
   bool  _stars = false;                 // overlay Star Map stars + constellations on the sky-dome
