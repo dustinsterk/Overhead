@@ -58,6 +58,26 @@ static const Star kStars[] = {
 };
 static const int kStarCount = sizeof(kStars) / sizeof(kStars[0]);
 
+// Prominent deep-sky (Messier) objects — naked-eye / binocular showpieces, J2000.
+// Plotted as distinct markers on the Star Map. Coordinates are accurate; this is a
+// curated highlights list, not the full Messier catalog.
+struct DeepSky { const char* name; float raHours; float decDeg; };
+static const DeepSky kDeepSky[] = {
+  {"M31 Andromeda", 0.712f,  41.269f},
+  {"M45 Pleiades",  3.790f,  24.105f},
+  {"M42 Orion Neb", 5.588f,  -5.391f},
+  {"M44 Beehive",   8.670f,  19.667f},
+  {"M13 Hercules", 16.695f,  36.460f},
+  {"M6 Butterfly", 17.668f, -32.217f},
+  {"M7 Ptolemy",   17.897f, -34.793f},
+  {"M8 Lagoon",    18.060f, -24.383f},
+  {"M22 Sagit",    18.606f, -23.904f},
+  {"M11 Wild Duck",18.851f,  -6.270f},
+  {"M57 Ring",     18.885f,  33.029f},
+  {"M27 Dumbbell", 19.994f,  22.721f},
+};
+static const int kDeepSkyCount = sizeof(kDeepSky) / sizeof(kDeepSky[0]);
+
 // Constellation lines as star-name pairs (resolved at draw).
 struct StarLine { const char* a; const char* b; };
 static const StarLine kStarLines[] = {

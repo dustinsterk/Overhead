@@ -241,6 +241,26 @@ void PageStarMap::draw(App& app) {
     }
   }
 
+  // Deep-sky objects (Messier highlights) — hollow markers so they read as
+  // not-a-star; short id label when labels are on (full names are in the catalog).
+  for (int k = 0; k < kDeepSkyCount; ++k) {
+    astro::Equatorial eq{ kDeepSky[k].raHours * 15.0 * astro::DEG2RAD, kDeepSky[k].decDeg * astro::DEG2RAD };
+    astro::Horizontal h = astro::equatorialToHorizontal(eq, latRad, lst);
+    double alt = h.altRad * astro::RAD2DEG;
+    if (alt <= 0) continue;
+    double rr = R * (90.0 - alt) / 90.0;
+    int sx0 = cx + (int)round(rr * sin(h.azRad)), sy0 = cy - (int)round(rr * cos(h.azRad));
+    int sx, sy; xf(sx0, sy0, sx, sy);
+    if (sx < -10 || sx > cw + 10 || sy < cy0 - 10 || sy > cy0 + ch + 10) continue;
+    g.drawCircle(sx, sy, 2, gTheme.accent);
+    if (_labels && !_tour) {
+      String nm = kDeepSky[k].name; int sp = nm.indexOf(' ');
+      g.setTextDatum(textdatum_t::bottom_left);
+      g.setTextColor(gTheme.accent, gTheme.bg);
+      g.drawString(sp > 0 ? nm.substring(0, sp) : nm, sx + 4, sy - 1);
+    }
+  }
+
   // Sun / Moon / planets, projected the same way (azimuthal). Distinct colours.
   for (int i = 0; _showSS && i < 9; ++i) {
     astro::PlanetState p = astro::planetState((astro::Planet)i, jd, _loc.active().lat, _loc.active().lon);
