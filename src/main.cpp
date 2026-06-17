@@ -245,6 +245,7 @@ void setup() {
   director.begin(&app, &settings, &timeSvc, &locSvc, &tleProv, &launchProv, satsPage);
   director.setSpaceWx(&spaceWxProv);
   director.setAviation(&avwxProv);
+  director.setAviationPage(aviationPage);
 
   Serial.printf("[boot] done. free heap=%u  largest=%u\n",
                 Display::freeHeap(), Display::largestFreeBlock());

@@ -12,6 +12,7 @@ class LaunchProvider;
 class SpaceWxProvider;
 class AviationWxProvider;
 class PageSatellites;
+class PageAviation;
 
 // core/Director — Intelligent Focus (spec §7). The only component with cross-tab
 // awareness: it reads providers + clock + Sun and drives App::autoFocus(). Two
@@ -25,6 +26,7 @@ public:
              TleProvider* tle, LaunchProvider* launch, PageSatellites* satPage);
   void setSpaceWx(SpaceWxProvider* wx) { _spacewx = wx; }
   void setAviation(AviationWxProvider* a) { _avwx = a; }
+  void setAviationPage(PageAviation* p) { _avPage = p; }
   void tick(uint32_t nowMs);
 
 private:
@@ -39,6 +41,7 @@ private:
   SpaceWxProvider* _spacewx = nullptr;
   AviationWxProvider* _avwx = nullptr;
   PageSatellites*  _satPage = nullptr;
+  PageAviation*    _avPage = nullptr;
 
   astro::SatEngine _eng;
   String   _passBird;

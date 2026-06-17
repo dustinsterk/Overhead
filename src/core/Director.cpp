@@ -8,6 +8,7 @@
 #include "../providers/SpaceWxProvider.h"
 #include "../providers/AviationWxProvider.h"
 #include "../pages/PageSatellites.h"
+#include "../pages/PageAviation.h"
 #include "../astro/Sun.h"
 #include "../astro/Time.h"
 #include <ArduinoJson.h>
@@ -142,8 +143,8 @@ void Director::tick(uint32_t nowMs) {
 
   String spec = night ? _s->getString("ambientNight", "Solar System,Star Map")
                       : _s->getString("ambientDay", "Agenda");
-  int pages[6]; int np = 0;                         // resolved rotation page indices
-  for (int start = 0; np < 6 && start <= (int)spec.length(); ) {
+  int pages[10]; int np = 0;                        // resolved rotation page indices
+  for (int start = 0; np < 10 && start <= (int)spec.length(); ) {
     int comma = spec.indexOf(',', start);
     if (comma < 0) comma = spec.length();
     String t = spec.substring(start, comma); t.trim();
@@ -152,10 +153,22 @@ void Director::tick(uint32_t nowMs) {
     if (comma >= (int)spec.length()) break;
     start = comma + 1;
   }
+  // Fold badged "notice" pages into the AUTO rotation so it periodically visits the
+  // flag (Kp storm / Aviation SPECI) and returns, until it clears. (In MANUAL the
+  // badge is the only signal — autoFocus is a no-op there.)
+  bool speci = _avwx && _avwx->hasSpeci();
+  auto addNotice = [&](int idx, bool on) {
+    if (!on || idx < 0 || np >= 10) return;
+    for (int i = 0; i < np; ++i) if (pages[i] == idx) return;   // dedupe
+    pages[np++] = idx;
+  };
+  addNotice(swxIdx, _spacewx && _spacewx->kp() >= 5.0f);
+  addNotice(avIdx, speci);
   if (np == 0) return;
   if (_ambPos >= np) _ambPos = 0;
   int amb = pages[_ambPos];
-  _app->autoFocus(amb);
+  bool switched = _app->autoFocus(amb);
+  if (switched && amb == avIdx && speci && _avPage) _avPage->focusSpeci();  // jump to the SPECI
 
   uint32_t dwell = (uint32_t)_s->getInt("tourDwellSec", 6) * 1000UL;
   if (_app->mode() == App::Mode::Auto && !_app->pinned() && _app->activeIndex() == amb) {

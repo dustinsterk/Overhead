@@ -17,6 +17,7 @@ public:
     : _wx(wx), _snd(snd), _haz(haz), _loc(loc) {}
 
   const char* title() const override { return "Aviation"; }
+  void focusSpeci();              // Director: jump to the SPECI station's METAR view
   void onEnter(App& app) override { _dirty = _needClear = true; }
   void onData(App& app, ProviderId id) override;
   void onTouch(App& app, int x, int y) override;

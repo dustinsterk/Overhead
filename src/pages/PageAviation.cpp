@@ -35,6 +35,12 @@ static int drawWrapped(LGFX& g, const String& text, int x, int y, int maxChars, 
   return y;
 }
 
+void PageAviation::focusSpeci() {
+  const auto& st = _wx.stations();
+  for (int i = 0; i < (int)st.size(); ++i)
+    if (st[i].raw.startsWith("SPECI")) { _sel = i; _view = View::Metar; _needClear = _dirty = true; return; }
+}
+
 void PageAviation::onData(App& app, ProviderId id) {
   int n = (int)_wx.stations().size();
   if (_sel >= n) _sel = n ? n - 1 : 0;

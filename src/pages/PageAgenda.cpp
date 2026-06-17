@@ -159,7 +159,11 @@ void PageAgenda::draw(App& app) {
   for (int hh = 0; hh <= 24; hh += 6) {
     int x = sx + sw * hh / kHours;
     g.drawFastVLine(x, sy, sh, gTheme.grid);
-    g.drawString(hh == 0 ? "now" : String("+") + hh, x + 1, sy + sh + 1);
+    if (hh < 24) {                                   // skip the right-edge tick (would clip)
+      time_t t = _base + (time_t)hh * 3600; struct tm tm; localtime_r(&t, &tm);
+      char lt[8]; strftime(lt, sizeof(lt), "%H:%M", &tm);
+      g.drawString((hh == 0 ? String("now") : String("+") + hh) + " " + lt, x + 1, sy + sh + 1);
+    }
   }
   // Event markers on the strip (accent=pass, warn=launch, ok=sun/moon).
   for (const auto& e : _events) {
