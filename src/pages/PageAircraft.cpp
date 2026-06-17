@@ -297,12 +297,20 @@ void PageAircraft::draw(App& app) {
   _rCx = cx; _rCy = cy; _rR = R; _rMaxR = maxR;     // remember for tap-on-blip
   g.fillRect(cx - R - 4, cy - R - 10, 2 * R + 8, 2 * R + 20, gTheme.bg);
 
-  g.drawCircle(cx, cy, R, gTheme.grid);
-  g.drawCircle(cx, cy, R / 2, gTheme.grid);
+  g.drawCircle(cx, cy, R, gTheme.grid);              // outer ring = selected range
+  // Fixed-distance reference rings (5 / 10 nm) when they fit inside the range, so
+  // close-in traffic has a scale even at the 25/50 nm settings.
+  g.setTextDatum(textdatum_t::middle_center);
+  for (int nm : {5, 10}) {
+    if (nm >= (int)maxR) continue;
+    int rr = (int)(nm / maxR * R);
+    g.drawCircle(cx, cy, rr, gTheme.dim);
+    g.setTextColor(gTheme.dim, gTheme.bg);
+    g.drawString(String(nm), cx, cy - rr - 4);
+  }
   g.drawFastHLine(cx - R, cy, 2 * R, gTheme.grid);
   g.drawFastVLine(cx, cy - R, 2 * R, gTheme.grid);
   g.setTextColor(gTheme.dim, gTheme.bg);
-  g.setTextDatum(textdatum_t::middle_center);
   g.drawString("N", cx, cy - R - 6);
   g.drawString(String((int)maxR) + "nm", cx + R - 8, cy - 6);
 

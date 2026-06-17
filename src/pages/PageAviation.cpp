@@ -201,6 +201,12 @@ void PageAviation::drawMap(App& app) {
     int rad = (i == _sel) ? 4 : 2;
     g.fillCircle(x, y, rad, c);
     if (i == _sel) g.drawCircle(x, y, rad + 2, gTheme.fg);
+    // Identifier near the dot (drop the US 'K' prefix to keep it short).
+    String id = s.icao;
+    if (id.length() == 4 && id[0] == 'K') id = id.substring(1);
+    g.setTextDatum(textdatum_t::middle_left);
+    g.setTextColor(i == _sel ? gTheme.fg : gTheme.dim, gTheme.bg);
+    g.drawString(id, x + rad + 2, y);
   }
 
   // Legend (top-right).
