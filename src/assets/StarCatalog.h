@@ -34,6 +34,27 @@ static const Star kStars[] = {
   {"Mizar",      13.399f,  54.925f,  2.04f}, {"Alkaid",   13.792f,  49.313f,  1.86f},
   {"Polaris",     2.530f,  89.264f,  1.98f}, {"Alpheratz", 0.140f,  29.090f,  2.06f},
   {"Schedar",     0.675f,  56.537f,  2.24f}, {"Caph",      0.153f,  59.150f,  2.28f},
+  // --- expansion: stars needed for more constellation figures (J2000) ---
+  {"Navi",        0.945f,  60.717f,  2.47f}, {"Ruchbah",   1.430f,  60.235f,  2.68f},
+  {"Segin",       1.906f,  63.670f,  3.35f}, {"Sadr",     20.370f,  40.257f,  2.23f},
+  {"Gienah",     20.770f,  33.970f,  2.48f}, {"Fawaris",  19.750f,  45.131f,  2.87f},
+  {"Albireo",    19.512f,  27.960f,  3.18f}, {"Sheliak",  18.835f,  33.363f,  3.52f},
+  {"Sulafat",    18.982f,  32.690f,  3.26f}, {"Denebola", 11.818f,  14.572f,  2.11f},
+  {"Algieba",    10.333f,  19.842f,  2.21f}, {"Zosma",    11.235f,  20.524f,  2.56f},
+  {"Chertan",    11.237f,  15.430f,  3.33f}, {"Alhena",    6.628f,  16.399f,  1.93f},
+  {"Wezen",       7.140f, -26.393f,  1.83f}, {"Mirzam",    6.378f, -17.956f,  1.98f},
+  {"Gacrux",     12.519f, -57.113f,  1.63f}, {"Imai",     12.252f, -58.749f,  2.79f},
+  {"Kochab",     14.845f,  74.156f,  2.07f}, {"Pherkad",  15.345f,  71.834f,  3.00f},
+  {"Tarazed",    19.771f,  10.613f,  2.72f}, {"Alshain",  19.922f,   6.407f,  3.71f},
+  {"Izar",       14.750f,  27.074f,  2.35f}, {"Seginus",  14.535f,  38.308f,  3.03f},
+  {"Nekkar",     15.032f,  40.390f,  3.49f}, {"Muphrid",  13.912f,  18.398f,  2.68f},
+  {"Markab",     23.079f,  15.205f,  2.48f}, {"Scheat",   23.063f,  28.083f,  2.42f},
+  {"Algenib",     0.221f,  15.184f,  2.83f}, {"Mirach",    1.162f,  35.621f,  2.05f},
+  {"Almach",      2.065f,  42.330f,  2.10f}, {"Mirfak",    3.405f,  49.861f,  1.79f},
+  {"Algol",       3.136f,  40.956f,  2.12f}, {"Menkalinan",5.992f,  44.947f,  1.90f},
+  {"Mahasim",     5.995f,  37.213f,  2.62f}, {"Gomeisa",   7.453f,   8.289f,  2.89f},
+  {"Dschubba",   16.005f, -22.622f,  2.32f}, {"Acrab",    16.090f, -19.805f,  2.62f},
+  {"Sargas",     17.622f, -42.998f,  1.86f}, {"Lesath",   17.513f, -37.296f,  2.70f},
 };
 static const int kStarCount = sizeof(kStars) / sizeof(kStars[0]);
 
@@ -47,7 +68,37 @@ static const StarLine kStarLines[] = {
   // Big Dipper (Ursa Major)
   {"Dubhe","Merak"}, {"Merak","Phecda"}, {"Phecda","Megrez"}, {"Megrez","Dubhe"},
   {"Megrez","Alioth"}, {"Alioth","Mizar"}, {"Mizar","Alkaid"},
-  // Cassiopeia
-  {"Caph","Schedar"},
+  // Cassiopeia (the W)
+  {"Caph","Schedar"}, {"Schedar","Navi"}, {"Navi","Ruchbah"}, {"Ruchbah","Segin"},
+  // Cygnus (Northern Cross)
+  {"Deneb","Sadr"}, {"Sadr","Gienah"}, {"Sadr","Fawaris"}, {"Sadr","Albireo"},
+  // Lyra
+  {"Vega","Sheliak"}, {"Vega","Sulafat"}, {"Sheliak","Sulafat"},
+  // Leo (sickle + hindquarters triangle)
+  {"Regulus","Algieba"}, {"Algieba","Zosma"}, {"Zosma","Denebola"},
+  {"Denebola","Chertan"}, {"Chertan","Regulus"},
+  // Gemini
+  {"Castor","Pollux"}, {"Pollux","Alhena"},
+  // Canis Major
+  {"Mirzam","Sirius"}, {"Sirius","Wezen"}, {"Wezen","Adhara"}, {"Adhara","Sirius"},
+  // Crux (Southern Cross)
+  {"Acrux","Gacrux"}, {"Mimosa","Imai"},
+  // Ursa Minor (Little Dipper bowl edge)
+  {"Kochab","Pherkad"},
+  // Aquila
+  {"Tarazed","Altair"}, {"Altair","Alshain"},
+  // Bootes (the kite)
+  {"Arcturus","Izar"}, {"Izar","Nekkar"}, {"Nekkar","Seginus"},
+  {"Seginus","Arcturus"}, {"Arcturus","Muphrid"},
+  // Pegasus (Great Square) + Andromeda chain + Perseus
+  {"Alpheratz","Scheat"}, {"Scheat","Markab"}, {"Markab","Algenib"}, {"Algenib","Alpheratz"},
+  {"Alpheratz","Mirach"}, {"Mirach","Almach"}, {"Almach","Mirfak"}, {"Mirfak","Algol"},
+  // Auriga (pentagon, shares Elnath with Taurus)
+  {"Capella","Menkalinan"}, {"Menkalinan","Mahasim"}, {"Mahasim","Elnath"}, {"Elnath","Capella"},
+  // Taurus horn + Canis Minor
+  {"Aldebaran","Elnath"}, {"Procyon","Gomeisa"},
+  // Scorpius (head + hook)
+  {"Acrab","Dschubba"}, {"Dschubba","Antares"}, {"Antares","Sargas"},
+  {"Sargas","Shaula"}, {"Shaula","Lesath"},
 };
 static const int kStarLineCount = sizeof(kStarLines) / sizeof(kStarLines[0]);
