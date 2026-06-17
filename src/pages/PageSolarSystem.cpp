@@ -36,6 +36,23 @@ static double sepDeg(const astro::PlanetState& a, const astro::PlanetState& b) {
   return acos(c) / D2R;
 }
 
+// Rough naked-eye visibility of body i right now: combines a nominal brightness
+// class with above-horizon state, sky darkness (Sun altitude) and altitude. Returns
+// a short word and sets col. Honest estimate, not a magnitude calculation.
+static const char* nakedEye(int i, const astro::PlanetState st[], Color& col) {
+  static const int ease[9] = { 0, 3, 1, 3, 2, 3, 2, 0, 0 };  // Su Mo Me Ve Ma Ju Sa Ur Ne
+  col = gTheme.dim;
+  if (i <= 0) return "";                                      // Sun: n/a
+  if (!st[i].above)   return "below";
+  if (ease[i] == 0)   return "scope";                         // Uranus/Neptune
+  double sun = st[0].elDeg, el = st[i].elDeg;
+  if (sun > -0.5) return ease[i] >= 3 ? "daytime" : "washed"; // Sun up
+  if (sun > -6.0) { col = gTheme.warn; return ease[i] >= 2 ? "twilight" : "low"; }
+  if (el < 10)    { col = gTheme.warn; return "low"; }        // dark but near horizon
+  if (ease[i] >= 3) { col = gTheme.ok; return "easy"; }
+  col = gTheme.accent; return "good";
+}
+
 static const char* moonPhaseName(double deg) {
   if (deg <  22.5) return "New";
   if (deg <  67.5) return "Waxing Cres";
@@ -267,11 +284,13 @@ void PageSolarSystem::draw(App& app) {
   g.setTextSize(1);
   for (int i = 0; i < kN && ly < cy0 + ch - 44; ++i) {
     if (!visible(i)) continue;
-    Color c = (i == _sel) ? gTheme.ok : gTheme.fg;
+    Color rc = gTheme.fg; const char* nw = nakedEye(i, _st, rc);   // naked-eye likelihood
+    Color c = (i == _sel) ? gTheme.ok : rc;
     g.setTextDatum(textdatum_t::top_left);
     g.setTextColor(c, gTheme.bg);
     String row = String(astro::planetName((Planet)i));
     if (i == 1) row += String("  ") + (int)astro::moonIlluminationPct(_time.julianDate()) + "% " + moonPhaseName(astro::moonPhaseDeg(_time.julianDate()));
+    else if (i >= 2 && nw[0]) row += String("  ") + nw;
     g.drawString(row, 6, ly);
     g.setTextDatum(textdatum_t::top_right);
     g.setTextColor(_st[i].above ? gTheme.fg : gTheme.dim, gTheme.bg);
