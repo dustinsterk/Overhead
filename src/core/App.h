@@ -68,6 +68,8 @@ private:
   uint32_t _lastStatusMs = 0;
   bool     _statusDirty  = true;
   String   _alert;               // Director alert text (shown in the status strip)
+  String   _switchBanner;        // brief "switched to X" banner on an auto-switch
+  uint32_t _switchBannerMs = 0;
   volatile int _injTapX = -1, _injTapY = -1;   // pending injected touch (debug web API)
   volatile int _injSwipe = 0;                  // pending injected swipe (-1/+1)
 

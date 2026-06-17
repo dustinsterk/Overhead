@@ -43,6 +43,9 @@ bool App::autoFocus(int index) {
   if (_mode != Mode::Auto || _pinned || index < 0 || index == _active) return false;
   setPage(index);
   if (index < (int)_badge.size()) _badge[index] = false;
+  _switchBanner = _pages[index]->title();   // announce the auto-switch in the status strip
+  _switchBannerMs = millis();
+  _statusDirty = true;
   return true;
 }
 
@@ -129,6 +132,10 @@ void App::tick(uint32_t nowMs) {
 
   if (_active >= 0) _pages[_active]->tick(*this, nowMs);
 
+  if (_switchBannerMs && nowMs - _switchBannerMs >= 4000) {   // banner expired -> restore strip
+    _switchBannerMs = 0; _statusDirty = true;
+  }
+
   if (_statusDirty || nowMs - _lastStatusMs >= 1000) {
     _lastStatusMs = nowMs;
     _statusDirty = false;
@@ -157,6 +164,19 @@ void App::drawStatus() {
     g.drawString(clk, 6, kStatusH / 2);
     g.setTextDatum(textdatum_t::middle_right);
     g.drawString(String("\xC2 ") + _alert, _display.width() - 6, kStatusH / 2);
+    return;
+  }
+
+  // Auto-switch banner: announce an ambient/Director page change for ~2.5s (the
+  // interrupt case already shows _alert above; this covers the silent tour jumps).
+  if (_switchBannerMs && millis() - _switchBannerMs < 4000) {
+    g.fillRect(0, 0, _display.width(), kStatusH, gTheme.accent);
+    g.setTextSize(1);
+    g.setTextDatum(textdatum_t::middle_left);
+    g.setTextColor(gTheme.bg, gTheme.accent);
+    g.drawString(clk, 6, kStatusH / 2);
+    g.setTextDatum(textdatum_t::middle_right);
+    g.drawString(String("\x10 ") + _switchBanner, _display.width() - 6, kStatusH / 2);
     return;
   }
 

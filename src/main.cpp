@@ -162,6 +162,8 @@ void setup() {
   // Cold start: WiFi first (spec §13). Blocks on the captive portal if unprovisioned.
   splash("Connecting WiFi…");
   prov.begin("Overhead-Setup-" + chipSuffix());
+  WiFi.setAutoReconnect(true);            // let the stack retry drops on its own too
+  WiFi.persistent(true);
 
   // Services.
   rtc.begin();
@@ -261,6 +263,19 @@ void loop() {
   themeCtl.tick(now);   // day/night palette + backlight
   director.tick(now);   // Intelligent Focus
   app.tick(now);
+
+  // WiFi watchdog (headless device): the radio occasionally drops and doesn't come
+  // back on its own, which kills OTA + the debug API. Nudge a reconnect after a few
+  // seconds; if it's still down after ~90 s, reboot to recover.
+  static uint32_t wifiDownSince = 0;
+  static bool reconnTried = false;
+  if (WiFi.status() == WL_CONNECTED) { wifiDownSince = 0; reconnTried = false; }
+  else {
+    if (!wifiDownSince) wifiDownSince = now;
+    uint32_t down = now - wifiDownSince;
+    if (down > 8000 && !reconnTried) { WiFi.reconnect(); reconnTried = true; Serial.println("[wd] wifi reconnect"); }
+    if (down > 90000) { Serial.println("[wd] wifi down 90s -> reboot"); delay(50); ESP.restart(); }
+  }
 
   // Loop-timing heartbeat: if dt spikes, the UI/touch loop is being starved.
   static uint32_t lastHb = 0, maxDt = 0;
