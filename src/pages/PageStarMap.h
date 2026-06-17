@@ -45,4 +45,11 @@ private:
   float    _t = 0.0f;            // 0 = full sky, 1 = fully zoomed on _tourCon
   float    _drawnT = -2.0f;      // last-drawn t / con: skip redraw when unchanged
   int      _drawnCon = -2;       // (so the static hold phase doesn't flicker)
+
+  // Tap-to-zoom: tap an area to zoom into it and label its stars; tap again to exit.
+  bool     _zoom = false;
+  float    _zoomT = 0.0f;        // 0 = wide, 1 = zoomed
+  int      _zoomDir = 1;         // +1 zooming in, -1 zooming out
+  int      _zFx = 0, _zFy = 0;   // focus = base screen coords of the tap
+  uint32_t _zoomMs = 0;
 };

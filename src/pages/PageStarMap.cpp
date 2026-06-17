@@ -98,9 +98,14 @@ void PageStarMap::onTouch(App& app, int x, int y) {
   if (y >= ch - 20 && x > cw / 2 - 26 && x < cw / 2 + 26) {  // bottom-centre: tour
     _tour = !_tour; _tourCon = -1; _t = 0; _dirty = true; return;
   }
-  if (_tour) { _tour = false; _t = 0; _dirty = true; return; }  // any tap exits the tour
-  int third = cw / 3;
-  if (x >= third && x <= 2 * third) { _labels = !_labels; _dirty = true; }
+  if (_tour) { _tour = false; _t = 0; _dirty = true; return; }   // exit the auto-tour
+  if (_zoom && _zoomDir > 0) {                                    // already zoomed -> zoom out
+    _zoomDir = -1; _zoomMs = millis(); _dirty = true; return;
+  }
+  // Tap an area -> zoom into it (precision-free; labels reveal once zoomed). The
+  // focus is the tap point in base screen coords; the transform pulls it to centre.
+  _zFx = x; _zFy = y + app.contentY();
+  _zoom = true; _zoomT = 0; _zoomDir = 1; _zoomMs = millis(); _drawnT = -2; _dirty = true;
 }
 
 bool PageStarMap::autoAdvance(App&) {
@@ -149,6 +154,18 @@ void PageStarMap::tick(App& app, uint32_t nowMs) {
     }
     _dirty = true;                                 // tour just ended -> redraw full sky
   }
+  if (_zoom) {                                     // tap-to-zoom animation
+    const uint32_t DUR = 750;
+    float p = (nowMs - _zoomMs) >= DUR ? 1.0f : (float)(nowMs - _zoomMs) / DUR;
+    _zoomT = (_zoomDir > 0) ? smooth(p) : 1.0f - smooth(p);
+    if (_zoomDir < 0 && p >= 1.0f) { _zoom = false; _zoomT = 0; }
+    if (_zoom) {                                   // zooming in / holding zoomed
+      if (_zoomT == _drawnT) return;               // static (held) -> no redraw, no strobe
+      if (nowMs - _lastDraw < 55) return;
+      _drawnT = _zoomT; _lastDraw = nowMs; draw(app); return;
+    }
+    _drawnT = -2; _lastDraw = nowMs; draw(app); return;   // exited -> redraw the wide sky
+  }
   if (!_dirty && nowMs - _lastDraw < 30000) return; // sky rotates slowly
   _dirty = false; _lastDraw = nowMs;
   draw(app);
@@ -176,9 +193,10 @@ void PageStarMap::draw(App& app) {
 
   // Zoom transform: display = C + s*(P - F) + (1-t)*(F - C). At t=0 identity; at
   // t=1 the focus F maps to centre C and the chart is magnified by Z.
-  float t = (_tour && _tourCon >= 0) ? _t : 0.0f;
-  int Fx = cx, Fy = cy;
-  if (t > 0) { int c; conFocus(app, _tourCon, Fx, Fy, c); }
+  float t = 0.0f; int Fx = cx, Fy = cy;
+  if (_tour && _tourCon >= 0) { t = _t; int c; conFocus(app, _tourCon, Fx, Fy, c); }
+  else if (_zoom)            { t = _zoomT; Fx = _zFx; Fy = _zFy; }
+  float magLim = (_zoom && _zoomT > 0.35f) ? 4.5f : _magLimit;   // reveal fainter stars zoomed
   const float Z = 3.6f;
   float s = 1 + t * (Z - 1);
   auto xf = [&](int px, int py, int& ox, int& oy) {
@@ -234,14 +252,15 @@ void PageStarMap::draw(App& app) {
   for (int k = 0; k < kStarCount; ++k) {
     const Star& s2 = kStars[k];
     bool member = _tour && starInCon(_tourCon, s2.name);
-    if (s2.mag > _magLimit && !member) continue;
+    if (s2.mag > magLim && !member) continue;
     int sx0, sy0; float alt;
     if (!project(s2, jd, latRad, lst, cx, cy, R, sx0, sy0, alt)) continue;
     int sx, sy; xf(sx0, sy0, sx, sy);
     if (sx < -10 || sx > cw + 10 || sy < cy0 - 10 || sy > cy0 + ch + 10) continue;
     int r = s2.mag < 0.5f ? 3 : s2.mag < 1.5f ? 2 : 1;
     g.fillCircle(sx, sy, member ? r + 1 : r, member ? gTheme.accent : gTheme.fg);
-    bool showName = (member && t > 0.45f) || (!_tour && _labels && s2.mag <= 1.6f);
+    bool zlabel = _zoom && _zoomT > 0.4f;            // zoomed -> name everything in view
+    bool showName = (member && t > 0.45f) || zlabel || (!_tour && !_zoom && _labels && s2.mag <= 1.6f);
     if (showName) {
       g.setTextDatum(textdatum_t::bottom_left);
       g.setTextColor(member ? gTheme.fg : gTheme.dim, gTheme.bg);
@@ -261,7 +280,7 @@ void PageStarMap::draw(App& app) {
     int sx, sy; xf(sx0, sy0, sx, sy);
     if (sx < -10 || sx > cw + 10 || sy < cy0 - 10 || sy > cy0 + ch + 10) continue;
     g.drawCircle(sx, sy, 2, gTheme.accent);
-    if (_labels && !_tour) {
+    if ((_labels && !_tour && !_zoom) || (_zoom && _zoomT > 0.4f)) {
       String nm = kDeepSky[k].name; int sp = nm.indexOf(' ');
       g.setTextDatum(textdatum_t::bottom_left);
       g.setTextColor(gTheme.accent, gTheme.bg);
@@ -279,14 +298,21 @@ void PageStarMap::draw(App& app) {
     int sx, sy; xf(sx0, sy0, sx, sy);
     Color c = (i == 0) ? gTheme.warn : (i == 1) ? gTheme.fg : gTheme.ok;   // Sun / Moon / planets
     g.fillCircle(sx, sy, i <= 1 ? 3 : 2, c);
-    if (_labels && !_tour) {
+    if (!_tour && (_labels || (_zoom && _zoomT > 0.4f))) {
       g.setTextDatum(textdatum_t::bottom_left);
       g.setTextColor(c, gTheme.bg);
       g.drawString(astro::planetName((astro::Planet)i), sx + 4, sy - 1);
     }
   }
 
-  // Constellation name banner while zoomed.
+  // Tap-to-zoom hint.
+  if (_zoom && _zoomT > 0.5f) {
+    g.setTextDatum(textdatum_t::top_left);
+    g.setTextColor(gTheme.dim, gTheme.bg);
+    g.drawString("zoom \xB7 tap to exit", 4, cy0 + 2);
+  }
+
+  // Constellation name banner while zoomed (auto-tour).
   if (_tour && _tourCon >= 0 && t > 0.25f) {
     g.setTextDatum(textdatum_t::top_center);
     g.setTextColor(gTheme.accent, gTheme.bg);
