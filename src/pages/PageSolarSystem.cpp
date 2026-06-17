@@ -27,6 +27,15 @@ static double parallacticDeg(const astro::PlanetState& st, double latDeg, double
   return atan2(sin(H), tan(lat) * cos(dec) - sin(dec) * cos(H)) / D2R;
 }
 
+// Angular separation (deg) between two bodies from their geocentric RA/Dec.
+static double sepDeg(const astro::PlanetState& a, const astro::PlanetState& b) {
+  const double D2R = 3.14159265358979323846 / 180.0;
+  double r1 = a.raDeg * D2R, d1 = a.decDeg * D2R, r2 = b.raDeg * D2R, d2 = b.decDeg * D2R;
+  double c = sin(d1) * sin(d2) + cos(d1) * cos(d2) * cos(r1 - r2);
+  if (c > 1) c = 1; else if (c < -1) c = -1;
+  return acos(c) / D2R;
+}
+
 static const char* moonPhaseName(double deg) {
   if (deg <  22.5) return "New";
   if (deg <  67.5) return "Waxing Cres";
@@ -256,7 +265,7 @@ void PageSolarSystem::draw(App& app) {
   // --- List (below the horizon) ---
   int ly = horY + 4;
   g.setTextSize(1);
-  for (int i = 0; i < kN && ly < cy0 + ch - 30; ++i) {
+  for (int i = 0; i < kN && ly < cy0 + ch - 44; ++i) {
     if (!visible(i)) continue;
     Color c = (i == _sel) ? gTheme.ok : gTheme.fg;
     g.setTextDatum(textdatum_t::top_left);
@@ -271,6 +280,25 @@ void PageSolarSystem::draw(App& app) {
     else              snprintf(b, sizeof(b), "below");
     g.drawString(b, cw - 6, ly);
     ly += 13;
+  }
+
+  // Closest conjunction among Moon + planets (geocentric separation). Highlighted
+  // when notably close (< 5 deg). Uses the already-computed RA/Dec, so ~free.
+  {
+    int bi = -1, bj = -1; double best = 1e9;
+    for (int i = 1; i < kN; ++i) for (int j = i + 1; j < kN; ++j) {
+      double s = sepDeg(_st[i], _st[j]);
+      if (s < best) { best = s; bi = i; bj = j; }
+    }
+    if (bi >= 0) {
+      bool close = best < 5.0;
+      g.setTextDatum(textdatum_t::top_left);
+      g.setTextColor(close ? gTheme.warn : gTheme.dim, gTheme.bg);
+      char b[48];
+      snprintf(b, sizeof(b), "%s%s-%s %.1f%c apart", close ? "CONJ " : "closest ",
+               astro::planetName((Planet)bi), astro::planetName((Planet)bj), best, (char)247);
+      g.drawString(b, 6, cy0 + ch - 42);
+    }
   }
 
   // Selected body's rise / transit / set (just above the badge row).
