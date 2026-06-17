@@ -213,17 +213,17 @@ void PageSatellites::drawInfoColumn(App& app, int ix, int iy, const astro::SatOb
   line(String("range ") + (int)round(o.rangeKm) + " km", gTheme.fg);
   line(o.sunlit ? "sunlit" : "eclipsed", o.sunlit ? gTheme.warn : gTheme.dim);
 
+  auto hm = [](time_t t) { struct tm tm; localtime_r(&t, &tm); char b[8]; snprintf(b, sizeof(b), "%02d:%02d", tm.tm_hour, tm.tm_min); return String(b); };
   if (up) {
     line(String("PASS NOW max ") + (int)round(_pass.maxElDeg), gTheme.ok);
+    if (_pass.valid) line("LOS " + hm(_pass.los) + " (ends)", gTheme.dim);
   } else if (_pass.valid) {
     long t = (long)_pass.aos - (long)now; if (t < 0) t = 0;
     char b[32];
     if (t >= 3600) snprintf(b, sizeof(b), "AOS T-%ldh%02ldm  max %d", t / 3600, (t % 3600) / 60, (int)round(_pass.maxElDeg));
     else           snprintf(b, sizeof(b), "AOS T-%02ld:%02ld  max %d", t / 60, t % 60, (int)round(_pass.maxElDeg));
     line(b, gTheme.fg);
-    struct tm tm; time_t a = _pass.aos; localtime_r(&a, &tm);
-    char lb[20]; strftime(lb, sizeof(lb), "at %H:%M local", &tm);
-    line(lb, gTheme.dim);
+    line("AOS " + hm(_pass.aos) + "  LOS " + hm(_pass.los), gTheme.dim);
   } else {
     line("no pass in window", gTheme.dim);
   }

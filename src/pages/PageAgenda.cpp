@@ -74,6 +74,9 @@ void PageAgenda::recompute() {
           String lbl = s.name + " " + (int)round(p.maxElDeg) + (char)247;
           if (vis) lbl += " VIS";
           if (radioSat(s.name)) lbl += " RF";
+          struct tm tl; time_t lt = p.los; localtime_r(&lt, &tl);   // append LOS clock
+          char losb[12]; snprintf(losb, sizeof(losb), " >%02d:%02d", tl.tm_hour, tl.tm_min);
+          lbl += losb;
           _events.push_back({ p.aos, lbl, 0 });
         }
         break;
