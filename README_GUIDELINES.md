@@ -36,6 +36,16 @@ detail, with real screenshots. The "boring" setup lives in a separate linked fil
 
 ## 3. The pitch (write this section to hit these points)
 
+- **The mission / heart (lead with this emotionally):** beyond being the best
+  air-&-space *desk clock*, it exists to **inspire kids** — to put the awe of
+  far-away missions, satellites passing overhead, rockets launching, rovers on Mars,
+  and the night sky **on a child's bedside table**, updating in real time. It turns
+  "space is far away and abstract" into "look — the ISS goes over *our house* in 4
+  minutes." Write the pitch so a parent/teacher/maker feels that, not just an
+  engineer. (This also justifies content-rich, wonder-first features like a missions/
+  rover page, the constellation tour, and the orrery.)
+
+
 - **What it is:** a clean-room, modular **ESP32 "Cheap Yellow Display" (CYD)
   situational-awareness dashboard** for the sky — satellites, launches, aircraft,
   aviation weather, space weather, the solar system, a live star map, and a
@@ -159,6 +169,25 @@ Document these in prose (they're selling points):
 - Anything else present in `src/` at writing time — skim the pages/providers and
   describe every user-facing capability, even minor chips/toggles.
 
+## 5a. Web-interface walkthrough (place AFTER the on-device tour, before §6a)
+
+After the on-device screen tour, add a section showing the **web/remote interface**
+(it's a real differentiator and part of the day-to-day experience). Screenshot it
+if you can (it's a desktop browser — easy to capture cleanly); if a feature can't be
+screenshotted, describe it. Cover:
+- **`/remote`** — the live screen mirror with click-to-tap + swipe buttons (great
+  hero image of "control your desk clock from a laptop").
+- **`/update`** — ElegantOTA firmware upload.
+- **`/` settings form** — what's configurable (location, watchlist, refresh
+  intervals, theme, etc.). **Note the current form is basic** — if the planned
+  settings revamp (map geolocation picker, satellite/celestial checkbox pickers,
+  editable mDNS name) has landed, screenshot the new UI; otherwise describe the
+  current form and point at the backlog item.
+- **`/api/status`** — the JSON health/telemetry (mention `heapBlkMin`/`httpsSkip`),
+  but **do not paste raw JSON containing the SSID** (redact, per §4b).
+- Capture web screenshots while the device is at the **redacted launch-site
+  location** too, and restore afterward (same §4b procedure).
+
 ## 6. Link to the hardware/setup guide (separate file)
 
 End the README with a short "Build one" teaser and a link to **`HARDWARE_SETUP.md`**
@@ -211,6 +240,26 @@ project is alive and invites contribution.
 Then **link to the full backlog**: `[BACKLOG.md](BACKLOG.md)` — say that's the
 complete, living list. Do not duplicate the whole backlog in the README; the README
 shows the highlights, `BACKLOG.md` is the source of truth.
+
+## 6c. License (for the README's license section + a LICENSE file)
+
+Goal: **most restrictive license that still lets hobbyists clone, build, run, and
+modify it freely — but blocks anyone from commercially reselling this or
+derivatives without a written license.** I.e. no free-riding for profit.
+
+- **Recommended: PolyForm Noncommercial 1.0.0.** It permits any *noncommercial* use
+  (personal/hobby/research/education), including modifying and sharing, but reserves
+  all *commercial* use to the author (a separate written/paid license is required).
+  It's a clean, purpose-built, source-available license — exactly this intent.
+- Alternatives to mention only if needed: PolyForm Strict (no derivatives — too
+  tight, blocks hobbyist mods, avoid); BUSL-1.1 (commercial-after-a-date / change
+  date — more complex, for when you want eventual open-sourcing); CC-BY-NC is for
+  content, **not** software — don't use it for the code.
+- Add a real `LICENSE` file with the chosen text and a one-paragraph plain-English
+  summary in the README ("Free for personal/non-commercial use and tinkering;
+  commercial use or reselling — of this or derivatives — needs written permission;
+  contact <…>"). Note third-party components keep their own licenses (LovyanGFX,
+  ArduinoJson, SGP4, JPEGENC, ElegantOTA, ESPAsyncWebServer, etc.) — list them.
 
 ## 7. Before committing the README
 

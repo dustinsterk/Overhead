@@ -168,6 +168,12 @@ hazards, SPECI Director badge. Remaining:
   no-PSRAM pressure.
 - **Production memory toggle** — gate the 16 KB debug-screenshot buffer behind a
   setting; off frees ~16 KB of contiguous heap (lifts HTTPS over the TLS floor).
+- **Missions / Mars-rover page** — kid-inspiring "what's happening out there right
+  now" page: Mars facts + sol/season, active rovers (Perseverance/Curiosity) +
+  latest status, and live spacecraft (Voyager 1/2, Psyche, Europa Clipper) one-way
+  light-time + heliocentric distance. Mostly static facts refreshed occasionally +
+  a light status feed; light on heap. Strongly on-mission (bring far missions to the
+  bedside). (See also M6 "live spacecraft" panel.)
 - **Domain-based data release** — when in a heap-hungry domain (Aircraft), release
   String-heavy data from cold domains (TLE/METAR) + drop their poll rate; trigger on
   `heapBlkMin` near the floor; no-PSRAM only.
