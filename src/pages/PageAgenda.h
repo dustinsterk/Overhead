@@ -29,14 +29,18 @@ public:
   // the UI/touch loop.
   void onData(App& app, ProviderId id) override { _dirty = true; if (id == ProviderId::Location) _computed = false; }
   void onTouch(App& app, int x, int y) override;   // tap an event -> jump to its tab
+  void onScroll(App& app, int dy) override;        // swipe up/down -> scroll Upcoming list
   void tick(App& app, uint32_t nowMs) override;
 
 private:
   static constexpr int kHours = 24;
-  struct Event { time_t t; String label; uint8_t kind; };  // 0 pass, 1 launch, 2 sun/moon
+  // ref = focus hint for the target page (satellite name / launch id); kind: 0 pass,
+  // 1 launch, 2 sun/moon.
+  struct Event { time_t t; String label; uint8_t kind; String ref; };
 
   void recompute();
   void draw(App& app);
+  void jumpToEvent(App& app, int i);   // switch to the event's tab
 
   TimeService&     _time;
   LocationService& _loc;
@@ -58,4 +62,5 @@ private:
   uint32_t _lastRecompute = 0;
   uint32_t _lastDraw = 0;
   int   _listY0 = 0, _listN = 0;     // upcoming-list geometry for tap-to-jump
+  int   _listScroll = 0;             // first Upcoming event shown (vertical-swipe scroll)
 };

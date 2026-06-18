@@ -176,6 +176,9 @@ void App::tick(uint32_t nowMs) {
     bool moved = abs(dx) > kTapMax || abs(dy) > kTapMax;
     if (abs(dx) >= kSwipeMin && abs(dx) > abs(dy)) {       // horizontal swipe -> page nav
       if (_grid) closeGrid(); else { if (dx < 0) nextPage(); else prevPage(); }
+    } else if (abs(dy) >= kSwipeMin && abs(dy) >= abs(dx)) {  // vertical swipe -> page scroll
+      if (_grid) closeGrid();
+      else if (_active >= 0 && _pressY >= contentY()) _pages[_active]->onScroll(*this, dy);
     } else if (!moved) {
       if (!_grid && _pressY >= contentY() && held > 700) { // long-press (stationary) = pin (§7.4)
         _pinned = !_pinned; _statusDirty = true;

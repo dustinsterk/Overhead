@@ -24,6 +24,7 @@ public:
   virtual void onExit(App& app) {}
   virtual void tick(App& app, uint32_t nowMs) {}   // dirty-rect redraws
   virtual void onTouch(App& app, int x, int y) {}
+  virtual void onScroll(App& app, int dy) {}       // vertical swipe (dy<0 up, dy>0 down)
   virtual void onData(App& app, ProviderId id) {}  // EventBus delivery
 
   // Attract-mode step (spec §7). While the Director is resting in AUTO with no

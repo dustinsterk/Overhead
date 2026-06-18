@@ -128,19 +128,38 @@ void PageAgenda::tick(App& app, uint32_t nowMs) {
   draw(app);
 }
 
+void PageAgenda::jumpToEvent(App& app, int i) {
+  if (i < 0 || i >= (int)_events.size()) return;
+  const char* tab = _events[i].kind == 1 ? "Launches"
+                  : _events[i].kind == 2 ? "Solar System" : "Satellites";
+  int idx = app.pageIndexByTitle(tab);
+  if (idx >= 0) app.setPage(idx);
+}
+
 void PageAgenda::onTouch(App& app, int x, int y) {
-  // Tap an Upcoming row -> jump to that event's tab; centre / empty area -> 3x3 grid.
-  if (!_events.empty() && _listN > 0) {
-    int row = (y + app.contentY() - _listY0) / 13;          // which Upcoming row
-    if (row >= 0 && row < _listN && row < (int)_events.size()) {
-      const char* tab = _events[row].kind == 1 ? "Launches"
-                      : _events[row].kind == 2 ? "Solar System" : "Satellites";
-      int idx = app.pageIndexByTitle(tab);
-      if (idx >= 0) app.setPage(idx);
-      return;
+  // Sky Window: tap a vertical event stripe -> jump to that event (lines at sx+sw*h/24).
+  const int sxx = 2, sw = app.contentW() - 4, syRel = 16, sh = 64;
+  if (y >= syRel && y <= syRel + sh) {
+    int best = -1, bestd = 11;
+    for (int i = 0; i < (int)_events.size(); ++i) {
+      int hoff = (int)((_events[i].t - _base) / 3600);
+      if (hoff < 0 || hoff >= kHours) continue;
+      int lx = sxx + sw * hoff / kHours, d = x > lx ? x - lx : lx - x;
+      if (d < bestd) { bestd = d; best = i; }
     }
+    if (best >= 0) { jumpToEvent(app, best); return; }
   }
-  app.openGrid();
+  // Upcoming list: tap a row -> jump to that event (offset by the scroll position).
+  if (!_events.empty() && _listN > 0) {
+    int row = (y + app.contentY() - _listY0) / 13;
+    if (row >= 0 && row < _listN) jumpToEvent(app, _listScroll + row);
+  }
+}
+
+void PageAgenda::onScroll(App&, int dy) {
+  int total = (int)_events.size();
+  if (dy < 0) { if (_listScroll + _listN < total) { _listScroll++; _dirty = true; } }   // up -> later
+  else        { if (_listScroll > 0)              { _listScroll--; _dirty = true; } }    // down -> earlier
 }
 
 void PageAgenda::draw(App& app) {
@@ -256,13 +275,23 @@ void PageAgenda::draw(App& app) {
     g.drawString(b, sx, y); y += 13;
   }
 
-  // --- Event list ---
+  // --- Event list (vertical-swipe scrollable) ---
+  g.setTextDatum(textdatum_t::top_left);
   g.setTextColor(gTheme.dim, gTheme.bg);
-  g.drawString("Upcoming", sx, y); y += 13;
-  _listY0 = y; _listN = 0;                          // remember list geometry for tap-to-jump
-  for (const auto& e : _events) {
-    if (y > cy0 + ch - 12) break;
-    _listN++;
+  g.drawString("Upcoming", sx, y);
+  int headerY = y; y += 13;
+  _listY0 = y;
+  int total = (int)_events.size();
+  if (_listScroll > total - 1) _listScroll = total > 0 ? total - 1 : 0;
+  if (_listScroll < 0) _listScroll = 0;
+  int avail = (cy0 + ch - 12 - y) / 13; if (avail < 0) avail = 0;
+  _listN = total - _listScroll; if (_listN > avail) _listN = avail; if (_listN < 0) _listN = 0;
+  if (total > avail && total > 0) {                 // scroll-position indicator on the header
+    g.setTextDatum(textdatum_t::top_right);
+    g.drawString(String(_listScroll + 1) + "-" + String(_listScroll + _listN) + "/" + String(total), cw - 4, headerY);
+  }
+  for (int k = 0; k < _listN; ++k) {
+    const Event& e = _events[_listScroll + k];
     struct tm tm; time_t t = e.t; localtime_r(&t, &tm);
     char hm[8]; snprintf(hm, sizeof(hm), "%02d:%02d", tm.tm_hour, tm.tm_min);
     g.setTextDatum(textdatum_t::top_left);

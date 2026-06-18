@@ -188,6 +188,9 @@ void PageSatellites::draw(App& app) {
   else if (_view == View::Ground) drawGroundView(app, o);
   else                            drawGraphView(app, o);
   if (_view != View::Graph) drawMinElBadge(app);   // graph shows the threshold line instead
+  g.setTextDatum(textdatum_t::bottom_right);       // consistent control hint across views
+  g.setTextColor(gTheme.dim, gTheme.bg); g.setTextSize(1);
+  g.drawString("[side tap: sat  mid: view]", app.contentW() - 4, app.contentY() + app.contentH() - 1);
 }
 
 void PageSatellites::drawMinElBadge(App& app) {
@@ -358,9 +361,6 @@ void PageSatellites::drawGroundView(App& app, const astro::SatObservation& o) {
   snprintf(b, sizeof(b), "el %d  %s", (int)round(o.elDeg), o.sunlit ? "sun" : "ecl");
   g.setTextDatum(textdatum_t::top_right);
   g.drawString(b, cw - 4, cy0 + 3);
-  g.setTextColor(gTheme.dim, gTheme.bg);
-  g.setTextDatum(textdatum_t::top_left);
-  g.drawString("centre: next view  |  edges: select", 4, cy0 + 15);
 }
 
 void PageSatellites::drawGraphView(App& app, const astro::SatObservation& o) {

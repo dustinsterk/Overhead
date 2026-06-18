@@ -202,7 +202,7 @@ void PageLaunches::drawCard(App& app) {
   // Upcoming list fills the remaining space (above the chip row).
   g.drawFastHLine(x0, y, cw - 2 * x0, gTheme.grid); y += 4;
   g.setTextSize(1);
-  for (int fi = 0; fi < (int)_filtered.size() && y < cy0 + ch - 30; ++fi) {
+  for (int fi = 0; fi < (int)_filtered.size() && y < cy0 + ch - 17; ++fi) {  // fill down to the chips
     if (fi == _sel) continue;
     const Launch& u = list[_filtered[fi]];
     long s = (long)u.net - (long)now; if (s < 0) s = 0;

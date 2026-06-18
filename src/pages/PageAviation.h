@@ -19,7 +19,7 @@ public:
                WeatherProvider& wxo, PressureMapProvider& pmap, LocationService& loc)
     : _wx(wx), _snd(snd), _haz(haz), _wxo(wxo), _pmap(pmap), _loc(loc) {}
 
-  const char* title() const override { return "Aviation"; }
+  const char* title() const override { return "Aviation Wx"; }
   void focusSpeci();              // Director: jump to the SPECI station's METAR view
   void onEnter(App& app) override { _dirty = _needClear = true; }
   void onData(App& app, ProviderId id) override;

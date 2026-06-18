@@ -101,7 +101,7 @@ void Director::tick(uint32_t nowMs) {
   int swxIdx = _app->pageIndexByTitle("Space Wx");
   if (swxIdx >= 0) _app->setBadge(swxIdx, _spacewx && _spacewx->kp() >= 5.0f);
   // Aviation: badge on an off-cycle SPECI special report (spec §14, phase 2b).
-  int avIdx = _app->pageIndexByTitle("Aviation");
+  int avIdx = _app->pageIndexByTitle("Aviation Wx");
   if (avIdx >= 0) _app->setBadge(avIdx, _avwx && _avwx->hasSpeci());
 
   // Interrupt: pass wins ties if it starts first. A specific item is highlighted
