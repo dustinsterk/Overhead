@@ -30,10 +30,11 @@ bool Display::begin(bool enableShots) {
   ledcAttachPin(PIN_TFT_BL, kBlChannel);
 #endif
   setBacklight(255);
-  // Screenshot buffer — once, while the heap is fresh. Gated by a setting: on a
-  // no-PSRAM board this 16 KB permanently sits in the band TLS needs, so leaving it
-  // off (production, no remote screenshots) frees the heap floor for HTTPS.
-  if (_shotsEnabled) _jpg = (uint8_t*)malloc(kJpgMax);
+  // Screenshot buffer is allocated LAZILY on the first screenshot request (see
+  // serviceShot), not here. On a no-PSRAM board this 16 KB sits in the band TLS
+  // needs, so deferring it until a screenshot is actually taken keeps the heap
+  // floor clear for HTTPS — and a lean updater boot (no screenshots) never pays
+  // for it at all.
   return true;
 }
 
@@ -98,7 +99,8 @@ void Display::serviceShot() {
   if (!_shotPending) return;
   _shotPending = false;
   _jpgLen = 0;
-  if (!_jpg) { _shotReady = true; return; }            // boot allocation failed
+  if (!_jpg && _shotsEnabled) _jpg = (uint8_t*)malloc(kJpgMax);   // lazy: only once a shot is requested
+  if (!_jpg) { _shotReady = true; return; }            // disabled or allocation failed
   _jpgLen = encodeJpeg(JPEGE_Q_MED);
   if (_jpgLen == 0) _jpgLen = encodeJpeg(JPEGE_Q_LOW);
   _shotReady = true;

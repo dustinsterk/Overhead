@@ -8,6 +8,7 @@ class Touch;
 class EventBus;
 class Scheduler;
 class Page;
+class ClockOverlay;
 
 // core/App — the app shell (spec §4). For milestone 1 this is intentionally
 // minimal: it owns the page list, renders the always-visible status strip, and
@@ -54,6 +55,9 @@ public:
   bool gridOpen() const { return _grid; }
   void setPin(bool on) { _pinned = on; _statusDirty = true; }   // pages can pin (clock rests)
 
+  void setClockOverlay(ClockOverlay* c) { _clock = c; }         // device-wide bouncing-clock screensaver
+  void repaintActive();                  // force a clean full repaint of the active page
+
 private:
   void drawStatus();
   void drawGrid();                       // render the 3x3 page grid over the content area
@@ -70,6 +74,8 @@ private:
   std::vector<Page*> _pages;
   std::vector<bool>  _badge;
   int  _active = -1;
+  ClockOverlay* _clock = nullptr;      // device-wide clock-mode screensaver (null until wired)
+  int  _clockShownPage = -1;           // page the clock last composed over (detect Director switches)
 
   bool     _wasTouched   = false;
   int      _pressX = 0, _pressY = 0;   // touch-down point

@@ -1,5 +1,6 @@
 #include "App.h"
 #include "Page.h"
+#include "ClockOverlay.h"
 #include "EventBus.h"
 #include "Scheduler.h"
 #include "Theme.h"
@@ -76,6 +77,12 @@ void App::setPage(int index) {
 void App::nextPage() { if (!_pages.empty()) setPage((_active + 1) % _pages.size()); }
 void App::prevPage() { if (!_pages.empty()) setPage((_active - 1 + _pages.size()) % _pages.size()); }
 
+void App::repaintActive() {                                  // clean full repaint (clock-mode exit)
+  _display.gfx().fillRect(0, contentY(), contentW(), contentH(), gTheme.bg);
+  if (_active >= 0) _pages[_active]->onEnter(*this);
+  _statusDirty = true;
+}
+
 // --- 3x3 quick-jump grid overlay (first step of the desk-clock shell) -------------
 void App::openGrid() {
   if (_pages.size() < 2) return;
@@ -106,12 +113,22 @@ void App::drawGrid() {
     g.setTextColor(act ? gTheme.accent : gTheme.fg, gTheme.bg);
     String t = _pages[i]->title();
     String st = _pages[i]->gridStatus();             // live token surfaced from the page
-    int cyc = yy + chc / 2;
-    g.drawString(t.substring(0, (cwc - 8) / 6), x + cwc / 2, st.length() ? cyc - 7 : cyc);
-    if (st.length()) {
-      g.setTextColor(gTheme.dim, gTheme.bg);
-      g.drawString(st.substring(0, (cwc - 6) / 6), x + cwc / 2, cyc + 8);
+    const int cx = x + cwc / 2, maxChars = (cwc - 6) / 6 < 4 ? 4 : (cwc - 6) / 6;
+    if (!st.length()) { g.drawString(t.substring(0, maxChars), cx, yy + chc / 2); continue; }
+    g.drawString(t.substring(0, maxChars), cx, yy + 16);
+    g.setTextColor(gTheme.dim, gTheme.bg);           // word-wrap the status into the tile
+    int ly = yy + 30, maxLines = (chc - 30) / 9; if (maxLines > 3) maxLines = 3;
+    int start = 0, line = 0; String cur;
+    while (start <= (int)st.length() && line < maxLines) {
+      int sp = st.indexOf(' ', start);
+      String word = (sp < 0) ? st.substring(start) : st.substring(start, sp);
+      String trial = cur.length() ? cur + " " + word : word;
+      if ((int)trial.length() <= maxChars) cur = trial;
+      else if (cur.length()) { g.drawString(cur, cx, ly); ly += 9; line++; cur = word; }
+      else { g.drawString(word.substring(0, maxChars), cx, ly); ly += 9; line++; }
+      if (sp < 0) break; start = sp + 1;
     }
+    if (cur.length() && line < maxLines) g.drawString(cur, cx, ly);
   }
 }
 
@@ -140,9 +157,12 @@ void App::tapAt(int x, int y) {
     } else closeGrid();
     return;
   }
+  if (_clock && _clock->active() && y >= contentY()) {       // clock mode: chips toggle, else exit
+    if (!_clock->handleTap(*this, x, y - contentY())) _clock->toggle(*this);
+    return;
+  }
   if (y < contentY()) {                                      // status strip
-    if (x < 48) { int ci = pageIndexByTitle("Clock");        // tap the clock -> Clock page
-                  if (ci >= 0) { setPage(ci); return; } }
+    if (x < 48 && _clock) { _clock->toggle(*this); return; } // tap the clock -> clock mode on/off
     if (dotsHit(x)) { openGrid(); return; }                  // tap the page dots -> grid
     if (_pinned) _pinned = false;
     else _mode = (_mode == Mode::Auto) ? Mode::Manual : Mode::Auto;
@@ -202,7 +222,18 @@ void App::tick(uint32_t nowMs) {
     _mode = Mode::Auto; _statusDirty = true;
   }
 
-  if (_active >= 0 && !_grid) _pages[_active]->tick(*this, nowMs);   // grid overlay holds the content
+  if (_active >= 0 && !_grid) {                                // grid overlay holds the content
+    if (_clock && _clock->active()) {
+      bool live = _pages[_active]->clockKeepLive();            // live pages keep running underneath
+      if (_active != _clockShownPage) { _clock->invalidate(); _clockShownPage = _active; }
+      _clock->prepare(*this, nowMs, live);                     // pick corner; repaint page on a hop
+      _pages[_active]->tick(*this, nowMs);                     // page draws live underneath
+      _clock->stamp(*this);                                    // clock on top in its corner
+    } else {
+      _clockShownPage = -1;                                   // next clock-on starts with a clean redraw
+      _pages[_active]->tick(*this, nowMs);
+    }
+  }
 
   if (_switchBannerMs && nowMs - _switchBannerMs >= 4000) {   // banner expired -> restore strip
     _switchBannerMs = 0; _statusDirty = true;

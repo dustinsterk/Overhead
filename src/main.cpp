@@ -29,7 +29,7 @@
 #include "services/Provisioning.h"
 #include "services/WebPortal.h"
 #include "services/AirportDB.h"
-#include "pages/PageClock.h"
+#include "core/ClockOverlay.h"
 #include "providers/TleProvider.h"
 #include "providers/LaunchProvider.h"
 #include "providers/AircraftProvider.h"
@@ -112,6 +112,52 @@ static void splash(const char* msg) {
   g.setTextSize(1);
   g.setTextColor(gTheme.accent, gTheme.bg);
   g.drawString(msg, g.width() / 2, g.height() / 2 + 12);
+  g.setTextColor(gTheme.dim, gTheme.bg);
+  g.drawString("github.com/JamesDavid/Overhead", g.width() / 2, g.height() - 22);
+  g.drawString("DE KE7AQA", g.width() / 2, g.height() - 10);
+}
+
+// Two-phase boot (spec backlog): on a no-PSRAM board the big cacheable HTTPS
+// fetches (TLEs, launches, space-wx) compete with the live-feed TLS handshakes
+// for the ~42 KB contiguous-heap floor. When `bootUpdater` is enabled, do those
+// fetches in a LEAN phase right after boot — only the cacheable providers are up,
+// no UI, no live feeds, no screenshot buffer — then reboot into the viewer where
+// the caches are fresh
+// (the RTC keeps the clock valid, so the providers skip re-fetching within TTL)
+// and the heap is free for ADS-B / weather TLS.
+//
+// Reuses the providers' OWN staleness decision: their begin() kicks a fetch only
+// for stale groups, so net.inFlight()>0 here means "something still needs
+// updating". Each boot: if anything is stale, refresh it in this lean phase and
+// reboot; if it's STILL stale next boot (a fetch failed), do another update boot
+// — up to kMaxUpdateBoots, so it can chip away across several boots but can never
+// loop forever. When everything is fresh, fall through to the full viewer.
+// Disabled by default (no behaviour change unless the setting is on).
+static void runBootUpdater() {
+  if (!settings.getBool("bootUpdater", false)) return;
+  long cycles = settings.getInt("bootCycles", 0);
+  static const long kMaxUpdateBoots = 5;
+  delay(60);                                             // let the NetTask register any queued jobs
+  if (net.inFlight() == 0) {                             // nothing stale -> viewer
+    if (cycles) { settings.set("bootCycles", (long)0); settings.save(); }
+    Serial.println("[boot] cached data fresh -> viewer mode");
+    return;
+  }
+  if (cycles >= kMaxUpdateBoots) {                       // guard: give up, run the viewer anyway
+    settings.set("bootCycles", (long)0); settings.save();
+    Serial.printf("[boot] updater guard (%ld boots) -> viewer with stale data\n", cycles);
+    return;
+  }
+  splash("Updating data...");
+  settings.set("bootCycles", (long)(cycles + 1)); settings.save();
+  Serial.printf("[boot] updater boot %ld: %u fetch(es) in flight, waiting...\n",
+                cycles + 1, (unsigned)net.inFlight());
+  uint32_t t0 = millis();
+  while (net.inFlight() > 0 && millis() - t0 < 30000) { net.poll(); web.loop(); delay(20); }
+  delay(500);                                            // flush cache writes to LittleFS
+  Serial.println("[boot] update pass done -> reboot");
+  delay(50);
+  ESP.restart();
 }
 
 static uint32_t gHeapBlkMin = 0xFFFFFFFF;   // low-water of the largest free block
@@ -186,21 +232,24 @@ void setup() {
   timeSvc.begin();
 
   net.begin(24576);   // generous stack — mbedtls TLS handshakes are stack-hungry
-  locSvc.begin(&settings, &net, &bus, &timeSvc);   // kicks off IP geolocation
-  tleProv.begin(&settings, &net, &cache, &bus);    // loads cache + fetches TLEs
+  tleProv.begin(&settings, &net, &cache, &bus);    // cacheable -> boot-updater candidates (load cache + fetch if stale)
   launchProv.begin(&settings, &net, &cache, &bus); // LL2 + fallback
+  spaceWxProv.begin(&settings, &net, &cache, &bus);// Kp/SFI (persists a while)
+
+  web.setStatusJsonProvider(fillStatusJson);
+  web.setDebug(&app, &display);     // /api/screen.bmp, /api/tap, /api/swipe
+  web.begin(&settings, gHostname);  // up early so OTA/API survive the lean update pass
+
+  runBootUpdater();   // two-phase boot: refresh stale caches in a lean phase, then reboot to viewer
+
+  locSvc.begin(&settings, &net, &bus, &timeSvc);   // kicks off IP geolocation (viewer phase)
   aircraftProv.begin(&settings, &net, &bus, &locSvc);
-  spaceWxProv.begin(&settings, &net, &cache, &bus);
   weatherProv.begin(&settings, &net, &cache, &bus, &locSvc);
   avwxProv.begin(&settings, &net, &cache, &bus, &locSvc);
   sndProv.begin(&settings, &net, &cache, &bus, &locSvc);
   hazProv.begin(&settings, &net, &cache, &bus, &locSvc);
   marsProv.begin(&settings, &net, &cache, &bus);
   pmapProv.begin(&settings, &net, &cache, &locSvc);
-
-  web.setStatusJsonProvider(fillStatusJson);
-  web.setDebug(&app, &display);     // /api/screen.bmp, /api/tap, /api/swipe
-  web.begin(&settings, gHostname);
 
   // The location resolves asynchronously a few seconds after boot; kick the
   // location-dependent providers as soon as it does, rather than waiting for
@@ -257,7 +306,7 @@ void setup() {
   app.addPage(solarPage);
   app.addPage(starPage);
   app.addPage(healthPage);
-  app.addPage(new PageClock(timeSvc, locSvc, settings));   // last; reached by tapping the time
+  app.setClockOverlay(new ClockOverlay(timeSvc, settings));  // bouncing-clock screensaver (tap the time)
   app.setInactivityMs((uint32_t)settings.getInt("inactivitySec", 90) * 1000UL);
   app.begin();
 

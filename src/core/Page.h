@@ -29,6 +29,11 @@ public:
   virtual void onData(App& app, ProviderId id) {}  // EventBus delivery
   virtual String gridStatus() { return String(); }  // one live token for the 3x3 grid tile
 
+  // Clock mode (core/ClockOverlay): true if this page should keep running live
+  // underneath the clock (the clock parks static in the lower-right corner);
+  // false if it's a calm page the clock may freeze and bounce over. Default calm.
+  virtual bool clockKeepLive() const { return false; }
+
   // Attract-mode step (spec §7). While the Director is resting in AUTO with no
   // specific item to highlight, it calls this on a dwell timer so the page tours
   // its selectable objects and then its alternate views. Returns true when the
