@@ -12,26 +12,8 @@
 #include <math.h>
 #include <string.h>
 
-// Constellations for the zoom tour: name + up to 8 member stars (must match catalog
-// names). Used for the framing centroid + the star labels shown when zoomed in.
-struct Constellation { const char* name; const char* stars[8]; };
-static const Constellation kCons[] = {
-  {"Orion",       {"Betelgeuse","Bellatrix","Mintaka","Alnilam","Alnitak","Rigel","Saiph"}},
-  {"Ursa Major",  {"Dubhe","Merak","Phecda","Megrez","Alioth","Mizar","Alkaid"}},
-  {"Cassiopeia",  {"Caph","Schedar","Navi","Ruchbah","Segin"}},
-  {"Cygnus",      {"Deneb","Sadr","Gienah","Fawaris","Albireo"}},
-  {"Lyra",        {"Vega","Sheliak","Sulafat"}},
-  {"Leo",         {"Regulus","Algieba","Zosma","Denebola","Chertan"}},
-  {"Bootes",      {"Arcturus","Izar","Seginus","Nekkar","Muphrid"}},
-  {"Scorpius",    {"Antares","Dschubba","Acrab","Shaula","Sargas","Lesath"}},
-  {"Gemini",      {"Castor","Pollux","Alhena"}},
-  {"Canis Major", {"Sirius","Mirzam","Wezen","Adhara"}},
-  {"Crux",        {"Acrux","Mimosa","Gacrux","Imai"}},
-  {"Pegasus",     {"Markab","Scheat","Algenib","Alpheratz"}},
-  {"Aquila",      {"Altair","Tarazed","Alshain"}},
-  {"Auriga",      {"Capella","Menkalinan","Mahasim","Elnath"}},
-};
-static const int kConCount = sizeof(kCons) / sizeof(kCons[0]);
+// Constellation data (kCons/kConCount) now lives in assets/StarCatalog.h (shared
+// with the Agenda's "what's up tonight" line).
 
 static const Star* findStar(const char* n) {
   for (int k = 0; k < kStarCount; ++k) if (!strcmp(kStars[k].name, n)) return &kStars[k];

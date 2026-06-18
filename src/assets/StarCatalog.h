@@ -122,3 +122,24 @@ static const StarLine kStarLines[] = {
   {"Sargas","Shaula"}, {"Shaula","Lesath"},
 };
 static const int kStarLineCount = sizeof(kStarLines) / sizeof(kStarLines[0]);
+
+// Constellations: name + up to 8 member stars (must match catalog names). Shared
+// by the Star Map (zoom-tour framing + labels) and the Agenda (what's up tonight).
+struct Constellation { const char* name; const char* stars[8]; };
+static const Constellation kCons[] = {
+  {"Orion",       {"Betelgeuse","Bellatrix","Mintaka","Alnilam","Alnitak","Rigel","Saiph"}},
+  {"Ursa Major",  {"Dubhe","Merak","Phecda","Megrez","Alioth","Mizar","Alkaid"}},
+  {"Cassiopeia",  {"Caph","Schedar","Navi","Ruchbah","Segin"}},
+  {"Cygnus",      {"Deneb","Sadr","Gienah","Fawaris","Albireo"}},
+  {"Lyra",        {"Vega","Sheliak","Sulafat"}},
+  {"Leo",         {"Regulus","Algieba","Zosma","Denebola","Chertan"}},
+  {"Bootes",      {"Arcturus","Izar","Seginus","Nekkar","Muphrid"}},
+  {"Scorpius",    {"Antares","Dschubba","Acrab","Shaula","Sargas","Lesath"}},
+  {"Gemini",      {"Castor","Pollux","Alhena"}},
+  {"Canis Major", {"Sirius","Mirzam","Wezen","Adhara"}},
+  {"Crux",        {"Acrux","Mimosa","Gacrux","Imai"}},
+  {"Pegasus",     {"Markab","Scheat","Algenib","Alpheratz"}},
+  {"Aquila",      {"Altair","Tarazed","Alshain"}},
+  {"Auriga",      {"Capella","Menkalinan","Mahasim","Elnath"}},
+};
+static const int kConCount = sizeof(kCons) / sizeof(kCons[0]);

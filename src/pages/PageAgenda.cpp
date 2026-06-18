@@ -10,8 +10,11 @@
 #include "../services/Settings.h"
 #include "../astro/Sun.h"
 #include "../astro/Time.h"
+#include "../astro/Coords.h"
 #include "../astro/SolarSystem.h"
 #include "../assets/MeteorShowers.h"
+#include "../assets/StarCatalog.h"
+#include <string.h>
 #include <ArduinoJson.h>
 #include <algorithm>
 #include <time.h>
@@ -275,19 +278,62 @@ void PageAgenda::draw(App& app) {
   g.setTextColor(gTheme.ok, gTheme.bg);
   g.drawString(_verdict, sx, y); y += 13;
 
-  // --- Meteor showers: active shower or a countdown to the next peak ---
+  // --- Tonight's sky: the planets + constellations up during the dark window
+  // (more useful than a far-off meteor countdown). An ACTIVE shower is still
+  // called out, since that IS relevant tonight.
   {
     ShowerInfo ms = meteorShowerInfo(_base);
-    char b[60];
     if (ms.active) {
-      if (ms.daysToPeak > 0)       snprintf(b, sizeof(b), "Meteors: %s active, peak in %dd (ZHR %d)", ms.name, ms.daysToPeak, ms.zhr);
-      else if (ms.daysToPeak == 0) snprintf(b, sizeof(b), "Meteors: %s PEAK tonight (ZHR %d)", ms.name, ms.zhr);
-      else                         snprintf(b, sizeof(b), "Meteors: %s active, peak %dd ago (ZHR %d)", ms.name, -ms.daysToPeak, ms.zhr);
-    } else {
-      snprintf(b, sizeof(b), "Meteors: next %s in %dd (ZHR %d)", ms.name, ms.daysToPeak, ms.zhr);
+      char b[60];
+      if (ms.daysToPeak == 0)     snprintf(b, sizeof(b), "Meteors: %s PEAK tonight (ZHR %d)", ms.name, ms.zhr);
+      else if (ms.daysToPeak > 0) snprintf(b, sizeof(b), "Meteors: %s active, peak in %dd (ZHR %d)", ms.name, ms.daysToPeak, ms.zhr);
+      else                        snprintf(b, sizeof(b), "Meteors: %s active (ZHR %d)", ms.name, ms.zhr);
+      g.setTextColor(gTheme.accent, gTheme.bg);
+      g.drawString(b, sx, y); y += 13;
     }
-    g.setTextColor(ms.active ? gTheme.accent : gTheme.dim, gTheme.bg);
-    g.drawString(b, sx, y); y += 13;
+
+    if (_loc.active().valid && _time.synced()) {
+      int hDark = 0; float lo = 999;                    // deepest-dark hour tonight (solar midnight)
+      for (int h = 0; h < kHours; ++h) if (_sunAlt[h] < lo) { lo = _sunAlt[h]; hDark = h; }
+      if (lo < -6.0f) {                                 // only when it actually gets dark
+        double jd = astro::julianDate(_base + (time_t)hDark * 3600);
+        double lat = _loc.active().lat, lon = _loc.active().lon;
+        // One combined "what's up" list: naked-eye planets, then constellations
+        // with >=3 stars up. Flowed across two lines for room; "+N" only if it
+        // still overflows both.
+        String items[24]; int ni = 0;
+        struct { astro::Planet p; const char* n; } P[] = {
+          {astro::Planet::Venus, "Venus"}, {astro::Planet::Mars, "Mars"}, {astro::Planet::Jupiter, "Jupiter"},
+          {astro::Planet::Saturn, "Saturn"}, {astro::Planet::Mercury, "Mercury"} };
+        for (auto& e : P)
+          if (astro::planetState(e.p, jd, lat, lon).elDeg > 0 && ni < 24) items[ni++] = e.n;
+        double latRad = lat * astro::DEG2RAD, lst = astro::lstRad(jd, lon);
+        for (int c = 0; c < kConCount && ni < 24; ++c) {
+          int up = 0;
+          for (const char* nm : kCons[c].stars) {
+            if (!nm) break;
+            const Star* st = nullptr;
+            for (int k = 0; k < kStarCount; ++k) if (!strcmp(kStars[k].name, nm)) { st = &kStars[k]; break; }
+            if (!st) continue;
+            astro::Equatorial eq{ st->raHours * 15.0 * astro::DEG2RAD, st->decDeg * astro::DEG2RAD };
+            if (astro::equatorialToHorizontal(eq, latRad, lst).altRad > 0) up++;
+          }
+          if (up >= 3) items[ni++] = kCons[c].name;
+        }
+
+        const int maxChars = (cw - sx - 4) / 6;         // chars per line at size 1
+        String l0 = "Tonight: ", l1; int i = 0;
+        while (i < ni) { String t = (l0.length() > 9 ? l0 + ", " : l0) + items[i];
+                         if ((int)t.length() <= maxChars) { l0 = t; i++; } else break; }
+        while (i < ni) { String t = (l1.length() ? l1 + ", " : l1) + items[i];
+                         if ((int)t.length() <= maxChars) { l1 = t; i++; } else break; }
+        if (i < ni) l1 += " +" + String(ni - i);
+        if (ni == 0) l0 += "quiet sky";
+        g.setTextColor(gTheme.fg, gTheme.bg);
+        g.drawString(l0, sx, y); y += 13;
+        if (l1.length()) { g.drawString(l1, sx, y); y += 13; }
+      }
+    }
   }
 
   // --- Event list (vertical-swipe scrollable) ---
