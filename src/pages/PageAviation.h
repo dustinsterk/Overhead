@@ -40,6 +40,8 @@ private:
   void drawHazards(App& app);
   void drawTrends(App& app);
   void drawPressure(App& app);
+  bool enterTaf();                       // point _sel at a TAF-bearing field; false if none have one
+  int  nextTaf(int from, int dir) const; // next station index with a TAF (wrapping), or -1
 
   AviationWxProvider& _wx;
   SoundingProvider&   _snd;
@@ -49,6 +51,11 @@ private:
   LocationService&    _loc;
   Settings&           _settings;
   int   _presMode = 0;         // pressure-map mode: 0=hPa, 1=inHg, 2=cloud
+  bool  _pZoom = false;        // pressure-map tap-to-zoom (like the star map)
+  float _pZoomT = 0;           // 0 = full extent, 1 = zoomed in
+  int   _pZoomDir = 0;         // +1 zooming in, -1 zooming out, 0 idle
+  int   _pFx = 0, _pFy = 0;    // zoom focus (absolute screen px) = the tapped point
+  uint32_t _pZoomMs = 0;
   View  _view = View::Map;     // Map is the default Aviation view (then Metar/Sounding/Hazards)
   int   _sel = 0;
   int   _mapZoom = 0;          // airport-map zoom index (top-left badge cycles)

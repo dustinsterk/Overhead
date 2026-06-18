@@ -55,6 +55,7 @@ void PageAviation::onEnter(App& app) {
   _presMode = (int)_settings.getInt("presMode", 0);
   if (_presMode < 0 || _presMode > 2) _presMode = 0;
   _pmap.setScope((int)_settings.getInt("presScope", 0));   // default regional (~200mi)
+  _pZoom = false; _pZoomT = 0; _pZoomDir = 0;
   _dirty = _needClear = true;
 }
 
@@ -62,6 +63,18 @@ void PageAviation::focusSpeci() {
   const auto& st = _wx.stations();
   for (int i = 0; i < (int)st.size(); ++i)
     if (st[i].raw.startsWith("SPECI")) { _sel = i; _view = View::Metar; _needClear = _dirty = true; return; }
+}
+
+bool PageAviation::enterTaf() {
+  const auto& st = _wx.stations(); int n = (int)st.size();
+  if (_sel >= 0 && _sel < n && st[_sel].taf.length()) return true;   // current field already has one
+  for (int i = 0; i < n; ++i) if (st[i].taf.length()) { _sel = i; return true; }
+  return false;
+}
+int PageAviation::nextTaf(int from, int dir) const {
+  const auto& st = _wx.stations(); int n = (int)st.size();
+  for (int k = 1; k <= n; ++k) { int i = ((from + dir * k) % n + n) % n; if (st[i].taf.length()) return i; }
+  return -1;
 }
 
 void PageAviation::onData(App& app, ProviderId id) {
@@ -78,6 +91,8 @@ void PageAviation::onTouch(App& app, int x, int y) {
     _view = _view == View::Map ? View::Metar : _view == View::Metar ? View::Taf
           : _view == View::Taf ? View::Sounding : _view == View::Sounding ? View::Hazards
           : _view == View::Hazards ? View::Trends : _view == View::Trends ? View::Pressure : View::Map;
+    if (_view == View::Taf && !enterTaf()) _view = View::Sounding;    // skip TAF if no field has one
+    _pZoom = false; _pZoomT = 0; _pZoomDir = 0;        // leaving the pressure map -> reset its zoom
     _needClear = _dirty = true; return;
   }
   if (_view == View::Map && x < 50 && y < 16) {     // top-left badge: cycle map zoom
@@ -93,11 +108,18 @@ void PageAviation::onTouch(App& app, int x, int y) {
     int ns = (_pmap.scope() + 1) % 3;
     _pmap.setScope(ns);
     _settings.set("presScope", (long)ns); _settings.save();
+    _pZoom = false; _pZoomT = 0; _pZoomDir = 0;        // reset map zoom on scope change
     _needClear = _dirty = true; return;
+  }
+  if (_view == View::Pressure && y >= 16) {            // tap the map (side) -> tap-to-zoom on that point
+    if (!_pZoom) { _pZoom = true; _pFx = x; _pFy = y + app.contentY(); _pZoomDir = 1; }
+    else           _pZoomDir = -1;
+    _pZoomMs = millis(); _needClear = _dirty = true; return;
   }
   int n = (int)_wx.stations().size();
   if (n && (_view == View::Metar || _view == View::Map || _view == View::Taf)) {   // edges step stations
-    _sel = (x < third) ? (_sel - 1 + n) % n : (_sel + 1) % n;
+    if (_view == View::Taf) { int t = nextTaf(_sel, x < third ? -1 : 1); if (t >= 0) _sel = t; }  // TAF fields only
+    else _sel = (x < third) ? (_sel - 1 + n) % n : (_sel + 1) % n;
     _needClear = _dirty = true;
   }
 }
@@ -110,10 +132,14 @@ bool PageAviation::autoAdvance(App&) {
           : _view == View::Taf ? View::Sounding : _view == View::Sounding ? View::Hazards
           : _view == View::Hazards ? View::Trends : _view == View::Trends ? View::Pressure : View::Map;
     _tourN = 0; _sel = 0;
+    if (_view == View::Taf && !enterTaf()) _view = View::Sounding;    // skip TAF if no field has one
     if (wasLast) cycled = true;            // Pressure -> Map = full cycle
   };
   int n = (int)_wx.stations().size();
-  if ((_view == View::Metar || _view == View::Map || _view == View::Taf) && n > 0) {
+  if (_view == View::Taf && n > 0) {       // tour only TAF-bearing fields
+    int t = nextTaf(_sel, 1);
+    if (t < 0 || t <= _sel) nextView(); else _sel = t;
+  } else if ((_view == View::Metar || _view == View::Map) && n > 0) {
     _sel = (_sel + 1) % n;
     if (++_tourN >= n) nextView();         // toured all stations -> next view
   } else {
@@ -124,6 +150,14 @@ bool PageAviation::autoAdvance(App&) {
 }
 
 void PageAviation::tick(App& app, uint32_t nowMs) {
+  if (_pZoomDir != 0) {                          // ease the pressure-map zoom in/out
+    const uint32_t DUR = 260;
+    float p = (nowMs - _pZoomMs) >= DUR ? 1.f : (float)(nowMs - _pZoomMs) / DUR;
+    float e = p * p * (3 - 2 * p);
+    _pZoomT = _pZoomDir > 0 ? e : 1.f - e;
+    if (p >= 1.f) { if (_pZoomDir < 0) _pZoom = false; _pZoomDir = 0; }
+    _needClear = _dirty = true;
+  }
   if (!_dirty && nowMs - _lastDraw < 5000) return;
   _dirty = false; _lastDraw = nowMs;
   draw(app);
@@ -556,7 +590,7 @@ void PageAviation::drawPressure(App& app) {
   g.fillRect(2, cy0 + 2, 52, 12, gTheme.grid);                 // mode badge (tap: hPa/inHg/cloud)
   g.setTextColor(gTheme.fg, gTheme.grid); g.drawString(ml, 6, cy0 + 3);
   g.setTextColor(gTheme.fg, gTheme.bg);
-  g.drawString(String(cloud ? "cloud" : "pressure") + "  [mid: metar]", 60, cy0 + 3);
+  g.drawString(String(cloud ? "cloud" : "pressure") + "  [sides: zoom]", 60, cy0 + 3);
   g.fillRect(cw - 48, cy0 + 2, 46, 12, gTheme.grid);           // scope badge (tap: zoom 200mi/US/world)
   g.setTextDatum(textdatum_t::top_right);
   g.setTextColor(gTheme.fg, gTheme.grid); g.drawString(sc, cw - 4, cy0 + 3);
@@ -569,8 +603,9 @@ void PageAviation::drawPressure(App& app) {
 
   double w0, w1, a0, a1; _pmap.bbox(w0, w1, a0, a1);            // bbox from the active scope
   int mx = 2, my = cy0 + 16, mw = cw - 4, mh = ch - 16 - 12;
-  auto SX = [&](double lon) { return mx + (int)((lon - w0) / (w1 - w0) * mw); };
-  auto SY = [&](double lat) { return my + (int)((a1 - lat) / (a1 - a0) * mh); };
+  float zs = 1.f + _pZoomT * (2.6f - 1.f);                      // tap-to-zoom magnification about the focus
+  auto SX = [&](double lon) { int x = mx + (int)((lon - w0) / (w1 - w0) * mw); return _pFx + (int)(zs * (x - _pFx)); };
+  auto SY = [&](double lat) { int y = my + (int)((a1 - lat) / (a1 - a0) * mh); return _pFy + (int)(zs * (y - _pFy)); };
   g.drawRect(mx, my, mw, mh, gTheme.grid);
   // Coastlines + borders, then (regional view only) state/province lines, both
   // clipped to the bbox. Natural Earth coords are in 0.1-degree units.
