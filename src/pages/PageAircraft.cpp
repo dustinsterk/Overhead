@@ -200,10 +200,12 @@ void PageAircraft::drawGroundBadge(App& app) {
 }
 
 void PageAircraft::tick(App& app, uint32_t nowMs) {
-  if (!_dirty && nowMs - _lastDraw < 1000) return;
-  _dirty = false;
-  _lastDraw = nowMs;
-  draw(app);
+  if (_dirty || nowMs - _lastDraw >= 1000) {        // full redraw on change / once a second
+    _dirty = false; _lastDraw = nowMs; _marqMs = nowMs;
+    draw(app);
+    return;
+  }
+  if (nowMs - _marqMs >= 50) { _marqMs = nowMs; drawAirportMarquee(app); }  // ~20fps ticker scroll
 }
 
 void PageAircraft::drawMessage(App& app, const char* msg, int topY) {
@@ -276,7 +278,7 @@ void PageAircraft::draw(App& app) {
                   : _ap.status() == ProviderStatus::Loading ? "scanning..."
                   : _ap.hideGround() ? "no airborne aircraft in range"
                   : "no aircraft in range", top);
-    drawNearestAirport(app, 8, top + 22, true); // still useful with no traffic: what's tunable near you
+    drawAirportMarquee(app); // still useful with no traffic: what's tunable near you
     drawRadiusBadge(app);    // keep the badges tappable so the user can widen
     drawGroundBadge(app);    // range or re-enable ground traffic from here
     drawFilterBadges(app);
@@ -311,9 +313,10 @@ void PageAircraft::draw(App& app) {
 
   // Radar on the left. Clear just the circle's bbox each tick (blips move);
   // the info column on the right redraws in place (padded) so it stays stable.
-  int size = min(ch - 8 - chipH - alertH, cw / 2 - 8);
+  const int MARQ = 16;                              // reserve a ticker band at the bottom
+  int size = min(ch - 8 - chipH - alertH - MARQ, cw / 2 - 8);
   int R = size / 2 - 12;
-  int cx = 8 + R + 8, cy = top + (ch - chipH - alertH) / 2;
+  int cx = 8 + R + 8, cy = top + (ch - chipH - alertH - MARQ) / 2;
   float maxR = _ap.radiusNm();
   _rCx = cx; _rCy = cy; _rR = R; _rMaxR = maxR;     // remember for tap-on-blip
   g.fillRect(cx - R - 4, cy - R - 10, 2 * R + 8, 2 * R + 20, gTheme.bg);
@@ -398,8 +401,7 @@ void PageAircraft::draw(App& app) {
     }
   }
 
-  if (_sel >= 0 && _sel < (int)_filt.size()) drawNearestAirport(app, ix, iy + 4, false); // 1 line under details
-  else                                       drawNearestAirport(app, ix, iy + 6, true);  // full list
+  drawAirportMarquee(app);
   drawRadiusBadge(app);
   drawGroundBadge(app);
   drawFilterBadges(app);
@@ -407,32 +409,28 @@ void PageAircraft::draw(App& app) {
 
 // Nearest airport + its likely frequencies (the ham/SDR headline). `full` lists every
 // frequency (when the info column is free); otherwise a one-line summary. US dataset.
-void PageAircraft::drawNearestAirport(App& app, int x, int y, bool full) {
+// Scrolling ticker (just above the filter chips): the nearest field + its full
+// frequency list, marquee-scrolled so the whole list fits a single line. Redrawn at
+// ~20fps from tick() between full page draws; offset is time-based so it's smooth.
+void PageAircraft::drawAirportMarquee(App& app) {
   auto& g = app.display().gfx();
-  const int ch = app.contentH(), cy0 = app.contentY();
+  const int cw = app.contentW(), ch = app.contentH(), cy0 = app.contentY();
+  int my = cy0 + ch - 29;
+  g.fillRect(0, my, cw, 12, gTheme.bg);              // clear the ticker band
   if (!_loc.active().valid || !_adb.ready()) return;
-  const AirportDB::Nearest& ap = _adb.nearest(_loc.active().lat, _loc.active().lon);
-  if (!ap.valid || ap.distNm >= 250) return;
+  const AirportDB::Nearest& a = _adb.nearest(_loc.active().lat, _loc.active().lon);
+  if (!a.valid || a.distNm >= 250) return;
   static const char* kDir[8] = {"N", "NE", "E", "SE", "S", "SW", "W", "NW"};
-  const char* dir = kDir[((int)round(ap.brgDeg / 45.0)) & 7];
-  g.setTextDatum(textdatum_t::top_left);
-
-  if (!full) {                                       // one-line summary (aircraft selected)
-    char ln[48];
-    if (ap.n) snprintf(ln, sizeof(ln), "apt %s %dnm %s  %s %.2f", ap.id, (int)round(ap.distNm), dir,
-                       AirportDB::label(ap.type[0]), ap.f40[0] / 40.0f);
-    else      snprintf(ln, sizeof(ln), "apt %s %dnm %s", ap.id, (int)round(ap.distNm), dir);
-    g.setTextColor(gTheme.accent, gTheme.bg); g.drawString(ln, x, y);
-    return;
+  String m = String(a.id) + "  " + (int)round(a.distNm) + "nm " + kDir[((int)round(a.brgDeg / 45.0)) & 7] + "     ";
+  char seg[24];
+  for (int i = 0; i < a.n; ++i) {
+    snprintf(seg, sizeof(seg), "%s %.2f    ", AirportDB::label(a.type[i]), a.f40[i] / 40.0f);
+    m += seg;
   }
-  char b[48];                                        // header + the full frequency list
-  snprintf(b, sizeof(b), "apt %s  %dnm %s", ap.id, (int)round(ap.distNm), dir);
-  g.setTextColor(gTheme.accent, gTheme.bg); g.drawString(b, x, y); y += 13;
-  int yMax = cy0 + ch - 20;                          // stop above the bottom badges
-  g.setTextColor(gTheme.fg, gTheme.bg);
-  for (int i = 0; i < ap.n && y <= yMax; ++i) {
-    char ln[24];
-    snprintf(ln, sizeof(ln), "%-4s %.2f", AirportDB::label(ap.type[i]), ap.f40[i] / 40.0f);
-    g.drawString(ln, x, y); y += 12;
-  }
+  g.setTextSize(1); g.setTextDatum(textdatum_t::top_left);
+  int textW = g.textWidth(m);
+  if (textW < 1) return;
+  int off = (int)((millis() / 20) % (uint32_t)textW);   // ~50 px/s leftward scroll
+  g.setTextColor(gTheme.accent);                        // transparent bg: copies coexist
+  for (int x = 2 - off; x < cw; x += textW) g.drawString(m, x, my + 1);
 }

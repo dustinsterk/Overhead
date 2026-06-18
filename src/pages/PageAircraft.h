@@ -39,7 +39,7 @@ private:
   bool handleCatTap(App& app, int x, int yRel);  // category filter chip
   bool handleChipTap(App& app, int x, int yRel);
   void drawFilterBadges(App& app);               // alt + category filter chips (bottom)
-  void drawNearestAirport(App& app, int x, int y, bool full);  // nearest field + freqs
+  void drawAirportMarquee(App& app);             // scrolling nearest-field + freqs ticker
   void rebuildFilt();                            // _filt = contacts passing alt/cat filters
   void applyCenter();                            // push _centerIcao to the provider + poll
 
@@ -59,6 +59,7 @@ private:
   bool  _wasEmerg = false;   // track emergency-squawk presence (clear strip on change)
   uint32_t _lastDraw = 0;
   uint32_t _lastDataMs = 0;  // millis() of the last data update, for dead-reckoning blips
+  uint32_t _marqMs = 0;      // last marquee scroll-frame time
 
   static constexpr int kMaxChips = 8;
   int    _chipX[kMaxChips] = {0}, _chipW[kMaxChips] = {0}, _chipCount = 0;
