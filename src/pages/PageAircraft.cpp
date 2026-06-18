@@ -293,7 +293,7 @@ void PageAircraft::draw(App& app) {
                   : _ap.status() == ProviderStatus::Loading ? "scanning..."
                   : _ap.hideGround() ? "no airborne aircraft in range"
                   : "no aircraft in range", top);
-    drawNearestAirport(app); // still useful with no traffic: what's tunable near you
+    drawNearestAirport(app, 8, top + 22, true); // still useful with no traffic: what's tunable near you
     drawRadiusBadge(app);    // keep the badges tappable so the user can widen
     drawGroundBadge(app);    // range or re-enable ground traffic from here
     drawFilterBadges(app);
@@ -415,17 +415,18 @@ void PageAircraft::draw(App& app) {
     }
   }
 
-  drawNearestAirport(app);
+  if (_sel >= 0 && _sel < (int)_filt.size()) drawNearestAirport(app, ix, iy + 4, false); // 1 line under details
+  else                                       drawNearestAirport(app, ix, iy + 6, true);  // full list
   drawRadiusBadge(app);
   drawGroundBadge(app);
   drawFilterBadges(app);
 }
 
-// Nearest airport + likely frequencies (the ham/SDR headline) pinned bottom-right, so
-// it shows whether or not there's traffic. US dataset -> shown within ~250 nm.
-void PageAircraft::drawNearestAirport(App& app) {
+// Nearest airport + its likely frequencies (the ham/SDR headline). `full` lists every
+// frequency (when the info column is free); otherwise a one-line summary. US dataset.
+void PageAircraft::drawNearestAirport(App& app, int x, int y, bool full) {
   auto& g = app.display().gfx();
-  const int cw = app.contentW(), ch = app.contentH(), cy0 = app.contentY();
+  const int ch = app.contentH(), cy0 = app.contentY();
   if (!_loc.active().valid) return;
   float adist, abrg;
   const AirportRec* apt = nearestAirport(_loc.active().lat, _loc.active().lon, adist, abrg);
@@ -433,19 +434,26 @@ void PageAircraft::drawNearestAirport(App& app) {
   char id[5]; memcpy(id, apt->id, 4); id[4] = 0;
   for (int k = 3; k >= 0 && id[k] == ' '; --k) id[k] = 0;          // trim padding
   static const char* kDir[8] = {"N", "NE", "E", "SE", "S", "SW", "W", "NW"};
-  int ix = cw / 2 + 8, ay = cy0 + ch - 52;
+  const char* dir = kDir[((int)round(abrg / 45.0)) & 7];
+  int n = apt->fCnt, off = apt->fOff;
   g.setTextDatum(textdatum_t::top_left);
-  char b[48];
-  snprintf(b, sizeof(b), "apt %s  %dnm %s", id, (int)round(adist), kDir[((int)round(abrg / 45.0)) & 7]);
-  g.setTextColor(gTheme.accent, gTheme.bg); g.drawString(b, ix, ay); ay += 13;
-  struct FT { const char* l; uint16_t v; } fts[4] =
-    {{"TWR", apt->twr}, {"GND", apt->gnd}, {"ATIS", apt->atis}, {"CTAF", apt->ctaf}};
-  char l1[48] = "", l2[48] = ""; int np = 0;
-  for (auto& f : fts) if (f.v) {
-    char seg[20]; snprintf(seg, sizeof(seg), "%s %.2f ", f.l, f.v / 40.0f);
-    strcat(np < 2 ? l1 : l2, seg); np++;
+
+  if (!full) {                                       // one-line summary (aircraft selected)
+    char ln[48];
+    if (n) snprintf(ln, sizeof(ln), "apt %s %dnm %s  %s %.2f", id, (int)round(adist), dir,
+                    kAirportFreqLabel[kFreqType[off]], kFreq40[off] / 40.0f);
+    else   snprintf(ln, sizeof(ln), "apt %s %dnm %s", id, (int)round(adist), dir);
+    g.setTextColor(gTheme.accent, gTheme.bg); g.drawString(ln, x, y);
+    return;
   }
+  char b[48];                                        // header + the full frequency list
+  snprintf(b, sizeof(b), "apt %s  %dnm %s", id, (int)round(adist), dir);
+  g.setTextColor(gTheme.accent, gTheme.bg); g.drawString(b, x, y); y += 13;
+  int yMax = cy0 + ch - 20;                          // stop above the bottom badges
   g.setTextColor(gTheme.fg, gTheme.bg);
-  if (l1[0]) { g.drawString(l1, ix, ay); ay += 12; }
-  if (l2[0]) g.drawString(l2, ix, ay);
+  for (int i = 0; i < n && y <= yMax; ++i) {
+    char ln[24];
+    snprintf(ln, sizeof(ln), "%-4s %.2f", kAirportFreqLabel[kFreqType[off + i]], kFreq40[off + i] / 40.0f);
+    g.drawString(ln, x, y); y += 12;
+  }
 }

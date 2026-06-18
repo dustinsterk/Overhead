@@ -1,22 +1,20 @@
 #!/usr/bin/env python3
 # Generate src/assets/Airports.h - a compact US airport + radio-frequency table for
-# the Aircraft tab's "nearest airport + likely frequency" feature.
+# the Aircraft tab's "nearest airport + likely frequencies" feature.
 #
-# SOURCE: OurAirports (https://ourairports.com), a public-domain dataset that
-# aggregates the FAA's NASR data for US fields. Two CSVs:
-#   airports.csv             - ident, type, lat/lon, country
-#   airport-frequencies.csv  - per-airport TWR/GND/ATIS/AWOS/CTAF/UNICOM frequencies
+# SOURCE: OurAirports (https://ourairports.com), public-domain, aggregates the FAA's
+# NASR data for US fields. Two CSVs: airports.csv + airport-frequencies.csv.
 # To refresh: re-run this script (it re-downloads the CSVs). For the authoritative FAA
-# 28-day cycle instead, swap in the NASR APT_BASE.csv / FRQ.csv and keep the same
-# emit format below.
+# 28-day cycle instead, swap in the NASR APT_BASE.csv / FRQ.csv, same emit format.
 #
-# Record (16 bytes): id[4] (space-padded ident) + int16 lat*100,lon*100 (0.01 deg ~
-# 0.6 nm) + uint16 twr,gnd,atis,ctaf as freqMHz*40 (25 kHz steps, 0 = none).
+# Layout: kAirports[] = {id[4] (space-padded ident), int16 lat*100/lon*100 (0.01 deg ~
+# 0.6 nm), uint16 freq-offset, uint8 freq-count}. Each airport's frequencies live in
+# parallel kFreqType[] (type code) + kFreq40[] (MHz*40, 25 kHz steps) arrays. Up to 10
+# freqs/airport, kept by type priority. Codes index TYPE_LABELS (mirrored on-device).
 import csv, os, sys, urllib.request
 
 TMP = os.environ.get('TEMP') or os.environ.get('TMP') or '/tmp'
 BASE = 'https://davidmegginson.github.io/ourairports-data/'
-FILES = {'airports.csv': 'airports.csv', 'freqs.csv': 'airport-frequencies.csv'}
 
 def fetch(local, remote):
     path = os.path.join(TMP, local)
@@ -25,59 +23,73 @@ def fetch(local, remote):
         urllib.request.urlretrieve(BASE + remote, path)
     return path
 
-ap_csv = fetch('airports.csv', FILES['airports.csv'])
-fq_csv = fetch('freqs.csv', FILES['freqs.csv'])
+# type code (priority order) + the label shown on the device. OurAirports types map in.
+TYPE_LABELS = ['TWR','GND','ATIS','CLR','CTAF','UNI','APP','DEP','A/D','AWOS',
+               'RDO','CTR','AFIS','FSS','ATF','MISC']
+TYPE_MAP = {'TWR':0,'GND':1,'ATIS':2,'CLD':3,'CTAF':4,'UNIC':5,'APP':6,'DEP':7,
+            'A/D':8,'AWOS':9,'ASOS':9,'RDO':10,'CNTR':11,'AFIS':12,'FSS':13,'ATF':14}
+def code(t): return TYPE_MAP.get(t, 15)   # everything else -> MISC
 
-# airport_ident -> { freq-type: MHz } (airband 108-137 MHz only; first wins)
-freqs = {}
+CAP = 10
+ap_csv = fetch('airports.csv', 'airports.csv')
+fq_csv = fetch('freqs.csv', 'airport-frequencies.csv')
+
+byapt = {}
 for r in csv.DictReader(open(fq_csv, encoding='utf-8')):
     try: f = float(r['frequency_mhz'])
     except ValueError: continue
     if not (108.0 <= f <= 137.0): continue
-    freqs.setdefault(r['airport_ident'], {}).setdefault(r['type'], f)
+    byapt.setdefault(r['airport_ident'], []).append((code(r['type']), int(round(f * 40))))
 
-def pick(d, *types):
-    for t in types:
-        if t in d: return d[t]
-    return None
-
-def f40(mhz):
-    return int(round(mhz * 40)) if mhz else 0
-
-rows = []
 WANT = {'large_airport', 'medium_airport', 'small_airport'}
+airports, ftype, f40 = [], [], []
 for a in csv.DictReader(open(ap_csv, encoding='utf-8')):
     if a['iso_country'] != 'US' or a['type'] not in WANT: continue
     ident = a['ident']
-    if len(ident) > 4: continue                       # skip the ~9 odd long idents
-    d = freqs.get(ident)
-    if not d: continue
-    twr  = f40(pick(d, 'TWR'))
-    gnd  = f40(pick(d, 'GND'))
-    atis = f40(pick(d, 'ATIS', 'AWOS', 'ASOS'))
-    ctaf = f40(pick(d, 'CTAF', 'UNIC'))
-    if not (twr or gnd or atis or ctaf): continue
+    if len(ident) > 4: continue
+    fl = byapt.get(ident)
+    if not fl: continue
+    # keep by type priority (code asc), dedupe identical (type,freq), cap
+    seen, kept = set(), []
+    for c, v in sorted(fl, key=lambda x: x[0]):
+        if (c, v) in seen: continue
+        seen.add((c, v)); kept.append((c, v))
+        if len(kept) >= CAP: break
     try:
-        lat = int(round(float(a['latitude_deg']) * 100))
-        lon = int(round(float(a['longitude_deg']) * 100))
+        lat = int(round(float(a['latitude_deg']) * 100)); lon = int(round(float(a['longitude_deg']) * 100))
     except ValueError: continue
     if not (-9000 <= lat <= 9000 and -18000 <= lon <= 18000): continue
-    rows.append((ident.ljust(4), lat, lon, twr, gnd, atis, ctaf))
+    off = len(ftype)
+    for c, v in kept: ftype.append(c); f40.append(v)
+    airports.append((ident.ljust(4), lat, lon, off, len(kept)))
 
-rows.sort(key=lambda r: r[0])
-print(f'{len(rows)} airports  flash={len(rows)*16} bytes', file=sys.stderr)
+airports.sort(key=lambda r: r[0])
+# offsets were assigned before the sort, so they still point at the right blob slices.
+flash = len(airports) * 12 + len(ftype) * 3
+print(f'{len(airports)} airports, {len(ftype)} freqs  flash~={flash} bytes', file=sys.stderr)
+
+def arr(name, ctype, vals, perline=20):
+    out = [f'static const {ctype} {name}[] = {{']
+    for i in range(0, len(vals), perline):
+        out.append('  ' + ','.join(str(v) for v in vals[i:i + perline]) + ',')
+    out += ['};', '']
+    return out
 
 out = ['#pragma once', '#include <stdint.h>', '',
- '// assets/Airports - US airport + radio-frequency table for the Aircraft tab nearest-',
+ '// assets/Airports - US airport + radio-frequency table for the Aircraft nearest-',
  '// airport feature. Generated by tools/gen_airports.py from OurAirports (public-domain,',
- '// FAA-sourced for US fields) - do not hand-edit. id is the ident space-padded to 4;',
- '// lat/lon are degrees*100; freqs are MHz*40 (25 kHz steps), 0 = none.',
- 'struct AirportRec { char id[4]; int16_t lat100, lon100; uint16_t twr, gnd, atis, ctaf; };',
+ '// FAA-sourced for US). id = ident space-padded to 4; lat/lon = deg*100; each airport',
+ '// owns kFreqType[off..off+cnt) (type code -> kAirportFreqLabel) + kFreq40[] (MHz*40).',
+ 'struct AirportRec { char id[4]; int16_t lat100, lon100; uint16_t fOff; uint8_t fCnt; };',
  '',
+ 'static const char* const kAirportFreqLabel[] = {' +
+   ', '.join('"%s"' % t for t in TYPE_LABELS) + '};', '',
  'static const AirportRec kAirports[] = {']
-for id4, lat, lon, twr, gnd, atis, ctaf in rows:
-    c = ','.join("'%s'" % (ch if ch != ' ' else ' ') for ch in id4)
-    out.append('  {{%s},%d,%d,%d,%d,%d,%d},' % (c, lat, lon, twr, gnd, atis, ctaf))
+for id4, lat, lon, off, cnt in airports:
+    c = ','.join("'%s'" % ch for ch in id4)
+    out.append('  {{%s},%d,%d,%d,%d},' % (c, lat, lon, off, cnt))
 out += ['};', 'static const int kAirportCount = sizeof(kAirports) / sizeof(kAirports[0]);', '']
+out += arr('kFreqType', 'uint8_t', ftype)
+out += arr('kFreq40', 'uint16_t', f40)
 open(sys.argv[1], 'w').write('\n'.join(out))
 print('wrote', sys.argv[1], file=sys.stderr)
