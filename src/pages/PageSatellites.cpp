@@ -322,13 +322,13 @@ void PageSatellites::drawGroundView(App& app, const astro::SatObservation& o) {
   for (int lat = -60; lat < 90;  lat += 30) g.drawFastHLine(mx, py(lat), mw, gTheme.grid);
   g.drawFastHLine(mx, py(0), mw, gTheme.dim);   // equator
 
-  // Coastline (coarse; see assets/Coastline.h).
+  // Coastlines + borders (Natural Earth; coords in 0.1-degree units, see Coastline.h).
   for (int i = 1; i < kCoastlineCount; ++i) {
     const CoastPt& a = kCoastline[i - 1];
     const CoastPt& b = kCoastline[i];
-    if (a.lon == 999 || b.lon == 999) continue;          // pen-up separator
-    if (abs(a.lon - b.lon) > 180) continue;              // seam
-    g.drawLine(px(a.lon), py(a.lat), px(b.lon), py(b.lat), gTheme.dim);
+    if (a.lon == 9999 || b.lon == 9999) continue;        // pen-up separator
+    if (abs(a.lon - b.lon) > 1800) continue;             // seam
+    g.drawLine(px(a.lon / 10.0), py(a.lat / 10.0), px(b.lon / 10.0), py(b.lat / 10.0), gTheme.dim);
   }
 
   // Ground track (skip the +/-180 seam).

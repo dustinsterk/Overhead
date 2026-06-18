@@ -247,13 +247,13 @@ void PageLaunches::drawMap(App& app) {
   g.drawRect(mx, my, mw, mh, gTheme.grid);
   g.drawFastHLine(mx, py(0.0f), mw, gTheme.dim);    // equator
 
-  // Coastline (coarse; shared with the Satellites ground track).
+  // Coastlines + borders (Natural Earth; 0.1-degree units, shared with Satellites).
   for (int i = 1; i < kCoastlineCount; ++i) {
     const CoastPt& a = kCoastline[i - 1];
     const CoastPt& b = kCoastline[i];
-    if (a.lon == 999 || b.lon == 999) continue;     // pen-up
-    if (abs(a.lon - b.lon) > 180) continue;         // seam
-    g.drawLine(px(a.lon), py(a.lat), px(b.lon), py(b.lat), gTheme.dim);
+    if (a.lon == 9999 || b.lon == 9999) continue;   // pen-up
+    if (abs(a.lon - b.lon) > 1800) continue;        // seam
+    g.drawLine(px(a.lon / 10.0f), py(a.lat / 10.0f), px(b.lon / 10.0f), py(b.lat / 10.0f), gTheme.dim);
   }
 
   // Markers for every filtered launch's site; selected one ringed + labelled last.

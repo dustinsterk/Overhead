@@ -540,12 +540,19 @@ void PageAviation::drawPressure(App& app) {
   auto SX = [&](double lon) { return mx + (int)((lon - w0) / (w1 - w0) * mw); };
   auto SY = [&](double lat) { return my + (int)((a1 - lat) / (a1 - a0) * mh); };
   g.drawRect(mx, my, mw, mh, gTheme.grid);
-  for (int i = 1; i < kCoastlineCount; ++i) {                  // coastline within the bbox
-    const CoastPt& a = kCoastline[i - 1]; const CoastPt& b = kCoastline[i];
-    if (a.lon == 999 || b.lon == 999 || abs(a.lon - b.lon) > 180) continue;
-    if (a.lon < w0 || a.lon > w1 || b.lon < w0 || b.lon > w1 || a.lat < a0 || a.lat > a1 || b.lat < a0 || b.lat > a1) continue;
-    g.drawLine(SX(a.lon), SY(a.lat), SX(b.lon), SY(b.lat), gTheme.dim);
-  }
+  // Coastlines + borders, then (regional view only) state/province lines, both
+  // clipped to the bbox. Natural Earth coords are in 0.1-degree units.
+  auto drawLines = [&](const CoastPt* arr, int n, Color col) {
+    for (int i = 1; i < n; ++i) {
+      double alon = arr[i - 1].lon / 10.0, alat = arr[i - 1].lat / 10.0;
+      double blon = arr[i].lon / 10.0,     blat = arr[i].lat / 10.0;
+      if (arr[i - 1].lon == 9999 || arr[i].lon == 9999 || fabs(alon - blon) > 180) continue;
+      if (alon < w0 || alon > w1 || blon < w0 || blon > w1 || alat < a0 || alat > a1 || blat < a0 || blat > a1) continue;
+      g.drawLine(SX(alon), SY(alat), SX(blon), SY(blat), col);
+    }
+  };
+  drawLines(kCoastline, kCoastlineCount, gTheme.dim);
+  if (!world) drawLines(kStateLines, kStateLinesCount, gTheme.grid);   // state lines only at regional zoom
 
   int hi = -1, lo = -1, hv = -9999, lv = 9999;
   for (size_t i = 0; i < pts.size(); ++i) {

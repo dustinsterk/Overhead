@@ -77,16 +77,38 @@ void PageMissions::drawMars(App& app) {
     { "Perseverance", "Pe", "Jezero",     "2021-02-18", PERSEV_LANDING, 18.44f,  77.45f, _mars.perseverance() },
     { "Curiosity",    "Cu", "Gale",       "2012-08-06", CURIO_LANDING,  -4.59f, 137.44f, _mars.curiosity() },
   };
-  int mx = 6, mw = cw - 12, my = y + 1, mh = 60;
+  int mx = 6, mw = cw - 12, my = y + 1, mh = 84;
   g.fillRect(mx, my, mw, mh, rgb565(70, 34, 22));    // dim Mars ochre
   g.drawRect(mx, my, mw, mh, gTheme.grid);
   g.drawFastHLine(mx, my + mh / 2, mw, gTheme.dim);  // equator
   for (int lon = 90; lon < 360; lon += 90) g.drawFastVLine(mx + lon * mw / 360, my, mh, gTheme.dim);
   g.setTextColor(gTheme.dim, gTheme.bg); g.setTextDatum(textdatum_t::top_left);
   g.drawString("Mars surface", mx + 3, my + 2);
-  for (auto& r : rv) {
-    int rx = mx + (int)(r.lonE / 360.0f * mw);
-    int ry = my + (int)((90.0f - r.lat) / 180.0f * mh);
+  auto FX = [&](float lonE) { return mx + (int)(lonE / 360.0f * mw); };
+  auto FY = [&](float lat)  { return my + (int)((90.0f - lat) / 180.0f * mh); };
+
+  // Major surface features (real areographic coords, planetocentric east lon).
+  // kind: 0=volcano/peak (triangle), 1=basin/lowland (ring), 2=canyon (bar).
+  struct Feat { const char* name; float lat, lonE; uint8_t kind; };
+  static const Feat ft[] = {
+    { "Olympus",   18.65f, 226.2f, 0 },   // tallest volcano in the solar system
+    { "Tharsis",    0.8f,  247.0f, 0 },   // the three aligned Tharsis Montes
+    { "Elysium",   25.0f,  147.0f, 0 },
+    { "Marineris", -13.9f, 300.0f, 2 },   // Valles Marineris canyon system
+    { "Hellas",   -42.4f,   70.5f, 1 },   // giant impact basin
+  };
+  for (auto& f : ft) {
+    int fx = FX(f.lonE), fy = FY(f.lat);
+    if (f.kind == 0)      g.fillTriangle(fx, fy - 3, fx - 3, fy + 2, fx + 3, fy + 2, gTheme.accent);
+    else if (f.kind == 1) g.drawCircle(fx, fy, 3, gTheme.accent);
+    else                  g.drawFastHLine(fx - 4, fy, 9, gTheme.accent);
+    bool right = fx < mx + mw - 54;
+    g.setTextColor(gTheme.accent, gTheme.bg);
+    g.setTextDatum(right ? textdatum_t::middle_left : textdatum_t::middle_right);
+    g.drawString(f.name, right ? fx + 5 : fx - 5, fy);
+  }
+  for (auto& r : rv) {                                 // rover sites on top
+    int rx = FX(r.lonE), ry = FY(r.lat);
     g.fillCircle(rx, ry, 2, gTheme.ok);
     g.setTextColor(gTheme.fg, gTheme.bg); g.setTextDatum(textdatum_t::middle_left);
     g.drawString(r.lbl, rx + 4, ry);
