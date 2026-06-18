@@ -22,6 +22,7 @@ public:
     : _tle(tle), _loc(loc), _time(time), _settings(settings) {}
 
   const char* title() const override { return "Satellites"; }
+  bool clockKeepLive() const override { return true; }   // pass keeps counting under the clock
   void focusBird(const String& namePrefix);   // Director pre-focus (spec §7)
   void onEnter(App& app) override;
   void onData(App& app, ProviderId id) override;
@@ -31,7 +32,7 @@ public:
   bool autoAdvance(App& app) override;
 
 private:
-  enum class View { Polar, Ground, Graph };
+  enum class View { Polar, Ground };
   struct TrackPt { float lat; float lon; };
 
   void rebuildOrder();                 // filter provider sats by the watchlist
@@ -47,7 +48,6 @@ private:
   void drawMessage(App& app, const char* msg);
   void drawPolarView(App& app, const astro::SatObservation& o);
   void drawGroundView(App& app, const astro::SatObservation& o);
-  void drawGraphView(App& app, const astro::SatObservation& o);
   void drawInfoColumn(App& app, int ix, int iy, const astro::SatObservation& o);
   void drawMinElBadge(App& app);
 

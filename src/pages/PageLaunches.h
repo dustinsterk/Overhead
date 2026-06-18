@@ -21,6 +21,7 @@ public:
     : _lp(lp), _time(time), _loc(loc), _wx(wx) {}
 
   const char* title() const override { return "Launches"; }
+  bool clockKeepLive() const override { return true; }   // T-minus keeps counting under the clock
   void onEnter(App& app) override { _dirty = _needClear = true; }
   void onData(App& app, ProviderId id) override;
   void onTouch(App& app, int x, int y) override;

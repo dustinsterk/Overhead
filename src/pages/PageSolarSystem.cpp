@@ -259,6 +259,18 @@ void PageSolarSystem::onEnter(App&) {
   _stars    = _settings.getBool("ssShowStars", false);
 }
 
+String PageSolarSystem::gridStatus() {
+  if (!_time.synced() || !_loc.active().valid) return String();
+  double jd = _time.julianDate(), lat = _loc.active().lat, lon = _loc.active().lon;
+  struct { Planet p; const char* ab; } bodies[] = {
+    {Planet::Moon, "Mo"}, {Planet::Mercury, "Me"}, {Planet::Venus, "Ve"},
+    {Planet::Mars, "Ma"}, {Planet::Jupiter, "Ju"}, {Planet::Saturn, "Sa"} };
+  String s;
+  for (auto& b : bodies)
+    if (astro::planetState(b.p, jd, lat, lon).elDeg > 0) { if (s.length()) s += " "; s += b.ab; }
+  return s.length() ? s : String("none up");
+}
+
 void PageSolarSystem::tick(App& app, uint32_t nowMs) {
   // Positions drift over minutes — recompute/redraw on change or every 30 s, but step
   // ~20 fps while an orbits zoom transition is animating.

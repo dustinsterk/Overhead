@@ -24,6 +24,7 @@ public:
   void onTouch(App& app, int x, int y) override;
   void tick(App& app, uint32_t nowMs) override;
   bool autoAdvance(App& app) override;
+  String gridStatus() override;          // Moon illumination %
 
 private:
   static constexpr int kN = 9;          // Sun, Moon, Mercury..Neptune

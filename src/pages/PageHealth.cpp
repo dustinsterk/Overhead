@@ -86,6 +86,17 @@ void PageHealth::tick(App& app, uint32_t nowMs) {
   draw(app);
 }
 
+String PageHealth::gridStatus() {
+  if (WiFi.status() != WL_CONNECTED)            return "WiFi down";
+  if (!_time.synced())                          return "no time";
+  if (Display::largestFreeBlock() < 30000)      return "low heap";
+  int err = (_tle.status()    == ProviderStatus::Error) + (_launch.status() == ProviderStatus::Error)
+          + (_air.status()    == ProviderStatus::Error) + (_swx.status()    == ProviderStatus::Error)
+          + (_wx.status()     == ProviderStatus::Error);
+  if (err) return String(err) + (err == 1 ? " error" : " errors");
+  return "ok";
+}
+
 void PageHealth::draw(App& app) {
   auto& g = app.display().gfx();
   const int cw = app.contentW(), cy0 = app.contentY(), ch = app.contentH();

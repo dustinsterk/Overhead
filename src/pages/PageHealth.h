@@ -32,6 +32,7 @@ public:
   void onEnter(App& app) override { _dirty = _needClear = true; }
   void onTouch(App& app, int x, int y) override;
   void tick(App& app, uint32_t nowMs) override;
+  String gridStatus() override;          // worst current problem, or "ok"
 
 private:
   void draw(App& app);

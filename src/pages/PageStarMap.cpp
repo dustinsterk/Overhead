@@ -7,6 +7,7 @@
 #include "../assets/StarCatalog.h"
 #include "../astro/Time.h"
 #include "../astro/Coords.h"
+#include "../astro/SkyProjection.h"
 #include "../astro/SolarSystem.h"
 #include <math.h>
 #include <string.h>
@@ -42,14 +43,7 @@ static inline float smooth(float x) { x = x < 0 ? 0 : x > 1 ? 1 : x; return x * 
 // false if below the horizon.
 static bool project(const Star& s, double jd, double latRad, double lst,
                     int cx, int cy, int R, int& sx, int& sy, float& alt) {
-  astro::Equatorial eq{ s.raHours * 15.0 * astro::DEG2RAD, s.decDeg * astro::DEG2RAD };
-  astro::Horizontal h = astro::equatorialToHorizontal(eq, latRad, lst);
-  alt = h.altRad * astro::RAD2DEG;
-  if (alt <= 0) return false;
-  double rr = R * (90.0 - alt) / 90.0;
-  sx = cx + (int)round(rr * sin(h.azRad));
-  sy = cy - (int)round(rr * cos(h.azRad));
-  return true;
+  return astro::projectSky(s.raHours, s.decDeg, latRad, lst, cx, cy, R, sx, sy, alt);
 }
 
 bool PageStarMap::starInCon(int con, const char* name) const {
@@ -106,6 +100,29 @@ void PageStarMap::onTouch(App& app, int x, int y) {
   // focus is the tap point in base screen coords; the transform pulls it to centre.
   _zFx = x; _zFy = y + app.contentY();
   _zoom = true; _zoomT = 0; _zoomDir = 1; _zoomMs = millis(); _drawnT = -2; _dirty = true;
+}
+
+String PageStarMap::gridStatus() {
+  if (!_time.synced() || !_loc.active().valid) return String();
+  double jd = _time.julianDate();
+  double latRad = _loc.active().lat * astro::DEG2RAD;
+  double lst = astro::lstRad(jd, _loc.active().lon);
+  String s; int total = 0, shown = 0;
+  for (int c = 0; c < kConCount; ++c) {                    // a constellation is "up" if >=3 stars are
+    int up = 0;
+    for (const char* nm : kCons[c].stars) {
+      if (!nm) break;
+      const Star* st = findStar(nm); if (!st) continue;
+      astro::Equatorial eq{ st->raHours * 15.0 * astro::DEG2RAD, st->decDeg * astro::DEG2RAD };
+      if (astro::equatorialToHorizontal(eq, latRad, lst).altRad > 0) up++;
+    }
+    if (up < 3) continue;
+    total++;
+    if (s.length() + strlen(kCons[c].name) + 1 <= 30) { if (s.length()) s += " "; s += kCons[c].name; shown++; }
+  }
+  if (!total) return String("none up");
+  if (shown < total) s += " +" + String(total - shown);     // names that didn't fit
+  return s;
 }
 
 bool PageStarMap::autoAdvance(App&) {

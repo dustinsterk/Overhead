@@ -11,6 +11,7 @@
 #include <time.h>
 
 static constexpr double D2R = 3.14159265358979323846 / 180.0;
+static constexpr uint32_t kAutoCycleMs = 4000;   // dwell per contact while auto-cycling
 
 // Dead-reckon a contact's radar position forward from its last fix, so blips keep
 // moving smoothly between ADS-B updates. Works in the observer's local NM tangent
@@ -71,6 +72,7 @@ String PageAircraft::gridStatus() {
 
 void PageAircraft::onEnter(App& app) {
   _dirty = _needClear = true;
+  _userSel = false; _sel = -1; _cycleMs = 0;   // restart auto-select/cycle each visit
   _ap.setForeground(true);   // full-rate polling + an immediate refresh on entry
   applyCenter();             // sync provider centre with the selected chip, then poll
 }
@@ -130,11 +132,11 @@ void PageAircraft::onTouch(App& app, int x, int y) {
       int d2 = (ax - x) * (ax - x) + (ay - ty) * (ay - ty);
       if (d2 < bestd2) { bestd2 = d2; best = k; }
     }
-    if (best >= 0) { _sel = best; _needClear = _dirty = true; return; }
+    if (best >= 0) { _sel = best; _userSel = true; _needClear = _dirty = true; return; }
   }
   int third = app.contentW() / 3;
-  if (x < third)          { _sel = (_sel <= 0 ? n - 1 : _sel - 1); _needClear = true; }
-  else if (x > 2 * third) { _sel = (_sel + 1) % n;                 _needClear = true; }
+  if (x < third)          { _sel = (_sel <= 0 ? n - 1 : _sel - 1); _userSel = true; _needClear = true; }
+  else if (x > 2 * third) { _sel = (_sel + 1) % n;                 _userSel = true; _needClear = true; }
   _dirty = true;
 }
 
@@ -205,6 +207,17 @@ void PageAircraft::drawGroundBadge(App& app) {
 }
 
 void PageAircraft::tick(App& app, uint32_t nowMs) {
+  // Auto-select the first contact and slowly cycle while the user is just
+  // watching (MANUAL, nothing hand-picked). In AUTO the Director's autoAdvance
+  // tours contacts instead, so don't double-step there.
+  if (!_userSel && app.mode() == App::Mode::Manual) {
+    rebuildFilt();
+    int n = (int)_filt.size();
+    if (n > 0) {
+      if (_sel < 0)                            { _sel = 0;            _cycleMs = nowMs; _needClear = _dirty = true; }
+      else if (nowMs - _cycleMs >= kAutoCycleMs) { _sel = (_sel + 1) % n; _cycleMs = nowMs; _needClear = _dirty = true; }
+    }
+  }
   if (_dirty || nowMs - _lastDraw >= 1000) {        // full redraw on change / once a second
     _dirty = false; _lastDraw = nowMs; _marqMs = nowMs;
     draw(app);

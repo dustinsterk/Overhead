@@ -26,6 +26,7 @@ public:
   void onTouch(App& app, int x, int y) override;
   void tick(App& app, uint32_t nowMs) override;
   bool autoAdvance(App& app) override;
+  String gridStatus() override;          // nearest METAR: cat + temp/wind
 
 private:
   enum class View { Metar, Map, Taf, Sounding, Hazards, Trends, Pressure };

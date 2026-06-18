@@ -116,11 +116,10 @@ bool PageSatellites::autoAdvance(App&) {
   if (_order.empty()) return true;                // nothing to tour -> let rotation move on
   bool cycled = false;
   if (_orderPos + 1 >= (int)_order.size()) {      // toured all birds -> next view, restart
-    bool wasGraph = (_view == View::Graph);
-    _view = (_view == View::Polar) ? View::Ground
-          : (_view == View::Ground) ? View::Graph : View::Polar;
+    bool wasGround = (_view == View::Ground);
+    _view = (_view == View::Polar) ? View::Ground : View::Polar;
     selectPos(0);
-    if (wasGraph) cycled = true;                  // Graph -> Polar = full cycle
+    if (wasGround) cycled = true;                 // Ground -> Polar = full cycle
   } else {
     selectPos(_orderPos + 1);
   }
@@ -134,9 +133,8 @@ void PageSatellites::onTouch(App& app, int x, int y) {
   int third = app.contentW() / 3;
   if (x < third)          selectPos(_orderPos - 1);
   else if (x > 2 * third) selectPos(_orderPos + 1);
-  else {                                          // centre: cycle Polar->Ground->Graph
-    _view = (_view == View::Polar) ? View::Ground
-          : (_view == View::Ground) ? View::Graph : View::Polar;
+  else {                                          // centre: cycle Polar <-> Ground
+    _view = (_view == View::Polar) ? View::Ground : View::Polar;
     _dirty = _needClear = true;
   }
 }
@@ -154,12 +152,33 @@ bool PageSatellites::handleMinElTap(App& app, int x, int yRel) {
 }
 
 String PageSatellites::gridStatus() {
-  if (!_pass.valid) return String();
+  // The soonest AOS across ALL tracked birds (not just the selected one), named.
+  const auto& sats = _tle.sats();
+  const auto& loc = _loc.active();
+  if (sats.empty() || !loc.valid) return String();
+  // Use the (watchlist-filtered) order if it's been built; otherwise scan every
+  // loaded bird so the tile works even before the page has been opened.
+  std::vector<int> all;
+  const std::vector<int>* scan = &_order;
+  if (_order.empty()) { for (int i = 0; i < (int)sats.size(); ++i) all.push_back(i); scan = &all; }
   time_t now = time(nullptr);
-  if (now >= _pass.aos && now <= _pass.los) return String("pass now");
-  long s = (long)_pass.aos - (long)now;
-  if (s <= 0) return String();
-  return s >= 3600 ? String("AOS ") + String(s / 3600) + "h" : String("AOS ") + String(s / 60) + "m";
+  _eng.setObserver(loc.lat, loc.lon, 0.0);
+  bool have = false, bestNow = false; time_t bestAos = 0; int bestIdx = -1;
+  for (int idx : *scan) {
+    if (idx < 0 || idx >= (int)sats.size()) continue;
+    if (!_eng.loadTle(sats[idx].name.c_str(), sats[idx].line1.c_str(), sats[idx].line2.c_str())) continue;
+    astro::SatPass p = _eng.nextPass(now, (double)minEl(), 60);
+    if (!p.valid) continue;
+    if (!have || p.aos < bestAos) { have = true; bestAos = p.aos; bestIdx = idx; bestNow = (now >= p.aos && now <= p.los); }
+  }
+  reloadSelected();                          // restore the engine to the selected bird
+  if (!have) return String();
+  String nm = sats[bestIdx].name;            // short name: drop the "(...)" designator
+  int paren = nm.indexOf('('); if (paren > 0) nm = nm.substring(0, paren);
+  nm.trim(); if (nm.length() > 9) nm = nm.substring(0, 9);
+  if (bestNow) return nm + " now";
+  long s = (long)bestAos - (long)now; if (s < 0) s = 0;
+  return nm + " " + (s >= 3600 ? String(s / 3600) + "h" : String(s / 60) + "m");
 }
 
 void PageSatellites::tick(App& app, uint32_t nowMs) {
@@ -193,10 +212,9 @@ void PageSatellites::draw(App& app) {
     g.fillRect(0, app.contentY(), app.contentW(), app.contentH(), gTheme.bg);
     _needClear = false; _pdx = _pdy = -1;
   }
-  if      (_view == View::Polar)  drawPolarView(app, o);
-  else if (_view == View::Ground) drawGroundView(app, o);
-  else                            drawGraphView(app, o);
-  if (_view != View::Graph) drawMinElBadge(app);   // graph shows the threshold line instead
+  if (_view == View::Polar) drawPolarView(app, o);
+  else                      drawGroundView(app, o);
+  drawMinElBadge(app);
   g.setTextDatum(textdatum_t::bottom_right);       // consistent control hint across views
   g.setTextColor(gTheme.dim, gTheme.bg); g.setTextSize(1);
   g.drawString("[side tap: sat  mid: view]", app.contentW() - 4, app.contentY() + app.contentH() - 1);
@@ -372,60 +390,3 @@ void PageSatellites::drawGroundView(App& app, const astro::SatObservation& o) {
   g.drawString(b, cw - 4, cy0 + 3);
 }
 
-void PageSatellites::drawGraphView(App& app, const astro::SatObservation& o) {
-  auto& g = app.display().gfx();
-  const int cw = app.contentW(), cy0 = app.contentY(), ch = app.contentH();
-  const auto& sat = _tle.sats()[_sel];
-
-  g.setTextDatum(textdatum_t::top_left);
-  g.setTextSize(1);
-  g.setTextColor(gTheme.accent, gTheme.bg);
-  g.drawString(sat.name.substring(0, 16) + " - pass elevation", 4, cy0 + 3);
-
-  if (!_pass.valid || _graphEl.size() < 2) {
-    g.setTextColor(gTheme.dim, gTheme.bg);
-    g.drawString(String("no pass >= ") + minEl() + " deg in window", 4, cy0 + ch / 2);
-    return;
-  }
-
-  // Plot area.
-  const int gx = 30, gy = cy0 + 18, gw = cw - gx - 8, gh = ch - 18 - 22;
-  g.drawRect(gx, gy, gw, gh, gTheme.grid);
-  // Y gridlines at 30/60/90 deg.
-  for (int e = 30; e <= 90; e += 30) {
-    int yy = gy + gh - (int)((float)e / 90.0f * gh);
-    g.drawFastHLine(gx, yy, gw, gTheme.grid);
-    g.setTextDatum(textdatum_t::middle_right);
-    g.setTextColor(gTheme.dim, gTheme.bg);
-    g.drawString(String(e), gx - 3, yy);
-  }
-  // min-el threshold line.
-  int yMin = gy + gh - (int)((float)minEl() / 90.0f * gh);
-  g.drawFastHLine(gx, yMin, gw, gTheme.warn);
-
-  // Elevation curve.
-  int prevx = 0, prevy = 0;
-  for (size_t i = 0; i < _graphEl.size(); ++i) {
-    float el = _graphEl[i] < 0 ? 0 : _graphEl[i];
-    int xx = gx + (int)((float)i / (_graphEl.size() - 1) * gw);
-    int yy = gy + gh - (int)(el / 90.0f * gh);
-    if (i) g.drawLine(prevx, prevy, xx, yy, gTheme.accent);
-    prevx = xx; prevy = yy;
-  }
-
-  // "now" marker if the pass is in progress.
-  time_t now = time(nullptr);
-  if (now >= _pass.aos && now <= _pass.los) {
-    int xx = gx + (int)((float)(now - _pass.aos) / (float)(_pass.los - _pass.aos) * gw);
-    g.drawFastVLine(xx, gy, gh, gTheme.ok);
-  }
-
-  // Labels.
-  struct tm tm; time_t a = _pass.aos; localtime_r(&a, &tm);
-  char b[40];
-  snprintf(b, sizeof(b), "AOS %02d:%02d  max %d deg  dur %lus",
-           tm.tm_hour, tm.tm_min, (int)round(_pass.maxElDeg), (unsigned long)_pass.durationSec);
-  g.setTextDatum(textdatum_t::top_left);
-  g.setTextColor(gTheme.fg, gTheme.bg);
-  g.drawString(b, gx, gy + gh + 4);
-}

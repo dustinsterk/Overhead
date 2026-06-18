@@ -20,6 +20,7 @@ public:
     : _ap(ap), _wx(wx), _loc(loc), _settings(settings), _adb(adb) {}
 
   const char* title() const override { return "Aircraft"; }
+  bool clockKeepLive() const override { return true; }   // blips keep moving under the clock
   void onEnter(App& app) override;
   void onExit(App& app) override;
   void onData(App& app, ProviderId id) override;
@@ -50,6 +51,8 @@ private:
   Settings&           _settings;
   AirportDB&          _adb;
   int   _sel = -1;           // index into _filt (the filtered contact list)
+  bool  _userSel = false;    // user explicitly picked a contact -> stop auto-cycling
+  uint32_t _cycleMs = 0;     // last auto-cycle advance (when nothing is user-selected)
   std::vector<int> _filt;    // indices into _ap.aircraft() passing the alt/cat filters
   int   _altF = 0;           // 0 all, 1 <10k, 2 10-25k, 3 >25k ft
   int   _catF = 0;           // 0 all, 1 airliner, 2 GA, 3 heli, 4 mil

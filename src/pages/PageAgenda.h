@@ -23,6 +23,7 @@ public:
     : _time(time), _loc(loc), _wx(wx), _tle(tle), _launch(launch), _settings(settings) {}
 
   const char* title() const override { return "Agenda"; }
+  bool clockKeepLive() const override { return true; }   // countdowns keep ticking under the clock
   void onEnter(App& app) override { _dirty = true; }
   // Redraw on data, but only force the EXPENSIVE recompute (pass prediction) when
   // the location changes — otherwise it runs on every provider publish and starves
@@ -31,6 +32,7 @@ public:
   void onTouch(App& app, int x, int y) override;   // tap an event -> jump to its tab
   void onScroll(App& app, int dy) override;        // swipe up/down -> scroll Upcoming list
   void tick(App& app, uint32_t nowMs) override;
+  String gridStatus() override;                    // next upcoming event + countdown
 
 private:
   static constexpr int kHours = 24;

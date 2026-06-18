@@ -14,6 +14,17 @@
 
 static constexpr double D2R = 3.14159265358979323846 / 180.0;
 
+String PageAviation::gridStatus() {
+  const auto& st = _wx.stations();               // sorted by distance: [0] is nearest
+  if (st.empty()) return String();
+  const auto& m = st[0];
+  String s = m.icao;
+  if (m.cat.length())   s += " " + m.cat;
+  if (m.tempC > -999)   s += " " + String(m.tempC) + "C";
+  else if (m.wspd >= 0) s += " " + String(m.wspd) + "kt";
+  return s;
+}
+
 static Color catColor(const String& c) {
   if (c == "VFR")  return gTheme.ok;
   if (c == "MVFR") return gTheme.accent;

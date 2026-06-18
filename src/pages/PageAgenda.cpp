@@ -116,6 +116,18 @@ void PageAgenda::recompute() {
   if (_verdict.length() == 0) _verdict = _wx.valid() ? "No clear dark window in 24h" : "(clouds unavailable)";
 }
 
+String PageAgenda::gridStatus() {
+  if (_events.empty()) return String();
+  time_t now = time(nullptr);
+  for (const auto& e : _events) {                  // _events is sorted ascending by time
+    if (e.t <= now) continue;
+    long s = (long)e.t - (long)now;
+    String lbl = e.label; if (lbl.length() > 8) lbl = lbl.substring(0, 8);
+    return lbl + " " + (s >= 3600 ? String(s / 3600) + "h" : String(s / 60) + "m");
+  }
+  return String();
+}
+
 void PageAgenda::tick(App& app, uint32_t nowMs) {
   // Heavy recompute (pass prediction for the watchlist) only every 5 min or on a
   // location change — NOT on every provider publish (that starved the loop/touch).

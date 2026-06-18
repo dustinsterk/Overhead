@@ -21,6 +21,7 @@ public:
   void onTouch(App& app, int x, int y) override;
   void tick(App& app, uint32_t nowMs) override;
   bool autoAdvance(App& app) override;
+  String gridStatus() override;          // count of catalog stars above the horizon
 
 private:
   void draw(App& app);

@@ -148,9 +148,12 @@ void PageLaunches::onTouch(App& app, int x, int y) {
 
 String PageLaunches::gridStatus() {
   const auto& list = _lp.launches();
-  time_t now = time(nullptr), best = 0;
-  for (const auto& l : list) if (l.net > now && (best == 0 || l.net < best)) best = l.net;
-  return best ? tMinus(best, now) : String();
+  time_t now = time(nullptr), best = 0; const Launch* bl = nullptr;
+  for (const auto& l : list) if (l.net > now && (best == 0 || l.net < best)) { best = l.net; bl = &l; }
+  if (!bl) return String();
+  String nm = bl->mission.length() ? bl->mission : bl->name;
+  nm.trim(); if (nm.length() > 10) nm = nm.substring(0, 10);
+  return tMinus(best, now) + " " + nm;
 }
 
 bool PageLaunches::autoAdvance(App&) {
