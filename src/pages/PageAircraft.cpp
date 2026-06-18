@@ -6,6 +6,7 @@
 #include "../providers/AviationWxProvider.h"
 #include "../services/LocationService.h"
 #include "../services/Settings.h"
+#include "../assets/Airports.h"
 #include <math.h>
 #include <time.h>
 
@@ -26,6 +27,23 @@ static void drPos(const Aircraft& a, uint32_t lastDataMs, float& distNm, float& 
   east  += step * sinf(a.trackDeg * D2R);
   distNm = sqrtf(north * north + east * east);
   brgDeg = atan2f(east, north) / D2R; if (brgDeg < 0) brgDeg += 360;
+}
+
+// Nearest airport (bundled OurAirports/FAA subset) to an observer, with range +
+// bearing. Flat-earth metric over the small US lat/lon grid - fine for "nearest".
+static const AirportRec* nearestAirport(double lat, double lon, float& distNm, float& brgDeg) {
+  const AirportRec* best = nullptr; double bestd2 = 1e18, clat = cos(lat * D2R);
+  for (int i = 0; i < kAirportCount; ++i) {
+    double dla = kAirports[i].lat100 / 100.0 - lat;
+    double dlo = (kAirports[i].lon100 / 100.0 - lon) * clat;
+    double d2 = dla * dla + dlo * dlo;
+    if (d2 < bestd2) { bestd2 = d2; best = &kAirports[i]; }
+  }
+  if (!best) return nullptr;
+  double dla = best->lat100 / 100.0 - lat, dlo = (best->lon100 / 100.0 - lon) * clat;
+  distNm = (float)(sqrt(dla * dla + dlo * dlo) * 60.0);          // degrees -> nm
+  brgDeg = (float)(atan2(dlo, dla) / D2R); if (brgDeg < 0) brgDeg += 360;
+  return best;
 }
 
 // Decode an emergency transponder code; nullptr if it's a routine squawk.
@@ -275,6 +293,7 @@ void PageAircraft::draw(App& app) {
                   : _ap.status() == ProviderStatus::Loading ? "scanning..."
                   : _ap.hideGround() ? "no airborne aircraft in range"
                   : "no aircraft in range", top);
+    drawNearestAirport(app); // still useful with no traffic: what's tunable near you
     drawRadiusBadge(app);    // keep the badges tappable so the user can widen
     drawGroundBadge(app);    // range or re-enable ground traffic from here
     drawFilterBadges(app);
@@ -396,7 +415,37 @@ void PageAircraft::draw(App& app) {
     }
   }
 
+  drawNearestAirport(app);
   drawRadiusBadge(app);
   drawGroundBadge(app);
   drawFilterBadges(app);
+}
+
+// Nearest airport + likely frequencies (the ham/SDR headline) pinned bottom-right, so
+// it shows whether or not there's traffic. US dataset -> shown within ~250 nm.
+void PageAircraft::drawNearestAirport(App& app) {
+  auto& g = app.display().gfx();
+  const int cw = app.contentW(), ch = app.contentH(), cy0 = app.contentY();
+  if (!_loc.active().valid) return;
+  float adist, abrg;
+  const AirportRec* apt = nearestAirport(_loc.active().lat, _loc.active().lon, adist, abrg);
+  if (!apt || adist >= 250) return;
+  char id[5]; memcpy(id, apt->id, 4); id[4] = 0;
+  for (int k = 3; k >= 0 && id[k] == ' '; --k) id[k] = 0;          // trim padding
+  static const char* kDir[8] = {"N", "NE", "E", "SE", "S", "SW", "W", "NW"};
+  int ix = cw / 2 + 8, ay = cy0 + ch - 52;
+  g.setTextDatum(textdatum_t::top_left);
+  char b[48];
+  snprintf(b, sizeof(b), "apt %s  %dnm %s", id, (int)round(adist), kDir[((int)round(abrg / 45.0)) & 7]);
+  g.setTextColor(gTheme.accent, gTheme.bg); g.drawString(b, ix, ay); ay += 13;
+  struct FT { const char* l; uint16_t v; } fts[4] =
+    {{"TWR", apt->twr}, {"GND", apt->gnd}, {"ATIS", apt->atis}, {"CTAF", apt->ctaf}};
+  char l1[48] = "", l2[48] = ""; int np = 0;
+  for (auto& f : fts) if (f.v) {
+    char seg[20]; snprintf(seg, sizeof(seg), "%s %.2f ", f.l, f.v / 40.0f);
+    strcat(np < 2 ? l1 : l2, seg); np++;
+  }
+  g.setTextColor(gTheme.fg, gTheme.bg);
+  if (l1[0]) { g.drawString(l1, ix, ay); ay += 12; }
+  if (l2[0]) g.drawString(l2, ix, ay);
 }

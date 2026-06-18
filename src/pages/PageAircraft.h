@@ -38,6 +38,7 @@ private:
   bool handleCatTap(App& app, int x, int yRel);  // category filter chip
   bool handleChipTap(App& app, int x, int yRel);
   void drawFilterBadges(App& app);               // alt + category filter chips (bottom)
+  void drawNearestAirport(App& app);             // nearest field + likely freqs (bottom-right)
   void rebuildFilt();                            // _filt = contacts passing alt/cat filters
   void applyCenter();                            // push _centerIcao to the provider + poll
 
