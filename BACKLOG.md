@@ -138,6 +138,14 @@ cycles them). No change to current behavior - purely an added page.
   el), accepting the same protocol over serial/Wi-Fi, with limit/home + microstep
   ramping — a cheap build-your-own rotor. Keep the protocol the contract between the
   two so either end is swappable (commercial rotor or our build).
+- **IMU handheld antenna-aim mode.** Wire an I2C 6-DOF/9-DOF IMU (e.g. MPU6050 6-DOF,
+  or MPU9250/BNO055 9-DOF with magnetometer for absolute heading) to the CYD's exposed
+  I2C, mount the whole thing on a handheld Yagi/arrow antenna, and add a "manual track"
+  mode: read the device's current az (compass/yaw) + el (pitch) from the IMU and show a
+  live steering cue (arrows / "up-left", a centered crosshair, or a bullseye) toward the
+  satellite's computed az/el so the operator hand-aims the antenna through the pass.
+  9-DOF preferred for true heading (6-DOF yaw drifts; needs a known start heading).
+  Pairs with the az/el compute already used by the sat pass + the rotor-protocol item.
 
 ## M4 — Launches
 - **Launch az/el look indicator (not a full pass).** A real az/el track like the
@@ -318,6 +326,17 @@ hazards, SPECI Director badge. Remaining:
 - **Aircraft flight trails** — accumulate recent observed positions per hex and draw
   fading tracks (the ADS-B point feed has no history). Adds retained heap → gate on
   no-PSRAM pressure.
+- **Offline / no-internet mode.** A mode (manual toggle + auto-fallback when WiFi/DNS is
+  down) that disables every live-internet feature (ADS-B, live wx/METAR, launch/TLE
+  refresh, geolocation) but keeps everything computable from valid cached data working:
+  satellite tracking + passes from cached TLEs, Solar System / Star Map (pure astro,
+  no net), agenda from cached events, clock. Show an "offline" status glyph and mark
+  stale-but-usable data; suppress the WiFi-down reboot watchdog in this mode. Pairs with
+  the two-phase boot updater + domain-based data release.
+  - **Pre-offline refresh:** when the user switches into offline mode (field use), first
+    run a foreground update pass — refresh TLE + launches + space-wx (+ location) while
+    the network is still up — so you go offline with the freshest possible caches. Same
+    fetch path as the two-phase boot updater, just triggered on the offline transition.
 - **Rover/space imagery (PSRAM boards only)** — NASA mars-photos latest photo + APOD
   would be amazing on the bedside, but JPEG download + decode + a full framebuffer
   needs PSRAM — gate to CrowPanel. No-PSRAM CYD stays text-only (rover summary feed).
@@ -332,5 +351,23 @@ live mission panel) folded into the Solar System tab. Real Natural Earth coastli
 country/state borders + Mars/Moon feature maps (tools/gen_worldmap.py). Web settings
 revamp, debug-screenshot memory toggle, makeshift METAR pressure/cloud map, rise/set +
 transit per body, upcoming meteor-showers page, naked-eye visibility.
+
+## Web UI overhaul + user-friendly configuration (backlog, Jun 2026)
+A proper settings web app instead of the single scroll form, plus friendlier config:
+- **Tabbed web UI** — left-column section nav (Location, Focus, Satellites, Bodies,
+  Star Maps, System...) with the active section's settings filling the main right pane.
+- **Locations tab** — add multiple saved locations via map pick *or* address/geocode
+  input (not just lat/lon), list them, and choose the current/default. (Pairs with the
+  saved-locations + status-bar location glyph item.)
+- **Focus tab** — choose the ambient-tour pages via a sortable / multi-select list
+  (drag to order, toggle to include) instead of a typo-prone comma-separated string;
+  same result, no string parsing.
+- **Satellites + celestial-bodies selectors** — full-featured pickers to select anything
+  trackable (search/filter the TLE catalog; full body list), not a short baked set.
+  (Pairs with "orrery bodies -> LittleFS + self-update".)
+- **Per-page explanations** — a short user-facing "what am I looking at" blurb on each
+  detail page.
+- **Personalized star maps** — configure the memory/birthday skies (location + date/time)
+  through the same friendly UI widgets. (Pairs with the personal-skies item.)
 
 <!-- new milestones append below as they land -->
