@@ -371,10 +371,12 @@ void PageAircraft::draw(App& app) {
   g.setTextSize(1);
   line(String(_filt.size()) + "/" + list.size() + " @" + (_centerIcao.length() ? _centerIcao : String("HOME"))
        + "  " + (_ap.local() ? "local" : "cloud"), gTheme.dim);
-  if (_ap.status() == ProviderStatus::Stale && _ap.lastFetched()) {     // own line (was overflowing)
+  bool shownStale = false;                                              // own line (was overflowing)
+  if (_ap.status() == ProviderStatus::Stale && _ap.lastFetched()) {
     int age = (int)(time(nullptr) - _ap.lastFetched());
-    if (age > 0) line("stale " + String(age) + "s", gTheme.warn);
+    if (age > 0) { line("stale " + String(age) + "s", gTheme.warn); shownStale = true; }
   }
+  if (!shownStale) iy += 14;        // reserve the slot so the panel below doesn't reflow
 
   if (_sel >= 0 && _sel < (int)_filt.size()) {
     const Aircraft& a = list[_filt[_sel]];
