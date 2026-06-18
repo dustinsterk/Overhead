@@ -44,7 +44,6 @@ The vision: make it the best air-&-space *desk clock*, not a flat 9-tab carousel
   (AO-91 = "FOX-1B"). SatGus is fetched by NAME=SATGUS.
 - Group filter chips + sunlit-only toggle; AMSAT mode/band sub-filters.
 - Source the live AMSAT transponder set (not the hand seed in Transponders.h).
-- Proper Natural Earth coastline bundled in LittleFS (current is a coarse hand outline).
 - Grayline / day-night terminator overlay on the ground track (needs Ephem subsolar).
 - Doppler: uplink correction + tuning readout; rotor Az-El output.
 
@@ -64,15 +63,20 @@ The vision: make it the best air-&-space *desk clock*, not a flat 9-tab carousel
 - Flicker: radar still clears its circle bbox each tick — per-blip erase or a PSRAM sprite.
 
 ## M6 — Solar System
+The tab now tours the whole system via centre tap: sky-dome -> orbits -> Moon -> Mars
+-> Jupiter -> Saturn -> Deep Space -> meteors (the old Missions tab folded in). Moon,
+Mars, Deep Space, rise/set+transit, naked-eye visibility and the showers page are done.
 - **Saturn's moons** (Titan/Rhea/Dione/Tethys) on the moons & rings view — needs its
   own satellite theory (Meeus ch.46) or a calibrated circular model. (Jupiter's
   Galilean moons + Saturn's ring-opening are done + verified vs Horizons.)
-- **Live spacecraft** (Psyche probe, Voyager 1/2, Lucy): non-Keplerian / off-scale, so
-  a small "missions" text panel (heliocentric distance + one-way light-time) fed by
-  JPL Horizons, rather than plotted dots. (Asteroids Ceres/Vesta/16 Psyche + Starman
-  are already plotted from baked elements.)
 - Periodically refresh the baked Roadster/asteroid elements (drift over years).
-- Rise/set + transit times per body (currently instantaneous alt/az only).
+- Deep Space distances are extrapolated from baked epochs + recession rates; a real
+  JPL Horizons feed would keep Voyager/New Horizons exact (off by ~1 AU otherwise).
+- Mars NASA rover-photo feed (api.nasa.gov, DEMO_KEY) doesn't load on the no-PSRAM
+  board (HTTPS skipped under the TLS floor); rover sols are computed locally as a
+  graceful fallback. Needs the heap headroom or a lighter status source.
+- Moon/Mars upcoming-mission lines are hand-maintained + undated on purpose (lunar
+  schedules slip); wire a real launch feed for dated upcoming Artemis/CLPS/Chang'e.
 
 ## Cross-cutting — rendering
 - Anti-flicker via _needClear + in-place padded text + blip-erase. Next: optional LGFX
@@ -153,47 +157,29 @@ hazards, SPECI Director badge. Remaining:
   stale settings.json + the web form's Save-all once blanked focusEnabled/inactivitySec/
   dim*/lead-times to 0/false — do NOT let the form write keys that weren't loaded.
 
-## New feature ideas (this session's stream-of-consciousness, not yet built)
-- **Web settings UI revamp**: set geolocation on a *map*; pick satellites from a
-  checkbox/preset list (not name-search); checkbox the trackable celestial bodies
-  (Roadster/Psyche/asteroids); editable mDNS hostname. (task)
-- **Aviation surface-fronts map** — BLOCKED on a confirmed data source: the WPC
-  "Coded Surface Bulletin" endpoints I tried (codsus.php / codsus_disc.php) 404, and
-  I won't guess the coded lat/lon/mb format (would risk fabricated positions) or add
-  a flaky HTTPS provider to a heap-starved board on a hunch. Need to first confirm a
-  reachable, parseable fronts/H-L product (URL + format). Tier 1 (H/L centre markers
-  on the coastline map) then Tier 2 (front polylines, region-filtered + vertex-capped).
-  VIABLE PATH (recommended, no new data source): build a makeshift H/L pressure map
-  from METAR altimeter/SLP — one aviationweather.gov request for a fixed spread of
-  major airports (KLAX, KSFO, KDEN, KORD, KMSP, KDFW, KIAH, KATL, KMIA, KJFK, KBOS,
-  KSEA, KMCI, KSLC, ...). Plot each on the coastline map coloured by pressure
-  (blue=high, red=low), label the max as H and min as L (makeshift centres), and a
-  crude gradient. Same proven feed as AviationWxProvider; small body; no fronts data
-  needed. (Nearby-METAR interpolation gives the *local* gradient too.)
-- **Solar System "upcoming showers/comets" page** — list all upcoming meteor showers
-  (and comets) in date order even if far out, with per-location visibility notes;
-  promote to the Agenda when within a few days (the Agenda already shows the next one).
+## Remaining feature ideas (not yet built)
+- **Aviation TRUE surface fronts** — still BLOCKED on a confirmed data source. The
+  makeshift H/L + cloud pressure map from major-airport METARs SHIPPED (Aviation
+  "Pressure" sub-view: blue=high/red=low, H/L markers, observer crosshair, cloud-cover
+  rings, hPa/inHg, US or worldwide). Real WPC *front polylines* still need a reachable,
+  parseable fronts/H-L product (the codsus.php endpoints 404) — don't fabricate coded
+  lat/lon/mb positions or add a flaky HTTPS provider to a heap-starved board on a hunch.
 - **Aircraft flight trails** — accumulate recent observed positions per hex and draw
   fading tracks (the ADS-B point feed has no history). Adds retained heap → gate on
   no-PSRAM pressure.
-- **Production memory toggle** — gate the 16 KB debug-screenshot buffer behind a
-  setting; off frees ~16 KB of contiguous heap (lifts HTTPS over the TLS floor).
-- **Missions / Mars-rover page** — kid-inspiring "what's happening out there right
-  now" page: Mars facts + sol/season, active rovers (Perseverance/Curiosity) +
-  latest status, and live spacecraft (Voyager 1/2, Psyche, Europa Clipper) one-way
-  light-time + heliocentric distance. Mostly static facts refreshed occasionally +
-  a light status feed; light on heap. Strongly on-mission (bring far missions to the
-  bedside). (See also M6 "live spacecraft" panel.)
-  - ~~**Moon-missions view**~~ DONE — Missions page 3rd sub-view: live Moon
-    phase/illumination/distance + near-side map of real landing sites (Apollo/robotic/
-    CLPS) + sub-Earth (libration) marker. Past landings only (real coords); upcoming
-    flights named but undated on purpose. Future: pull a live feed for dated upcoming
-    launches (Artemis II, CLPS) when one's available.
-  - **Rover/space imagery (PSRAM boards only):** NASA mars-photos latest photo + APOD
-    would be amazing on the bedside, but JPEG download + decode + a full framebuffer
-    needs PSRAM — gate to CrowPanel. No-PSRAM CYD stays text-only (rover summary feed).
+- **Rover/space imagery (PSRAM boards only)** — NASA mars-photos latest photo + APOD
+  would be amazing on the bedside, but JPEG download + decode + a full framebuffer
+  needs PSRAM — gate to CrowPanel. No-PSRAM CYD stays text-only (rover summary feed).
 - **Domain-based data release** — when in a heap-hungry domain (Aircraft), release
   String-heavy data from cold domains (TLE/METAR) + drop their poll rate; trigger on
   `heapBlkMin` near the floor; no-PSRAM only.
+
+## Shipped this sweep (Jun 2026) — removed from the lists above
+Missions content (Mars distance/light-time + surface map + Earth-facing overlay; Moon
+phase/illumination + near & far-side landing-site maps + day/night shading; Deep Space
+live mission panel) folded into the Solar System tab. Real Natural Earth coastlines +
+country/state borders + Mars/Moon feature maps (tools/gen_worldmap.py). Web settings
+revamp, debug-screenshot memory toggle, makeshift METAR pressure/cloud map, rise/set +
+transit per body, upcoming meteor-showers page, naked-eye visibility.
 
 <!-- new milestones append below as they land -->
