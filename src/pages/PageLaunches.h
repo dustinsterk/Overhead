@@ -5,6 +5,7 @@
 
 class LaunchProvider;
 class TimeService;
+class LocationService;
 
 // pages/PageLaunches — the Launches tab (spec §6). Two views (centre-tap toggles):
 //  - Card: next-launch card (provider, vehicle, mission, pad, status pill, big
@@ -15,7 +16,8 @@ class TimeService;
 // launch site and company. Side taps step the selection.
 class PageLaunches : public Page {
 public:
-  PageLaunches(LaunchProvider& lp, TimeService& time) : _lp(lp), _time(time) {}
+  PageLaunches(LaunchProvider& lp, TimeService& time, LocationService& loc)
+    : _lp(lp), _time(time), _loc(loc) {}
 
   const char* title() const override { return "Launches"; }
   void onEnter(App& app) override { _dirty = _needClear = true; }
@@ -34,6 +36,7 @@ private:
 
   LaunchProvider& _lp;
   TimeService&    _time;
+  LocationService& _loc;
   int   _sel = 0;
   bool  _map = false;                  // false = card view, true = map view
   int   _winIdx = 1;                   // time window: 0=24h, 1=7d, 2=30d, 3=all

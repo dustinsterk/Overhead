@@ -4,9 +4,12 @@
 #include "../hal/Display.h"
 #include "../providers/LaunchProvider.h"
 #include "../services/TimeService.h"
+#include "../services/LocationService.h"
+#include "../astro/SolarSystem.h"
 #include "../assets/Coastline.h"
 #include "../assets/LaunchSites.h"
 #include <algorithm>
+#include <math.h>
 #include <time.h>
 
 static Color statusColor(const String& abbrev) {
@@ -23,6 +26,33 @@ static bool precise(const String& p) {
 static String shortSite(const String& loc) {
   int c = loc.indexOf(',');
   return c > 0 ? loc.substring(0, c) : loc;
+}
+
+// Rough "can I see it from here?" estimate: great-circle distance observer->pad plus
+// the Sun's elevation at the observer at launch time. A rocket climbs into sunlight at
+// altitude while the ground is dark -> the "twilight plume" visible ~1000 km (e.g.
+// Vandenberg from Arizona). Honest approximation, not a guarantee; "" if site unknown.
+static String launchVisibility(double obsLat, double obsLon, const String& location, time_t net) {
+  float slat, slon; String c;
+  if (!launchSiteLatLon(location, slat, slon, c) || net == 0) return String();
+  const double D2R = 3.14159265358979323846 / 180.0, R = 6371.0;
+  double dla = (slat - obsLat) * D2R, dlo = (slon - obsLon) * D2R;
+  double a = sin(dla / 2) * sin(dla / 2) + cos(obsLat * D2R) * cos(slat * D2R) * sin(dlo / 2) * sin(dlo / 2);
+  double d = R * 2 * atan2(sqrt(a), sqrt(1 - a));                          // km, great circle
+  double y = sin(dlo) * cos(slat * D2R);
+  double x = cos(obsLat * D2R) * sin(slat * D2R) - sin(obsLat * D2R) * cos(slat * D2R) * cos(dlo);
+  double brg = atan2(y, x) / D2R; if (brg < 0) brg += 360;
+  static const char* dir8[8] = {"N", "NE", "E", "SE", "S", "SW", "W", "NW"};
+  const char* dir = dir8[((int)round(brg / 45.0)) & 7];
+  double jd = (double)net / 86400.0 + 2440587.5;                          // launch instant
+  double sunEl = astro::planetState(astro::Planet::Sun, jd, obsLat, obsLon).elDeg;
+  const char* v;
+  if (d > 1400)         v = "below horizon";
+  else if (sunEl >= 0)  v = (d < 150) ? "daytime, only if near" : "unlikely (daytime)";
+  else if (sunEl > -18) v = "likely - twilight plume";                    // sunlit rocket, dark sky
+  else                  v = (d < 500) ? "maybe (night)" : "faint (night, far)";
+  char b[56]; snprintf(b, sizeof(b), "%dkm %s - %s", (int)round(d), dir, v);
+  return String(b);
 }
 
 // Cycle "" (all) -> vals[0] -> vals[1] -> ... -> "" through a distinct-value list.
@@ -199,6 +229,16 @@ void PageLaunches::drawCard(App& app) {
     g.drawString(String("precision: ") + l.netPrecision, x0, y); y += 14;
   }
 
+  // "Can I see it from here?" — distance/direction + twilight-plume likelihood.
+  if (_loc.active().valid) {
+    String vis = launchVisibility(_loc.active().lat, _loc.active().lon, l.location, l.net);
+    if (vis.length()) {
+      g.setTextDatum(textdatum_t::top_left); g.setTextSize(1);
+      g.setTextColor(gTheme.accent, gTheme.bg);
+      g.drawString(("see: " + vis).substring(0, (cw - 2 * x0) / 6), x0, y); y += 13;
+    }
+  }
+
   // Upcoming list fills the remaining space (above the chip row).
   g.drawFastHLine(x0, y, cw - 2 * x0, gTheme.grid); y += 4;
   g.setTextSize(1);
@@ -244,6 +284,12 @@ void PageLaunches::drawMap(App& app) {
   g.setTextDatum(textdatum_t::top_right);
   g.setTextColor(gTheme.fg, gTheme.bg);
   g.drawString(tMinus(sel.net, now) + "  " + String(_sel + 1) + "/" + _filtered.size(), cw - 4, cy0 + 2);
+  if (sel.net) {                                   // launch time in the user's local zone
+    struct tm tm; time_t t = sel.net; localtime_r(&t, &tm);
+    char lt[16]; strftime(lt, sizeof(lt), "%a %H:%M", &tm);
+    g.setTextColor(gTheme.dim, gTheme.bg);
+    g.drawString(lt, cw - 4, cy0 + 14);
+  }
 
   const int my = cy0 + 26, mh = ch - 26 - 18, mx = 0, mw = cw;
   auto px = [&](float lon) { return mx + (int)round((lon + 180.0f) / 360.0f * mw); };
