@@ -28,7 +28,7 @@ public:
       _tle(tle), _launch(launch), _air(air), _swx(swx), _wx(wx),
       _theme(theme), _settings(settings) {}
 
-  const char* title() const override { return "Health"; }
+  const char* title() const override { return "Device Health"; }
   void onEnter(App& app) override { _dirty = _needClear = true; }
   void onTouch(App& app, int x, int y) override;
   void tick(App& app, uint32_t nowMs) override;

@@ -5,6 +5,7 @@
 #include "../providers/LaunchProvider.h"
 #include "../services/TimeService.h"
 #include "../services/LocationService.h"
+#include "../providers/WeatherProvider.h"
 #include "../astro/SolarSystem.h"
 #include "../assets/Coastline.h"
 #include "../assets/LaunchSites.h"
@@ -31,10 +32,13 @@ static String shortSite(const String& loc) {
 // Rough "can I see it from here?" estimate: great-circle distance observer->pad plus
 // the Sun's elevation at the observer at launch time. A rocket climbs into sunlight at
 // altitude while the ground is dark -> the "twilight plume" visible ~1000 km (e.g.
-// Vandenberg from Arizona). Honest approximation, not a guarantee; "" if site unknown.
-static String launchVisibility(double obsLat, double obsLon, const String& location, time_t net) {
+// Vandenberg from Arizona). Honest approximation, not a guarantee. level: -1 unknown,
+// 0 unlikely, 1 faint/maybe, 2 likely.
+struct LaunchVis { int level = -1; String text; };
+static LaunchVis launchVis(double obsLat, double obsLon, const String& location, time_t net, int cloudPct = -1) {
+  LaunchVis r;
   float slat, slon; String c;
-  if (!launchSiteLatLon(location, slat, slon, c) || net == 0) return String();
+  if (!launchSiteLatLon(location, slat, slon, c) || net == 0) return r;
   const double D2R = 3.14159265358979323846 / 180.0, R = 6371.0;
   double dla = (slat - obsLat) * D2R, dlo = (slon - obsLon) * D2R;
   double a = sin(dla / 2) * sin(dla / 2) + cos(obsLat * D2R) * cos(slat * D2R) * sin(dlo / 2) * sin(dlo / 2);
@@ -47,12 +51,17 @@ static String launchVisibility(double obsLat, double obsLon, const String& locat
   double jd = (double)net / 86400.0 + 2440587.5;                          // launch instant
   double sunEl = astro::planetState(astro::Planet::Sun, jd, obsLat, obsLon).elDeg;
   const char* v;
-  if (d > 1400)         v = "below horizon";
-  else if (sunEl >= 0)  v = (d < 150) ? "daytime, only if near" : "unlikely (daytime)";
-  else if (sunEl > -18) v = "likely - twilight plume";                    // sunlit rocket, dark sky
-  else                  v = (d < 500) ? "maybe (night)" : "faint (night, far)";
+  if (d > 1400)         { v = "below horizon";          r.level = 0; }
+  else if (sunEl >= 0)  { v = (d < 150) ? "daytime, only if near" : "unlikely (daytime)"; r.level = d < 150 ? 1 : 0; }
+  else if (sunEl > -18) { v = "likely - twilight plume"; r.level = 2; }    // sunlit rocket, dark sky
+  else                  { v = (d < 500) ? "maybe (night)" : "faint (night, far)"; r.level = d < 500 ? 1 : 1; }
   char b[56]; snprintf(b, sizeof(b), "%dkm %s - %s", (int)round(d), dir, v);
-  return String(b);
+  r.text = b;
+  if (cloudPct >= 0) {                                                     // cloud at launch time
+    if (cloudPct >= 70) { r.text += "  clouded " + String(cloudPct) + "%"; r.level = 0; }
+    else { r.text += "  " + String(cloudPct) + "% cld"; if (cloudPct >= 40 && r.level == 2) r.level = 1; }
+  }
+  return r;
 }
 
 // Cycle "" (all) -> vals[0] -> vals[1] -> ... -> "" through a distinct-value list.
@@ -231,11 +240,12 @@ void PageLaunches::drawCard(App& app) {
 
   // "Can I see it from here?" — distance/direction + twilight-plume likelihood.
   if (_loc.active().valid) {
-    String vis = launchVisibility(_loc.active().lat, _loc.active().lon, l.location, l.net);
-    if (vis.length()) {
+    LaunchVis vis = launchVis(_loc.active().lat, _loc.active().lon, l.location, l.net, _wx.cloudCoverAt(l.net));
+    if (vis.level >= 0) {
+      Color vc = vis.level == 2 ? gTheme.ok : vis.level == 1 ? gTheme.warn : gTheme.dim;
       g.setTextDatum(textdatum_t::top_left); g.setTextSize(1);
-      g.setTextColor(gTheme.accent, gTheme.bg);
-      g.drawString(("see: " + vis).substring(0, (cw - 2 * x0) / 6), x0, y); y += 13;
+      g.setTextColor(vc, gTheme.bg);
+      g.drawString(("see: " + vis.text).substring(0, (cw - 2 * x0) / 6), x0, y); y += 13;
     }
   }
 
@@ -249,10 +259,15 @@ void PageLaunches::drawCard(App& app) {
     char tm[12];
     if (s >= 86400) snprintf(tm, sizeof(tm), "%ldd", s / 86400);
     else snprintf(tm, sizeof(tm), "%02ld:%02ld", s / 3600, (s % 3600) / 60);
+    int nx = x0;                                      // mark a potentially-visible launch
+    if (_loc.active().valid) {
+      LaunchVis uv = launchVis(_loc.active().lat, _loc.active().lon, u.location, u.net, _wx.cloudCoverAt(u.net));
+      if (uv.level >= 1) { g.fillCircle(x0 + 2, y + 5, 2, uv.level == 2 ? gTheme.ok : gTheme.warn); nx = x0 + 8; }
+    }
     g.setTextDatum(textdatum_t::top_left);
     g.setTextColor(gTheme.fg, gTheme.bg);
-    int nameMax = (cw - x0 - 48 - x0) / 6;            // fill up to the time cell
-    g.drawString(u.name.substring(0, nameMax), x0, y);
+    int nameMax = (cw - nx - 48 - x0) / 6;            // fill up to the time cell
+    g.drawString(u.name.substring(0, nameMax), nx, y);
     g.fillRect(cw - x0 - 44, y, 44, 12, gTheme.bg);   // clear time cell (right-aligned, shrinks)
     g.setTextDatum(textdatum_t::top_right);
     g.setTextColor(gTheme.dim, gTheme.bg);
@@ -347,6 +362,24 @@ void PageLaunches::drawMap(App& app) {
     g.setTextColor(gTheme.warn, gTheme.bg);
     g.setTextDatum(textdatum_t::bottom_left);
     g.drawString("site not mapped", mx + 4, my + mh - 2);
+  }
+
+  // Observer marker + sight line to the selected pad, coloured by visibility.
+  if (_loc.active().valid) {
+    int ox = px((float)_loc.active().lon), oy = py((float)_loc.active().lat);
+    if (selKnown) {
+      LaunchVis v = launchVis(_loc.active().lat, _loc.active().lon, sel.location, sel.net, _wx.cloudCoverAt(sel.net));
+      if (v.level >= 0) {
+        Color vc = v.level == 2 ? gTheme.ok : v.level == 1 ? gTheme.warn : gTheme.dim;
+        g.drawLine(ox, oy, selX, selY, vc);
+        g.setTextDatum(textdatum_t::bottom_right); g.setTextColor(vc, gTheme.bg);
+        g.drawString(String("visible: ") + (v.level == 2 ? "likely" : v.level == 1 ? "faint" : "unlikely"), cw - 4, my + mh - 2);
+      }
+    }
+    g.drawFastHLine(ox - 3, oy, 7, gTheme.accent);   // observer crosshair = "you"
+    g.drawFastVLine(ox, oy - 3, 7, gTheme.accent);
+    g.setTextDatum(textdatum_t::top_left); g.setTextColor(gTheme.accent, gTheme.bg);
+    g.drawString("you", ox + 4, oy - 4);
   }
 }
 
