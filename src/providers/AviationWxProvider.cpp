@@ -28,6 +28,11 @@ static String flightCat(int ceilFt, float visSm) {
 
 void AviationWxProvider::begin(Settings* s, NetClient* net, Cache* cache, EventBus* bus, LocationService* loc) {
   _s = s; _net = net; _cache = cache; _bus = bus; _loc = loc;
+  String body; CacheMeta m;                         // restore last-good METARs (offline-friendly)
+  if (_cache->get("avwx_metar", body, m) && parseMetars(body)) {
+    _status = ProviderStatus::Stale;
+    _lastFetched = m.fetchedAt;
+  }
   refresh(false);
 }
 
@@ -36,8 +41,9 @@ void AviationWxProvider::refresh(bool force) {
   uint32_t ttl = (uint32_t)_s->getInt("refreshAvWxMin", 12) * 60UL;
   uint32_t now = (uint32_t)time(nullptr);
   CacheMeta m = _cache->stat("avwx_metar");
-  bool stale = force || !m.found || now < 1600000000UL || (now - m.fetchedAt) > ttl;
+  bool stale = force || !m.found || (now >= 1600000000UL && (now - m.fetchedAt) > ttl);  // trust cache pre-NTP
   if (stale) fetchMetars();
+  else if (!_stations.empty()) _status = ProviderStatus::Ready;
 }
 
 void AviationWxProvider::fetchMetars() {

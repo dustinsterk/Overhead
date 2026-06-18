@@ -221,6 +221,14 @@ hazards, SPECI Director badge. Remaining:
 - TLEs retained WATCHLIST-ONLY (full lists ~18 KB of Strings froze TLS). Aircraft cap 24,
   METAR cap 12. On the PSRAM CrowPanel, keep full lists + a sprite double-buffer (board-conditional).
 - Boot fires ~12 HTTPS jobs serially — consider staggering to cut heap contention.
+- **Unified per-airport METAR cache.** The METAR feed is fetched 3x today from the same
+  aviationweather.gov API into separate blob caches: AviationWxProvider (nearby-box list),
+  PressureMapProvider (regional/US/world spread), and Aircraft's nearest-field. A shared
+  per-ICAO METAR store (one entry per airport: pressure/cloud/wind/cat/raw + fetchedAt)
+  that all three read/write would cut duplicate fetches + heap, and keep them consistent
+  (no more "AWC unavailable on the list but the pressure map has data"). Fetch by bbox,
+  upsert per station; consumers query by box or by id. (Stopgap shipped: each provider now
+  restores its own last-good cache on boot.)
 - **Two-phase boot: updater -> viewer (DONE, Jun 2026).** Gated by the `bootUpdater`
   setting (off by default): a lean boot brings up only WiFi/NTP/net + the cacheable
   providers (TLE/Launch/SpaceWx) — no UI, no live feeds, no screenshot buffer — refreshes
