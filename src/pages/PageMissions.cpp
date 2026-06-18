@@ -59,11 +59,10 @@ static SubPt subEarthMoon(double jd, double lat, double lon) {
   return p;
 }
 
-void PageMissions::drawEarthFacing(App& app, int mx, int my, int mw, int mh,
+void PageMissions::drawBodyOverlay(App& app, int mx, int my, int mw, int mh,
                                    double lonMin, double lonMax, double slat, double slon,
-                                   bool boundary) {
+                                   bool boundary, uint16_t col, const char* label) {
   auto& g = app.display().gfx();
-  Color col = rgb565(90, 200, 255);                      // Earth blue
   auto PX = [&](double lon) {
     double L = lon; while (L < lonMin) L += 360; while (L >= lonMin + 360) L -= 360;
     return mx + (int)((L - lonMin) / (lonMax - lonMin) * mw);
@@ -71,9 +70,9 @@ void PageMissions::drawEarthFacing(App& app, int mx, int my, int mw, int mh,
   auto PY = [&](double lat) { return my + (int)((90.0 - lat) / 180.0 * mh); };
 
   if (boundary) {
-    // Rim of the Earth-facing hemisphere = points 90 deg from the sub-Earth point.
+    // Great circle 90 deg from the sub-point = the hemisphere rim / day-night line.
     double t = tan(slat * D2R);
-    if (fabs(t) < 1e-3) {                                // sub-Earth near equator: rim = two meridians
+    if (fabs(t) < 1e-3) {                                // sub-point near equator: two meridians
       g.drawFastVLine(PX(slon - 90), my, mh, col);
       g.drawFastVLine(PX(slon + 90), my, mh, col);
     } else {
@@ -87,15 +86,16 @@ void PageMissions::drawEarthFacing(App& app, int mx, int my, int mw, int mh,
       }
     }
   }
-  // Sub-Earth marker: Earth is directly overhead here, now.
+  // Sub-point marker: the body is directly overhead here, now (skip if off the map).
   int ex = PX(slon), ey = PY(slat);
+  if (ex < mx || ex > mx + mw) return;
   g.drawFastHLine(ex - 5, ey, 11, col);
   g.drawFastVLine(ex, ey - 5, 11, col);
   g.drawCircle(ex, ey, 4, col);
   bool right = ex < mx + mw - 40;
   g.setTextColor(col, gTheme.bg);
   g.setTextDatum(right ? textdatum_t::middle_left : textdatum_t::middle_right);
-  g.drawString("Earth", right ? ex + 7 : ex - 7, ey);
+  g.drawString(label, right ? ex + 7 : ex - 7, ey);
 }
 
 void PageMissions::tick(App& app, uint32_t nowMs) {
@@ -207,7 +207,7 @@ void PageMissions::drawMars(App& app) {
   }
   // Earth-facing hemisphere: rim + the point where Earth is overhead right now.
   SubPt se = subEarthMars(jd);
-  drawEarthFacing(app, mx, my, mw, mh, 0, 360, se.lat, se.lonE, true);
+  drawBodyOverlay(app, mx, my, mw, mh, 0, 360, se.lat, se.lonE, true, rgb565(90, 200, 255), "Earth");
   y = my + mh + 3;
   g.setTextDatum(textdatum_t::top_left); g.setTextColor(rgb565(90, 200, 255), gTheme.bg);
   snprintf(b, sizeof(b), "Earth over %d\xF7E %d\xF7%c now - circled side faces us", (int)round(se.lonE),
@@ -271,12 +271,26 @@ void PageMissions::drawMoon(App& app) {
 
   // --- near-side map: lon -90..+90 (E+, Crisium on the right), lat -90..90 ---
   int mx = 6, mw = cw - 12, my = y + 1, mh = 96;
-  g.fillRect(mx, my, mw, mh, rgb565(48, 48, 54));    // lunar grey
+  g.fillRect(mx, my, mw, mh, rgb565(95, 95, 108));   // sunlit lunar grey
+  auto MX = [&](float lonE) { return mx + (int)((lonE + 90.0f) / 180.0f * mw); };
+  auto MY = [&](float lat)  { return my + (int)((90.0f - lat) / 180.0f * mh); };
+
+  // Shade the night side so the lit area matches the displayed phase exactly. Driven
+  // from the trusted illumination% + phase: the sub-Solar point is ~on the equator
+  // (Moon's tilt is tiny) at east-longitude lamS, so the terminator is the meridian
+  // lamS-90. Waxing (phase<180) lights the east/Crisium (right) limb first.
+  double frac = illum / 100.0;
+  double phAng = acos(fmax(-1.0, fmin(1.0, 2.0 * frac - 1.0))) / D2R;  // 0=full .. 180=new
+  double lamS = (ph < 180.0 ? 1.0 : -1.0) * phAng;                     // sub-Solar east lon
+  Color night = rgb565(22, 22, 28);
+  for (int xx = 0; xx < mw; ++xx) {
+    double lon = -90.0 + (double)xx / mw * 180.0;
+    double dl = lon - lamS; while (dl > 180) dl -= 360; while (dl < -180) dl += 360;
+    if (fabs(dl) > 90.0) g.drawFastVLine(mx + xx, my, mh, night);      // > 90 deg from Sun = night
+  }
   g.drawRect(mx, my, mw, mh, gTheme.grid);
   g.drawFastHLine(mx, my + mh / 2, mw, gTheme.dim);  // equator
   g.drawFastVLine(mx + mw / 2, my, mh, gTheme.dim);  // prime meridian (disc centre)
-  auto MX = [&](float lonE) { return mx + (int)((lonE + 90.0f) / 180.0f * mw); };
-  auto MY = [&](float lat)  { return my + (int)((90.0f - lat) / 180.0f * mh); };
   g.setTextColor(gTheme.dim, gTheme.bg); g.drawString("Near side", mx + 3, my + 2);
 
   // maria / craters for orientation (real selenographic coords). Kept to features
@@ -314,28 +328,33 @@ void PageMissions::drawMoon(App& app) {
       g.drawString(s.tag, right ? sx + 4 : sx - 4, sy);
     }
   }
-  // Sub-Earth point (libration). The near side always faces Earth; the marker shows
-  // where Earth sits overhead now and how the disc is tipped (libration) this moment.
+  // Sub-Solar (centre of the lit area, only on-disc near full) + sub-Earth/libration
+  // markers. The shading above already shows the illuminated portion we see right now.
+  drawBodyOverlay(app, mx, my, mw, mh, -90, 90, 0, lamS, false, rgb565(255, 205, 70), "Sun");
   if (_loc.active().valid) {
     SubPt se = subEarthMoon(jd, _loc.active().lat, _loc.active().lon);
-    drawEarthFacing(app, mx, my, mw, mh, -90, 90, se.lat, se.lonE, false);
+    drawBodyOverlay(app, mx, my, mw, mh, -90, 90, se.lat, se.lonE, false, rgb565(90, 200, 255), "Earth");
   }
   g.setTextDatum(textdatum_t::bottom_left);
-  g.setTextColor(gTheme.warn, gTheme.bg);   g.drawString("crewed", mx + 3, my + mh - 2);
-  g.setTextColor(gTheme.ok, gTheme.bg);     g.drawString("robotic", mx + 50, my + mh - 2);
-  g.setTextColor(gTheme.accent, gTheme.bg); g.drawString("2024+", mx + 102, my + mh - 2);
-  g.setTextColor(rgb565(90, 200, 255), gTheme.bg); g.drawString("Earth=sub-pt", mx + 150, my + mh - 2);
+  g.setTextColor(gTheme.warn, gTheme.bg);          g.drawString("crewed", mx + 3, my + mh - 2);
+  g.setTextColor(gTheme.ok, gTheme.bg);            g.drawString("robotic", mx + 46, my + mh - 2);
+  g.setTextColor(rgb565(150, 150, 160), gTheme.bg); g.drawString("shaded=night", mx + 92, my + mh - 2);
   y = my + mh + 3;
 
-  // --- summary (past dates are real; the future line is undated on purpose) ---
+  // --- summary: past missions are real/dated; Artemis plan reflects the 2026 reset
+  // (II flew Apr'26; III now a crewed LEO demo; IV the first landing) - targets slip.
   g.setTextDatum(textdatum_t::top_left);
   g.setTextColor(gTheme.fg, gTheme.bg);
   g.drawString("Apollo 11-17: 12 humans walked here, 1969-72", x, y); y += 12;
   g.setTextColor(gTheme.dim, gTheme.bg);
   g.drawString("Recent: Blue Ghost & IM-2 '25, SLIM '24, C-3 '23", x, y); y += 12;
   g.drawString("Far side: Chang'e 4 '19, Chang'e 6 sample '24", x, y); y += 12;
+  g.setTextColor(gTheme.ok, gTheme.bg);
+  g.drawString("Artemis II: 4 crew round the Moon, Apr 2026", x, y); y += 12;
+  g.setTextColor(gTheme.warn, gTheme.bg);
+  g.drawString("Soon '26: Chang'e 7 S.pole . IM-3 . BlueGhost 2", x, y); y += 12;
   g.setTextColor(gTheme.accent, gTheme.bg);
-  g.drawString("Next: Artemis II crew flyby + CLPS (planned)", x, y);
+  g.drawString("Planned: Artemis III LEO '27 . IV landing '28", x, y);
 }
 
 // Iconic active deep-space missions. Distance for the receding probes is

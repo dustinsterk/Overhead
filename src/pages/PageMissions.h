@@ -26,10 +26,12 @@ private:
   void drawMars(App& app);
   void drawMoon(App& app);
   void drawDeepSpace(App& app);
-  // Overlay the sub-Earth point (and, for Mars, the Earth-facing hemisphere rim)
-  // on an equirectangular body map. slat/slon are the sub-Earth lat/east-lon (deg).
-  void drawEarthFacing(App& app, int mx, int my, int mw, int mh,
-                       double lonMin, double lonMax, double slat, double slon, bool boundary);
+  // Overlay a sub-point marker (where a body is at the zenith) and optionally the
+  // great-circle 90 deg away (hemisphere rim / day-night terminator) on an
+  // equirectangular body map. slat/slon are the sub-point lat/east-lon (deg).
+  void drawBodyOverlay(App& app, int mx, int my, int mw, int mh, double lonMin,
+                       double lonMax, double slat, double slon, bool boundary,
+                       uint16_t col, const char* label);
 
   TimeService&     _time;
   LocationService& _loc;
