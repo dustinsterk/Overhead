@@ -430,7 +430,7 @@ void PageAircraft::drawAirportMarquee(App& app) {
   g.setTextSize(1); g.setTextDatum(textdatum_t::top_left);
   int textW = g.textWidth(m);
   if (textW < 1) return;
-  int off = (int)((millis() / 20) % (uint32_t)textW);   // ~50 px/s leftward scroll
+  int off = (int)((millis() / 27) % (uint32_t)textW);   // ~37 px/s leftward scroll (75% speed)
   g.setTextColor(gTheme.accent);                        // transparent bg: copies coexist
   for (int x = 2 - off; x < cw; x += textW) g.drawString(m, x, my + 1);
 }
