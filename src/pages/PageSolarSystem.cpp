@@ -227,10 +227,22 @@ bool PageSolarSystem::autoAdvance(App&) {
     if (vis == 0) { _view = 1; _tourN = 0; _orbSel = 0; _dirty = true; return false; }
     int g = 0; do { _sel = (_sel + 1) % kN; } while (!visible(_sel) && ++g < kN);
     if (++_tourN >= vis) { _tourN = 0; _view = 1; _orbSel = 0; }   // toured all -> orbits
-  } else if (_view == 1) {                  // orbits: tour the visible bodies
-    int cnt = orbitVisibleCount();
-    _orbSel = (_orbSel + 1) % cnt;
-    if (++_tourN >= cnt) { _tourN = 0; _view = 2; }               // orbits done -> Moon
+  } else if (_view == 1) {                  // orbits: tour every body, auto-zoom to fit it
+    OrbBody all[kMaxOrb];
+    int keep = _orbScope; _orbScope = 2;              // enumerate the full (all-scope) list
+    int cntAll = buildOrbit(all, kMaxOrb);
+    _orbScope = keep;
+    if (cntAll <= 0) { _tourN = 0; _view = 2; _dirty = true; return false; }
+    if (_tourN >= cntAll) _tourN = 0;
+    OrbBody b = all[_tourN];
+    // Zoom to the tightest scope that still contains this body so it sits well in view.
+    double au = b.minor ? astro::orbitMinorAu(b.idx) : astro::orbitMeanAu(b.idx);
+    _orbScope = (au <= astro::orbitMeanAu(3)) ? 0 : (au <= astro::orbitMeanAu(5)) ? 1 : 2;
+    OrbBody cur[kMaxOrb]; int curN = buildOrbit(cur, kMaxOrb);
+    _orbSel = 0;
+    for (int i = 0; i < curN; ++i)
+      if (cur[i].minor == b.minor && cur[i].idx == b.idx) { _orbSel = i; break; }
+    if (++_tourN >= cntAll) { _tourN = 0; _view = 2; }            // toured all -> Moon
   } else if (_view < 7) {                   // Moon->Mars->Jupiter->Saturn->Deep Space->Showers
     _view++;
   } else {                                  // Showers: one dwell -> full cycle
