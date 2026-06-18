@@ -124,6 +124,14 @@ cycles them). No change to current behavior - purely an added page.
 - Doppler: uplink correction + tuning readout; rotor Az-El output.
 
 ## M4 — Launches
+- **Launch az/el look indicator (not a full pass).** A real az/el track like the
+  satellite page needs a trajectory we don't have — modelling the whole ascent would be
+  fabrication. Honest version: show the look DIRECTION (az = bearing to pad) + an approx
+  max elevation = atan(~150km burnout / ground distance) -> "look WNW, up to ~10 deg",
+  maybe a short rising arc on a mini sky-dome. A full animated pass would be a modelled
+  ascent profile (label it as such if ever done).
+- **Filter the Launches list to "possibly visible"** (visibility level >= faint from the
+  observer) — a 5th bottom chip (needs the chip row re-layout).
 - **Per-mission launch path/azimuth (PSRAM boards only):** the light `mode=list` feed
   carries no orbit, and `mode=normal` is ~37KB for 8 launches (blows the no-PSRAM TLS
   floor) — so the map shows a per-SITE corridor azimuth (approx) instead. On the
