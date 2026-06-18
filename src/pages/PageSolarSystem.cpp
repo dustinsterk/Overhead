@@ -260,8 +260,10 @@ void PageSolarSystem::onEnter(App&) {
 }
 
 void PageSolarSystem::tick(App& app, uint32_t nowMs) {
-  // Positions drift over minutes — recompute/redraw on change or every 30 s.
-  if (!_dirty && nowMs - _lastDraw < 30000) return;
+  // Positions drift over minutes — recompute/redraw on change or every 30 s, but step
+  // ~20 fps while an orbits zoom transition is animating.
+  uint32_t gap = (_animating && _view == 1) ? 50 : 30000;
+  if (!_dirty && nowMs - _lastDraw < gap) return;
   _dirty = false;
   _lastDraw = nowMs;
   if (_time.synced() && _loc.active().valid) recompute();
@@ -432,35 +434,47 @@ void PageSolarSystem::drawOrbit(App& app) {
 
   int cx = cw / 2, cy = cy0 + (ch - 14) / 2 + 12;
   int maxR = min(cw / 2, (ch - 26) / 2) - 8;
-  OrbBody bodies[kMaxOrb];
-  int count = buildOrbit(bodies, kMaxOrb);
-  if (count == 0) return;
-  if (_orbSel >= count) _orbSel = count - 1;
   auto bAu = [&](OrbBody b) { return b.minor ? astro::orbitMinorAu(b.idx) : astro::orbitMeanAu(b.idx); };
-  double maxAu = 0;                                              // outermost ring shown
-  for (int i = 0; i < count; ++i) maxAu = max(maxAu, bAu(bodies[i]));
-  auto rad = [&](double au) { return (int)round(sqrt(au / maxAu) * maxR); };
+
+  OrbBody cur[kMaxOrb];                                          // current scope = the framing target
+  int curN = buildOrbit(cur, kMaxOrb);
+  if (curN == 0) return;
+  if (_orbSel >= curN) _orbSel = curN - 1;
+  OrbBody selB = cur[_orbSel];
+  double targetAu = 0;
+  for (int i = 0; i < curN; ++i) targetAu = max(targetAu, bAu(cur[i]));
+
+  // Ease the plotted scale toward the target so scope changes glide instead of snapping.
+  if (_zoomAu <= 0) _zoomAu = targetAu;
+  else { _zoomAu += (targetAu - _zoomAu) * 0.30; if (fabs(_zoomAu - targetAu) < targetAu * 0.01) _zoomAu = targetAu; }
+  _animating = (_zoomAu != targetAu);
+  auto rad = [&](double au) { return (int)round(sqrt(au / _zoomAu) * maxR); };
+
+  // Draw the full body list scaled by the animated zoom; clip beyond the plot so outer
+  // worlds slide in/out at the edge during the transition (smooth both directions).
+  OrbBody all[kMaxOrb]; int keep = _orbScope; _orbScope = 2;
+  int allN = buildOrbit(all, kMaxOrb); _orbScope = keep;
 
   g.fillCircle(cx, cy, 3, gTheme.warn);                          // Sun
-
-  astro::HelioPos sel{}; const char* selName = "?";
-  for (int i = 0; i < count; ++i) {
-    OrbBody b = bodies[i];
+  for (int i = 0; i < allN; ++i) {
+    OrbBody b = all[i];
     int rr = rad(bAu(b));
-    if (b.minor) for (int t = 0; t < 360; t += 18) g.drawPixel(cx + (int)round(rr * cosf(t * D2R)), cy - (int)round(rr * sinf(t * D2R)), gTheme.grid); // dashed orbit
-    else         g.drawCircle(cx, cy, rr, gTheme.grid);          // orbit ring
+    if (rr > maxR) continue;                                     // off the plot at this zoom
+    if (b.minor) for (int t = 0; t < 360; t += 18) g.drawPixel(cx + (int)round(rr * cosf(t * D2R)), cy - (int)round(rr * sinf(t * D2R)), gTheme.grid);
+    else         g.drawCircle(cx, cy, rr, gTheme.grid);
     astro::HelioPos hp = b.minor ? astro::orbitMinorPos(b.idx, jd) : astro::heliocentricBody(b.idx, jd);
     double a = hp.lonDeg * D2R;
     int pxp = cx + (int)round(rr * cos(a));
     int pyp = cy - (int)round(rr * sin(a));
-    bool s = (i == _orbSel);
-    Color c = s ? gTheme.ok : b.minor ? gTheme.warn : (b.idx == 2 ? gTheme.accent : gTheme.fg);  // minor=warn, Earth=accent
+    bool s = (b.minor == selB.minor && b.idx == selB.idx);
+    Color c = s ? gTheme.ok : b.minor ? gTheme.warn : (b.idx == 2 ? gTheme.accent : gTheme.fg);
     g.fillCircle(pxp, pyp, s ? 3 : 2, c);
     g.setTextDatum(textdatum_t::middle_left);
     g.setTextColor(c, gTheme.bg);
     g.drawString(b.minor ? astro::orbitMinorSym(b.idx) : astro::orbitBodyName(b.idx), pxp + 4, pyp);
-    if (s) { sel = hp; selName = b.minor ? astro::orbitMinorName(b.idx) : astro::orbitBodyName(b.idx); }
   }
+  astro::HelioPos sel = selB.minor ? astro::orbitMinorPos(selB.idx, jd) : astro::heliocentricBody(selB.idx, jd);
+  const char* selName = selB.minor ? astro::orbitMinorName(selB.idx) : astro::orbitBodyName(selB.idx);
 
   // Selected-body readout (bottom-left) + inner/all scope badge (bottom-right).
   g.setTextDatum(textdatum_t::bottom_left);
@@ -474,6 +488,8 @@ void PageSolarSystem::drawOrbit(App& app) {
   g.setTextColor(gTheme.fg, gTheme.grid);
   static const char* kScope[] = {"inner", "mid", "all"};
   g.drawString(kScope[_orbScope], cw - 26, by + 7);
+
+  if (_animating) _dirty = true;        // keep redrawing until the zoom settles
 }
 
 // Telescopic Jupiter: the four Galilean moons strung along Jupiter's equator, the

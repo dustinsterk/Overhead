@@ -63,6 +63,8 @@ private:
   int   _view = 0;                       // 0 sky,1 orbits,2 Moon,3 Mars,4 Jupiter,5 Saturn,6 deep,7 showers
   static constexpr int kViews = 8;
   bool  _moonFar = false;                // Moon view: false=near side, true=far side
+  double _zoomAu = 0;                    // orbits: eased plot scale (AU at the edge)
+  bool  _animating = false;              // orbits: a zoom transition is in progress
   int   _tourN = 0;                      // attract-tour: items stepped in this view
   int   _filter = 1;                    // 0 all, 1 above-horizon, 2 naked-eye
   bool  _stars = false;                 // overlay Star Map stars + constellations on the sky-dome
