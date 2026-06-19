@@ -194,8 +194,7 @@ hazards, SPECI Director badge. Remaining:
     original plan but its URLs 404'd — d3-celestial polylines are cleaner anyway.)
   - Remaining stretch: personal/memory skies reuse this renderer; tiny flash fallback if absent.
 - Pan/zoom (+/- buttons), magnitude limit persisted; gridlines / ecliptic. (Sun/Moon/
-  planets are plotted on the chart.)
-- Pan/zoom (+/- buttons), magnitude limit persisted; gridlines / ecliptic.
+  planets are plotted; tap-to-zoom + zoom-reveal of fainter stars done; mag badge cycles.)
 
 ## M10 — Agenda + observability
 - Sky Window: moon illumination shading intensity; precip overlay; finer (30-min) buckets.
