@@ -14,73 +14,127 @@ static const char kIndexHtml[] PROGMEM = R"HTML(
 <title>Overhead</title>
 <link rel=stylesheet href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<style>body{font:15px system-ui;margin:1rem;max-width:40rem;background:#0b1018;color:#e6e8f0}
-a{color:#50aaff}h3{margin:1.1rem 0 .3rem;border-bottom:1px solid #233;color:#9bf}
+<style>*{box-sizing:border-box}body{font:15px system-ui;margin:0;background:#0b1018;color:#e6e8f0;display:flex;min-height:100vh}
+#nav{width:9.5rem;background:#0e131c;border-right:1px solid #233;padding:.5rem;flex:none}
+#nav h2{font-size:1rem;color:#9bf;margin:.2rem .3rem .6rem}
+.tab{display:block;width:100%;text-align:left;background:none;color:#cdd;border:0;padding:.5rem .6rem;border-radius:6px;cursor:pointer;margin:.1rem 0;font-size:15px}
+.tab.on{background:#2563c0;color:#fff}
+#main{flex:1;padding:1rem;max-width:44rem}
+.sec{display:none}.sec.on{display:block}
+h3{color:#9bf;border-bottom:1px solid #233;margin:.2rem 0 .5rem}
 label{display:flex;justify-content:space-between;align-items:center;gap:1rem;padding:.18rem 0}
 input,select{background:#11161f;color:#e6e8f0;border:1px solid #334;border-radius:4px;padding:.25rem;min-width:11rem}
-button{background:#2563c0;color:#fff;border:0;border-radius:6px;padding:.5rem 1rem;font-size:15px;margin-top:.6rem}
-#map{height:220px;margin:.4rem 0;border:1px solid #334;border-radius:6px}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:.1rem 1rem}
-.grid label{justify-content:flex-start;gap:.5rem}#msg{color:#5d2}</style></head>
-<body><h2>Overhead settings</h2>
-<p><a href=/remote>Remote control</a> · <a href=/update>Firmware update (OTA)</a> · <a href=/api/status>status JSON</a></p>
-<h3>Location</h3><p style=margin:.2rem;color:#9bf>click the map to set your spot</p>
-<div id=map></div>
-<form id=f></form><button onclick=save()>Save</button> <span id=msg></span>
+button{background:#2563c0;color:#fff;border:0;border-radius:6px;padding:.45rem 1rem;margin:.2rem .3rem .2rem 0;cursor:pointer;font-size:15px}
+#map{height:240px;margin:.4rem 0;border:1px solid #334;border-radius:6px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:.1rem 1rem}.grid label{justify-content:flex-start;gap:.5rem}
+.row{display:flex;gap:.4rem;align-items:center;flex-wrap:wrap;margin:.3rem 0}
+table{width:100%;border-collapse:collapse;margin:.3rem 0}td{padding:.25rem;border-bottom:1px solid #233}
+#msg{color:#5d2;font-size:.85rem;margin:.3rem}.hint{color:#789;font-size:.82rem;margin:.1rem 0 .4rem}
+a{color:#50aaff}</style></head>
+<body>
+<div id=nav><h2>Overhead</h2><div id=tabs></div>
+<button onclick=save()>Save</button><div id=msg></div>
+<p style="font-size:.8rem"><a href=/remote>remote</a> · <a href=/update>OTA</a> · <a href=/api/status>status</a></p></div>
+<div id=main></div>
 <script>
-const F=[
- ['Location'],['locMode','mode','sel',['auto','preset']],['locName','name','t'],['locLat','lat','n'],['locLon','lon','n'],
- ['Appearance'],['themeMode','theme','sel',['auto','day','night']],['nightPalette','night palette','sel',['dark','red']],
- ['nightBacklight','night backlight','n'],['themeNightAlt','theme night sun-alt','n'],['dimAfterSec','dim after (s)','n'],['dimLevel','dim level','n'],
- ['Focus'],['focusEnabled','enabled','c'],['ambientDay','ambient day tab','t'],['ambientNight','ambient night tab','t'],
- ['passLeadMin','pass lead (min)','n'],['launchLeadMin','launch lead (min)','n'],['satMinEl','min pass el','n'],
- ['nightAmbientAlt','night ambient sun-alt','n'],['inactivitySec','inactivity->auto (s)','n'],
- ['Aircraft'],['adsbMode','mode','sel',['cloud','local']],['adsbHost','local host','t'],['adsbRadiusNm','radius (nm)','n'],
- ['Refresh'],['refreshLaunchMin','launches (min)','n'],['refreshTleHour','TLE (h)','n'],['refreshSpaceWxMin','space wx (min)','n'],['refreshWeatherMin','weather (min)','n'],
- ['Network'],['hostname','mDNS name (x.local)','t'],['debugShots','remote screenshots (uses 16KB)','c'],
- ['Web/OTA'],['otaUser','user','t'],['otaPass','password','t'],
-];
-const ORRERY=['Roadster','Psyche','Ceres','Vesta'];  // selectable minor bodies (astro catalog)
-// Satellite presets: [display, watchlist token]. Token matches Celestrak names
-// (case-insensitive CONTAINS), so designations w/o a catalog token use the real name.
-const SATS=[['ISS','ISS'],['Tiangong (CSS)','CSS'],['Hubble','HST'],['SO-50','SO-50'],
- ['AO-91','FOX-1B'],['SatGus','SATGUS'],['NOAA-15','NOAA 15'],['NOAA-18','NOAA 18'],
- ['NOAA-19','NOAA 19'],['METEOR-M2','METEOR-M2'],['Starlink','STARLINK'],['GOES-18','GOES 18']];
-let cur={},map,mk;
-fetch('/api/settings').then(r=>r.json()).then(d=>{cur=d;build();initMap();});
-function build(){let h='';for(const r of F){if(r.length==1){h+=`<h3>${r[0]}</h3>`;continue;}
- const[k,l,t,o]=r,v=cur[k];
- if(t=='c')h+=`<label>${l}<input type=checkbox id=_${k} ${v?'checked':''}></label>`;
- else if(t=='sel')h+=`<label>${l}<select id=_${k}>${o.map(x=>`<option ${x==v?'selected':''}>${x}</option>`).join('')}</select></label>`;
- else h+=`<label>${l}<input id=_${k} type=${t=='n'?'number':'text'} step=any value="${v??''}"></label>`;}
- const wl=(cur.watchlist||[]).map(s=>s.toUpperCase());
- h+='<h3>Satellites to track</h3><div class=grid>';
- for(const[lbl,val]of SATS)h+=`<label><input type=checkbox id=_sat_${val.replace(/\W/g,'')} ${wl.some(w=>w.includes(val.toUpperCase()))?'checked':''}>${lbl}</label>`;
- h+='</div><label>more (comma-sep names)'
-   +`<input id=_satx type=text value="${(cur.watchlist||[]).filter(s=>!SATS.some(p=>s.toUpperCase().includes(p[1].toUpperCase()))).join(', ')}"></label>`;
- h+='<h3>Celestial bodies (orrery)</h3><div class=grid>';const ob=cur.orreryBodies||'';
- for(const b of ORRERY)h+=`<label><input type=checkbox id=_orr_${b} ${ob.includes(b)?'checked':''}>${b}</label>`;
- h+='</div>';
- f.innerHTML=h;}
-function initMap(){try{
- const lat=Number(document.getElementById('_locLat').value)||34, lon=Number(document.getElementById('_locLon').value)||-118;
- map=L.map('map').setView([lat,lon],4);
+const FIELD={
+ locName:['name','t'],locLat:['latitude','n'],locLon:['longitude','n'],locMode:['source','sel',['auto','preset']],
+ themeMode:['theme','sel',['auto','day','night']],nightPalette:['night palette','sel',['dark','red']],
+ nightBacklight:['night backlight','n'],themeNightAlt:['night sun-alt','n'],dimAfterSec:['dim after (s)','n'],dimLevel:['dim level','n'],
+ focusEnabled:['focus enabled','c'],passLeadMin:['pass lead (min)','n'],launchLeadMin:['launch lead (min)','n'],satMinEl:['min pass el','n'],
+ nightAmbientAlt:['night ambient sun-alt','n'],inactivitySec:['inactivity->auto (s)','n'],
+ adsbMode:['mode','sel',['cloud','local']],adsbHost:['local host','t'],adsbRadiusNm:['radius (nm)','n'],
+ refreshLaunchMin:['launches (min)','n'],refreshTleHour:['TLE (h)','n'],refreshSpaceWxMin:['space wx (min)','n'],refreshWeatherMin:['weather (min)','n'],
+ hostname:['mDNS name','t'],debugShots:['remote screenshots','c'],otaUser:['user','t'],otaPass:['password','t']};
+const SECTIONS=[['Location','loc'],['Focus','focus'],['Satellites','sats'],['Bodies','bodies'],
+ ['Appearance',['themeMode','nightPalette','nightBacklight','themeNightAlt','dimAfterSec','dimLevel']],
+ ['Aircraft',['adsbMode','adsbHost','adsbRadiusNm']],
+ ['System',['hostname','debugShots','refreshLaunchMin','refreshTleHour','refreshSpaceWxMin','refreshWeatherMin','inactivitySec','otaUser','otaPass']]];
+const PAGES=['Agenda','Launches','Aircraft','Aviation Wx','Satellites','Space Wx','Solar System','Star Map'];
+const ORRERY=['Roadster','Psyche','Ceres','Vesta'];
+const SATS=[['ISS','ISS'],['Tiangong (CSS)','CSS'],['Hubble','HST'],['SO-50','SO-50'],['AO-91','FOX-1B'],['SatGus','SATGUS'],
+ ['NOAA-15','NOAA 15'],['NOAA-18','NOAA 18'],['NOAA-19','NOAA 19'],['METEOR-M2','METEOR-M2'],['Starlink','STARLINK'],['GOES-18','GOES 18']];
+let cur={},map,mk,mapDone=false;
+const E=id=>document.getElementById(id);
+fetch('/api/settings').then(r=>r.json()).then(d=>{cur=d;render();});
+
+function fld(k){const[l,t,o]=FIELD[k],v=cur[k];
+ if(t=='c')return `<label>${l}<input type=checkbox id=_${k} ${v?'checked':''}></label>`;
+ if(t=='sel')return `<label>${l}<select id=_${k}>${o.map(x=>`<option ${x==v?'selected':''}>${x}</option>`).join('')}</select></label>`;
+ return `<label>${l}<input id=_${k} type=${t=='n'?'number':'text'} step=any value="${v??''}"></label>`;}
+
+function render(){
+ tabs.innerHTML=SECTIONS.map((s,i)=>`<button class="tab${i?'':' on'}" data-s="${s[0]}" onclick="show('${s[0]}')">${s[0]}</button>`).join('');
+ main.innerHTML=SECTIONS.map((s,i)=>{let b;
+  if(s[1]=='loc')b=locHtml();else if(s[1]=='focus')b=focusHtml();else if(s[1]=='sats')b=satsHtml();
+  else if(s[1]=='bodies')b=bodiesHtml();else b=s[1].map(fld).join('');
+  return `<div class="sec${i?'':' on'}" data-s="${s[0]}"><h3>${s[0]}</h3>${b}</div>`;}).join('');
+ setTimeout(initMap,60);}
+
+function show(n){[...document.querySelectorAll('.tab')].forEach(t=>t.classList.toggle('on',t.dataset.s==n));
+ [...document.querySelectorAll('.sec')].forEach(t=>t.classList.toggle('on',t.dataset.s==n));
+ if(n=='Location'){if(map)setTimeout(()=>map.invalidateSize(),60);else initMap();}}
+
+function locHtml(){return `<p class=hint>Click the map, drag the pin, or search an address. Save spots and pick a default.</p>
+ <div class=row><input id=_addr type=text placeholder="address or place" style="flex:1"><button onclick=geocode()>Find</button></div>
+ <div id=map></div>${fld('locName')}${fld('locLat')}${fld('locLon')}${fld('locMode')}
+ <div class=row><button onclick=saveLoc()>+ Save current as a location</button></div>
+ <table id=loclist></table>`;}
+function locRows(){const L=cur.locations||[];
+ E('loclist').innerHTML=L.map((p,i)=>`<tr><td>${p.name||'(unnamed)'}</td><td>${(+p.lat).toFixed(2)}, ${(+p.lon).toFixed(2)}</td>
+  <td style="text-align:right"><button onclick="useLoc(${i})">use</button><button onclick="delLoc(${i})">x</button></td></tr>`).join('');}
+function saveLoc(){const n=E('_locName').value||('Spot '+((cur.locations||[]).length+1));
+ cur.locations=[...(cur.locations||[]),{name:n,lat:Number(E('_locLat').value),lon:Number(E('_locLon').value)}];locRows();}
+function useLoc(i){const p=cur.locations[i];E('_locName').value=p.name;E('_locLat').value=p.lat;E('_locLon').value=p.lon;E('_locMode').value='preset';
+ if(mk){mk.setLatLng([p.lat,p.lon]);map.setView([p.lat,p.lon],8);}}
+function delLoc(i){cur.locations.splice(i,1);locRows();}
+function geocode(){const q=E('_addr').value.trim();if(!q)return;
+ fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q='+encodeURIComponent(q))
+ .then(r=>r.json()).then(a=>{if(!a[0])return;const la=+a[0].lat,lo=+a[0].lon;
+  E('_locLat').value=la.toFixed(4);E('_locLon').value=lo.toFixed(4);E('_locMode').value='preset';
+  if(!E('_locName').value)E('_locName').value=(a[0].display_name||q).split(',')[0];
+  if(mk){mk.setLatLng([la,lo]);map.setView([la,lo],8);}}).catch(e=>{msg.textContent='geocode failed';});}
+
+function focusHtml(){const d=(cur.ambientDay||'').split(',').map(s=>s.trim()),n=(cur.ambientNight||'').split(',').map(s=>s.trim());
+ let h=`<p class=hint>Tick which tabs the device auto-tours when idle (day / night). No typing tab names.</p>
+  <table><tr><td><b>tab</b></td><td>day</td><td>night</td></tr>`;
+ for(const p of PAGES)h+=`<tr><td>${p}</td>
+  <td><input type=checkbox class=fday value="${p}" ${d.includes(p)?'checked':''}></td>
+  <td><input type=checkbox class=fnight value="${p}" ${n.includes(p)?'checked':''}></td></tr>`;
+ h+='</table>'+['focusEnabled','passLeadMin','launchLeadMin','satMinEl','nightAmbientAlt','inactivitySec'].map(fld).join('');
+ return h;}
+function satsHtml(){const wl=(cur.watchlist||[]).map(s=>s.toUpperCase());
+ let h='<p class=hint>Pick satellites to track (matched by name, case-insensitive contains).</p><div class=grid>';
+ for(const[lbl,val]of SATS)h+=`<label><input type=checkbox class=satp value="${val}" ${wl.some(w=>w.includes(val.toUpperCase()))?'checked':''}>${lbl}</label>`;
+ h+='</div><label>more (comma-sep)<input id=_satx type=text value="'+
+  (cur.watchlist||[]).filter(s=>!SATS.some(p=>s.toUpperCase().includes(p[1].toUpperCase()))).join(', ')+'"></label>';
+ return h;}
+function bodiesHtml(){const ob=cur.orreryBodies||'';let h='<p class=hint>Extra minor bodies on the orrery.</p><div class=grid>';
+ for(const b of ORRERY)h+=`<label><input type=checkbox class=orrp value="${b}" ${ob.includes(b)?'checked':''}>${b}</label>`;
+ return h+'</div>';}
+
+function initMap(){if(mapDone||!E('map'))return;try{
+ const lat=Number(E('_locLat').value)||34,lon=Number(E('_locLon').value)||-118;
+ map=L.map('map').setView([lat,lon],6);
  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:13}).addTo(map);
  mk=L.marker([lat,lon],{draggable:true}).addTo(map);
- const setll=ll=>{document.getElementById('_locLat').value=ll.lat.toFixed(4);
-  document.getElementById('_locLon').value=(((ll.lng+540)%360)-180).toFixed(4);
-  const ms=document.getElementById('_locMode');if(ms)ms.value='preset';};
+ const setll=ll=>{E('_locLat').value=ll.lat.toFixed(4);E('_locLon').value=(((ll.lng+540)%360)-180).toFixed(4);E('_locMode').value='preset';};
  map.on('click',e=>{mk.setLatLng(e.latlng);setll(e.latlng);});
- mk.on('dragend',()=>setll(mk.getLatLng()));
+ mk.on('dragend',()=>setll(mk.getLatLng()));mapDone=true;locRows();
 }catch(e){}}
-function save(){const o={};for(const r of F){if(r.length==1)continue;const[k,l,t]=r,e=document.getElementById('_'+k);
- if(t=='n'){if(e.value==='')continue;o[k]=Number(e.value);}else o[k]=t=='c'?e.checked:e.value;}
- o.orreryBodies=ORRERY.filter(b=>document.getElementById('_orr_'+b).checked).join(',');
- const sats=SATS.filter(p=>document.getElementById('_sat_'+p[1].replace(/\W/g,'')).checked).map(p=>p[1]);
- const extra=document.getElementById('_satx').value.split(',').map(s=>s.trim()).filter(Boolean);
+
+function save(){const o={};
+ for(const k in FIELD){const e=E('_'+k);if(!e)continue;const t=FIELD[k][1];
+  if(t=='c')o[k]=e.checked;else if(t=='n'){if(e.value==='')continue;o[k]=Number(e.value);}else o[k]=e.value;}
+ o.ambientDay=[...document.querySelectorAll('.fday:checked')].map(c=>c.value).join(',');
+ o.ambientNight=[...document.querySelectorAll('.fnight:checked')].map(c=>c.value).join(',');
+ const sats=[...document.querySelectorAll('.satp:checked')].map(c=>c.value);
+ const extra=(E('_satx')?E('_satx').value:'').split(',').map(s=>s.trim()).filter(Boolean);
  o.watchlist=[...new Set([...sats,...extra])];
+ o.orreryBodies=[...document.querySelectorAll('.orrp:checked')].map(c=>c.value).join(',');
+ if(cur.locations)o.locations=cur.locations;
  fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(o)})
- .then(r=>r.json()).then(_=>{msg.textContent='saved (some settings apply on reboot)';});}
+ .then(r=>r.json()).then(_=>{msg.textContent='saved (some apply on reboot)';});}
 </script></body></html>
 )HTML";
 
