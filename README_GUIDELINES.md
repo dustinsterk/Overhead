@@ -20,6 +20,29 @@ detail, with real screenshots. The "boring" setup lives in a separate linked fil
   glanceable dashboard," not an ephemeris).
 - Second person, active voice ("Tap the centre to cycle views"), short paragraphs,
   lots of images.
+- **Give every page heading a short, cute tagline** in the spirit of
+  "Launches — what's going up", and keep it up for *all* pages, not just the first
+  (e.g. "Aircraft — who's overhead right now", "Space Wx — is the Sun acting up?",
+  "Star Map — the whole sky, and the night you remember"). Don't start cute and go flat.
+- **Go deep on each page, not shallow.** Read the page source and surface the genuinely
+  cool specifics, not just "shows weather": the launch **visibility verdict**, live
+  **Doppler**, the **parallactic tilt** of Jupiter's moons to your sky, naked-eye
+  **visibility ratings**, **look az/el**, orbital **speed in km/h+mph**, the aurora-oval
+  calc, emergency-squawk handling, etc. If a feature is clever, say why.
+
+## 1a. Image + caption layout (do this for EVERY screenshot)
+
+- **Caption every screenshot** with what's cool about that view — never dump bare
+  images into a grid with no words. The caption carries the "what it shows / what's
+  cool / how to operate it".
+- **Use a 2-column table at most.** Put the **image in one column and its caption/
+  description in the other**, and **alternate** sides down the page (image-left/text-
+  right, then text-left/image-right) for visual rhythm. Do NOT make wide 3-/4-up image
+  grids — they read as a screenshot dump.
+- **Use the 2-column image+caption table even for a single screenshot** (e.g. Space
+  Weather, Agenda, Health) — one row, image one side, caption the other. Consistency.
+- For a page with several sub-views, stack them as successive 2-col rows (alternating
+  sides), each captioned.
 
 ## 2. Required README structure (in order)
 
@@ -86,18 +109,32 @@ sub-views to capture:
    filter chips.
 2. **Aircraft** — N-up ADS-B radar with 5/10 nm + range reference rings, heading
    chevrons, tap-to-select a blip. Info column: callsign, type, altitude, GS/track,
-   distance/bearing, **look az/el**, squawk (decoded). Capture: normal radar; a
-   selected contact; the **emergency-squawk** banner if you can stage one; the
-   centre-airport chips and the range/ground/**alt**/**category** filter chips.
-3. **Aviation weather** — five sub-views (centre-tap cycles): **Map** (flight-
-   category dots + wind vectors + **airport id labels** + zoom), **METAR** (decoded
-   card with °F/mph/inHg + raw), **TAF** (decoded periods), **Sounding** (Skew-T
-   temp/dewpoint vs ft, freezing level, winds-aloft, dry-parcel line, soaring
-   analysis), **Hazards** (AIRMET/SIGMET/PIREP in plain language). Capture all five.
-4. **Satellites** — three sub-views (centre-tap): **Polar** (sky-dome az/el with
-   the predicted **pass trajectory arc**, AOS/LOS times, live Doppler for FM birds),
-   **Ground** (world ground-track), **Graph** (elevation-vs-time pass profile).
-   Capture all three; note the min-elevation filter chip + watchlist.
+   distance/bearing, **look az/el**, squawk (decoded). **CAVEAT (no-PSRAM):** a
+   *populated* radar is hard to **screenshot** — the live ADS-B feed clears + re-fetches
+   often, and while the 16 KB screenshot buffer is allocated the largest free block
+   drops below the TLS floor and the fetch is starved (you'll get a "feed unavailable"
+   radar). A quiet location makes it worse. Best effort: a **busy, non-home metro**
+   (near a major hub) so there's traffic, captured right after boot before the heap
+   fragments; if it still won't populate, keep a clean radar-UI shot (rings + chips +
+   frequency marquee) and describe the populated experience + this heap-floor limit in
+   prose. Do NOT use the home location just to get traffic (location leak).
+3. **Aviation weather** — up to seven sub-views (centre-tap cycles): **Map** (flight-
+   category dots + wind barbs + **airport id labels** + zoom), **METAR** (decoded card
+   with °F/mph/inHg + raw), **TAF** (decoded periods), **Sounding** (Skew-T), **Hazards**
+   (AIRMET/SIGMET/PIREP), **Trends** (24 h sparklines), **Pressure** (synoptic map,
+   tap-to-zoom levels). **TAF and Hazards are HIDDEN when there's no data** and drop out
+   of the centre-tap cycle — so capture only the views that are actually present, and
+   describe the conditional ones in prose. **The Map and Pressure views need a
+   DENSE-airport area** to look good — a sparse coastal launch site (e.g. Cape Canaveral)
+   gives a near-empty map; pick a redacted location with many nearby airports (a busy
+   inland metro) for those two shots. NOTE: on the Pressure view a centre-tap *zooms*
+   (it doesn't advance the view) — step views with **up/down swipe**, not centre-tap, or
+   the capture sequence misaligns.
+4. **Satellites** — **two** sub-views (centre-tap): **Polar** (sky-dome az/el with the
+   predicted **pass trajectory arc**, AOS/LOS times, max-el, sunlit flag, live Doppler
+   for FM birds) and **Ground** (world ground-track). *(The old elevation-vs-time pass
+   graph was removed — don't expect a third view; a 3rd centre-tap just wraps to Polar.)*
+   Note the min-elevation filter chip + watchlist.
 5. **Space Wx** — Kp gauge + **history sparkline**, SFI, GOES flare class, solar-wind
    speed + IMF Bz, **aurora chance** for your geomagnetic latitude, and the HF band
    condition table. One screenshot.
