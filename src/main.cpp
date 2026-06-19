@@ -84,6 +84,7 @@ static MarsProvider     marsProv;
 static PressureMapProvider pmapProv;
 // --- pages ---
 static String          gHostname;
+static bool            gOffline = false;   // booted past the WiFi portal into offline (field) mode
 static PageAgenda*     agendaPage = nullptr;
 static PageLaunches*   launchesPage = nullptr;
 static PageAircraft*   aircraftPage = nullptr;
@@ -115,6 +116,32 @@ static void splash(const char* msg) {
   g.setTextColor(gTheme.dim, gTheme.bg);
   g.drawString("github.com/JamesDavid/Overhead", g.width() / 2, g.height() - 22);
   g.drawString("DE KE7AQA", g.width() / 2, g.height() - 10);
+}
+
+// Shown while the WiFi captive portal is open: how to set up WiFi, plus the
+// field-mode escape hatch (tap the screen to run offline on cached data).
+static void splashPortal(const String& ap) {
+  auto& g = display.gfx();
+  g.fillScreen(gTheme.bg);
+  g.setTextDatum(textdatum_t::middle_center);
+  g.setTextColor(gTheme.warn, gTheme.bg);
+  g.setTextSize(2);
+  g.drawString("No WiFi", g.width() / 2, 26);
+  g.setTextSize(1);
+  g.setTextColor(gTheme.fg, gTheme.bg);
+  g.drawString("To set up, join this WiFi:", g.width() / 2, 64);
+  g.setTextColor(gTheme.accent, gTheme.bg);
+  g.drawString(ap, g.width() / 2, 80);
+  g.setTextColor(gTheme.dim, gTheme.bg);
+  g.drawString("then open  192.168.4.1", g.width() / 2, 96);
+  g.setTextColor(gTheme.fg, gTheme.bg);
+  g.setTextSize(2);
+  g.drawString("- or -", g.width() / 2, 134);
+  g.setTextColor(gTheme.ok, gTheme.bg);
+  g.drawString("TAP SCREEN", g.width() / 2, g.height() - 52);
+  g.setTextSize(1);
+  g.setTextColor(gTheme.dim, gTheme.bg);
+  g.drawString("to use OFFLINE (cached data)", g.width() / 2, g.height() - 30);
 }
 
 // Two-phase boot (spec backlog): on a no-PSRAM board the big cacheable HTTPS
@@ -172,6 +199,7 @@ static void fillStatusJson(JsonDocument& d) {
   d["httpsSkip"]  = (uint32_t)net.httpsSkips();  // fetches skipped under the TLS floor
   d["psram"]    = Display::psramSize();
   d["wifi"]     = WiFi.status() == WL_CONNECTED;
+  d["offline"]  = gOffline;                      // user/timeout dropped to offline field mode at boot
   d["ssid"]     = WiFi.SSID();
   d["rssi"]     = WiFi.RSSI();
   d["ip"]       = WiFi.localIP().toString();
@@ -219,9 +247,15 @@ void setup() {
   gHostname = "overhead-" + chipSuffix();
   gHostname.toLowerCase();
 
-  // Cold start: WiFi first (spec §13). Blocks on the captive portal if unprovisioned.
+  // Cold start: WiFi first (spec §13). If unprovisioned/out of range it opens the
+  // captive portal — but a screen tap drops straight to OFFLINE field mode (cached
+  // data), so the device is usable away from any network.
   splash("Connecting WiFi…");
-  prov.begin("Overhead-Setup-" + chipSuffix());
+  String apName = "Overhead-Setup-" + chipSuffix();
+  bool wifiOk = prov.begin(apName, 180,
+      []() -> bool { int16_t tx, ty; return touch.read(display, tx, ty); },   // tap = go offline
+      [apName]() { splashPortal(apName); });                                  // portal opened -> prompt
+  gOffline = !wifiOk;
   WiFi.setAutoReconnect(true);            // let the stack retry drops on its own too
   WiFi.persistent(true);
 
@@ -295,7 +329,7 @@ void setup() {
   aviationPage = new PageAviation(avwxProv, sndProv, hazProv, weatherProv, pmapProv, locSvc, settings);
   satsPage = new PageSatellites(tleProv, locSvc, timeSvc, settings);
   solarPage = new PageSolarSystem(timeSvc, locSvc, settings, marsProv);
-  starPage = new PageStarMap(timeSvc, locSvc);
+  starPage = new PageStarMap(timeSvc, locSvc, settings);
   spaceWxPage = new PageSpaceWx(spaceWxProv, timeSvc, locSvc);
   healthPage = new PageHealth(touch, timeSvc, locSvc, gHostname,
                               tleProv, launchProv, aircraftProv, spaceWxProv, weatherProv,
@@ -339,10 +373,12 @@ void loop() {
 
   // WiFi watchdog (headless device): the radio occasionally drops and doesn't come
   // back on its own, which kills OTA + the debug API. Nudge a reconnect after a few
-  // seconds; if it's still down after ~90 s, reboot to recover.
+  // seconds; if it's still down after ~90 s, reboot to recover. Suppressed in offline
+  // field mode — there's no network to wait for, so a reboot would just loop.
   static uint32_t wifiDownSince = 0;
   static bool reconnTried = false;
-  if (WiFi.status() == WL_CONNECTED) { wifiDownSince = 0; reconnTried = false; }
+  if (gOffline) { /* offline field mode: leave the radio alone, never reboot for WiFi */ }
+  else if (WiFi.status() == WL_CONNECTED) { wifiDownSince = 0; reconnTried = false; }
   else {
     if (!wifiDownSince) wifiDownSince = now;
     uint32_t down = now - wifiDownSince;

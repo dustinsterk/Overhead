@@ -4,6 +4,7 @@
 
 class TimeService;
 class LocationService;
+class Settings;
 
 // pages/PageStarMap — all-sky star chart (spec §6, stretch). Azimuthal projection
 // (zenith centre, horizon edge), stars sized by magnitude, major constellation
@@ -13,24 +14,35 @@ class LocationService;
 // Prototype catalog in assets/StarCatalog.h.
 class PageStarMap : public Page {
 public:
-  PageStarMap(TimeService& time, LocationService& loc) : _time(time), _loc(loc) {}
+  PageStarMap(TimeService& time, LocationService& loc, Settings& settings)
+    : _time(time), _loc(loc), _settings(settings) {}
 
   const char* title() const override { return "Star Map"; }
-  void onEnter(App& app) override { _dirty = true; }
+  void onEnter(App& app) override { _dirty = true; if (_view > memCount()) _view = 0; }
   void onData(App& app, ProviderId id) override { _dirty = true; }
   void onTouch(App& app, int x, int y) override;
   void tick(App& app, uint32_t nowMs) override;
   bool autoAdvance(App& app) override;
   String gridStatus() override;          // count of catalog stars above the horizon
+  // Live "now / here" sky (view 0) plus one sub-view per saved Memory Sky.
+  void cycleView(int dir) override;
+  int  viewCount() const override { return 1 + memCount(); }
+  int  viewIndex() const override { return _view; }
 
 private:
   void draw(App& app);
   void updateTour(App& app, uint32_t nowMs);                 // advance the zoom animation
   bool conFocus(App& app, int con, int& fx, int& fy, int& count);  // label centre + above-horizon flag
   int  nextVisibleCon(App& app, int from);                   // next con whose label is above the horizon
+  int  memCount() const;                                     // number of saved Memory Skies
+  // Effective sky for the active view: live now/here (view 0) or a saved sky.
+  // false only when the live view has no time-sync / location yet.
+  bool effective(double& jd, double& latDeg, double& lonDeg) const;
 
   TimeService&     _time;
   LocationService& _loc;
+  Settings&        _settings;
+  int   _view = 0;               // 0 = live now/here; 1..N = saved Memory Sky (index N-1)
   float _magLimit = 3.0f;
   bool  _labels = true;
   bool  _showSS = true;          // overlay Sun/Moon/planets + ecliptic

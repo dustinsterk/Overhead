@@ -4,6 +4,7 @@
 #include "../hal/Display.h"
 #include "../services/TimeService.h"
 #include "../services/LocationService.h"
+#include "../services/Settings.h"
 #include "../assets/StarCatalog.h"
 #include "../astro/Time.h"
 #include "../astro/Coords.h"
@@ -11,6 +12,7 @@
 #include "../astro/SolarSystem.h"
 #include <math.h>
 #include <string.h>
+#include <time.h>
 
 // Constellation data (kCons/kConCount) now lives in assets/StarCatalog.h (shared
 // with the Agenda's "what's up tonight" line).
@@ -24,14 +26,42 @@ static bool project(const Star& s, double jd, double latRad, double lst,
   return astro::projectSky(s.raHours, s.decDeg, latRad, lst, cx, cy, R, sx, sy, alt);
 }
 
+int PageStarMap::memCount() const {
+  return _settings.doc()["memorySkies"].as<JsonArrayConst>().size();
+}
+
+// Effective time + observer for the active view: the live now/here sky (view 0),
+// or a saved Memory Sky's instant + place. Returns false only when the live view
+// has no clock/location yet (a saved sky is a fixed moment, always renderable).
+bool PageStarMap::effective(double& jd, double& latDeg, double& lonDeg) const {
+  if (_view >= 1) {
+    JsonObjectConst e = _settings.doc()["memorySkies"][_view - 1].as<JsonObjectConst>();
+    if (e.isNull()) return false;
+    jd = astro::julianDate((time_t)(long)(e["epoch"] | 0));
+    latDeg = e["lat"] | 0.0; lonDeg = e["lon"] | 0.0;
+    return true;
+  }
+  if (!_time.synced() || !_loc.active().valid) return false;
+  jd = _time.julianDate(); latDeg = _loc.active().lat; lonDeg = _loc.active().lon;
+  return true;
+}
+
+void PageStarMap::cycleView(int dir) {
+  int n = 1 + memCount();
+  _view = (_view + dir + n) % n;
+  _tour = _autoTour = false; _zoom = false; _zoomT = 0; _t = 0; _tourCon = -1;  // clean static sky
+  _dirty = true; _drawnT = -2; _lastDraw = 0;
+}
+
 // Screen position of a constellation's label centre; count=1 if above the horizon.
 bool PageStarMap::conFocus(App& app, int con, int& fx, int& fy, int& count) {
   count = 0; fx = app.contentW() / 2; fy = app.contentY() + app.contentH() / 2;
-  if (con < 0 || con >= kConCount || !_time.synced() || !_loc.active().valid) return false;
+  if (con < 0 || con >= kConCount) return false;
+  double jd, latDeg, lonDeg;
+  if (!effective(jd, latDeg, lonDeg)) return false;
   const int cw = app.contentW(), ch = app.contentH(), cy0 = app.contentY();
   int R = min(cw, ch) / 2 - 8, cx = cw / 2, cy = cy0 + ch / 2;
-  double jd = _time.julianDate(), latRad = _loc.active().lat * astro::DEG2RAD;
-  double lst = astro::lstRad(jd, _loc.active().lon);
+  double latRad = latDeg * astro::DEG2RAD, lst = astro::lstRad(jd, lonDeg);
   int px, py; float alt;
   if (astro::projectSky(kCons[con].raHours, kCons[con].decDeg, latRad, lst, cx, cy, R, px, py, alt)) {
     fx = px; fy = py; count = 1; return true;
@@ -93,6 +123,7 @@ bool PageStarMap::autoAdvance(App&) {
   // has framed every visible constellation. tick()/updateTour drive the animation.
   if (_tour) return false;                          // tour in progress -> stay on the page
   if (_autoTour) { _autoTour = false; return true; }// the full tour just finished -> move on
+  _view = 0;                                         // the Director's ambient tour shows the live sky
   _tour = true; _autoTour = true; _tourCon = -1; _t = 0; _dirty = true;
   return false;
 }
@@ -161,7 +192,8 @@ void PageStarMap::draw(App& app) {
   g.startWrite();                       // batch the whole frame in one SPI transaction
   g.fillRect(0, cy0, cw, ch, gTheme.bg);  // (composes fast -> far less tour strobe)
 
-  if (!_time.synced() || !_loc.active().valid) {
+  double jd, latDeg, lonDeg;
+  if (!effective(jd, latDeg, lonDeg)) {          // live view, no clock/location yet
     g.setTextDatum(textdatum_t::middle_center);
     g.setTextColor(gTheme.dim, gTheme.bg);
     g.drawString(_time.synced() ? "no location" : "waiting for time sync...", cw / 2, cy0 + ch / 2);
@@ -171,9 +203,8 @@ void PageStarMap::draw(App& app) {
 
   int R = min(cw, ch) / 2 - 8;
   int cx = cw / 2, cy = cy0 + ch / 2;
-  double jd = _time.julianDate();
-  double latRad = _loc.active().lat * astro::DEG2RAD;
-  double lst = astro::lstRad(jd, _loc.active().lon);
+  double latRad = latDeg * astro::DEG2RAD;
+  double lst = astro::lstRad(jd, lonDeg);
 
   // Zoom transform: display = C + s*(P - F) + (1-t)*(F - C). At t=0 identity; at
   // t=1 the focus F maps to centre C and the chart is magnified by Z.
@@ -276,7 +307,7 @@ void PageStarMap::draw(App& app) {
 
   // Sun / Moon / planets, projected the same way (azimuthal). Distinct colours.
   for (int i = 0; _showSS && i < 9; ++i) {
-    astro::PlanetState p = astro::planetState((astro::Planet)i, jd, _loc.active().lat, _loc.active().lon);
+    astro::PlanetState p = astro::planetState((astro::Planet)i, jd, latDeg, lonDeg);
     if (!p.above) continue;
     double rr = R * (90.0 - p.elDeg) / 90.0;
     int sx0 = cx + (int)round(rr * sin(p.azDeg * astro::DEG2RAD));
@@ -332,6 +363,21 @@ void PageStarMap::draw(App& app) {
     g.setTextSize(2);
     g.drawString(kCons[_tourCon].name, cw / 2, cy0 + 3);
     g.setTextSize(1);
+  }
+
+  // Memory-sky caption: the saved title + its instant (top-centre, when not touring).
+  if (_view >= 1 && !(_tour && t > 0.25f)) {
+    JsonObjectConst e = _settings.doc()["memorySkies"][_view - 1].as<JsonObjectConst>();
+    const char* title = e["title"] | "Memory sky";
+    time_t ep = (time_t)((jd - 2440587.5) * 86400.0 + 0.5);
+    struct tm tmv; gmtime_r(&ep, &tmv);
+    char db[40]; strftime(db, sizeof(db), "%b %e, %Y  %H:%MZ", &tmv);
+    g.setTextDatum(textdatum_t::top_center);
+    g.setTextSize(1);
+    g.setTextColor(gTheme.accent, gTheme.bg);
+    g.drawString(title, cw / 2, cy0 + 2);
+    g.setTextColor(gTheme.dim, gTheme.bg);
+    g.drawString(db, cw / 2, cy0 + 13);
   }
 
   // Badge: magnitude limit.

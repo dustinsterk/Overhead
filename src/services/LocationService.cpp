@@ -22,6 +22,18 @@ void LocationService::refresh() {
     loc.valid = true;
     applyAndPublish(loc, /*persist=*/false);
   } else {
+    // Auto: seed from the last-known persisted fix first, so we have a usable
+    // location offline (field mode) and before IP geolocation resolves; then
+    // refine over the network. refreshAuto's fetch is a no-op when offline.
+    double la = _s->getFloat("locLat", 0), lo = _s->getFloat("locLon", 0);
+    if (la != 0.0 || lo != 0.0) {
+      GeoLocation loc;
+      loc.lat = la; loc.lon = lo;
+      loc.tzOffsetSec = _s->getInt("tzOffset", 0);
+      loc.name = _s->getString("locName", "Last fix");
+      loc.valid = true;
+      applyAndPublish(loc, /*persist=*/false);
+    }
     refreshAuto();                       // "auto" (and "gps" until a module exists)
   }
 }

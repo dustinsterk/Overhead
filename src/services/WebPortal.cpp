@@ -46,7 +46,7 @@ const FIELD={
  adsbMode:['mode','sel',['cloud','local']],adsbHost:['local host','t'],adsbRadiusNm:['radius (nm)','n'],
  refreshLaunchMin:['launches (min)','n'],refreshTleHour:['TLE (h)','n'],refreshSpaceWxMin:['space wx (min)','n'],refreshWeatherMin:['weather (min)','n'],
  hostname:['mDNS name','t'],debugShots:['remote screenshots','c'],otaUser:['user','t'],otaPass:['password','t']};
-const SECTIONS=[['Location','loc'],['Focus','focus'],['Satellites','sats'],['Bodies','bodies'],
+const SECTIONS=[['Location','loc'],['Focus','focus'],['Satellites','sats'],['Bodies','bodies'],['Memory Skies','skies'],
  ['Appearance',['themeMode','nightPalette','nightBacklight','themeNightAlt','dimAfterSec','dimLevel']],
  ['Aircraft',['adsbMode','adsbHost','adsbRadiusNm']],
  ['System',['hostname','debugShots','refreshLaunchMin','refreshTleHour','refreshSpaceWxMin','refreshWeatherMin','inactivitySec','otaUser','otaPass']]];
@@ -67,13 +67,14 @@ function render(){
  tabs.innerHTML=SECTIONS.map((s,i)=>`<button class="tab${i?'':' on'}" data-s="${s[0]}" onclick="show('${s[0]}')">${s[0]}</button>`).join('');
  main.innerHTML=SECTIONS.map((s,i)=>{let b;
   if(s[1]=='loc')b=locHtml();else if(s[1]=='focus')b=focusHtml();else if(s[1]=='sats')b=satsHtml();
-  else if(s[1]=='bodies')b=bodiesHtml();else b=s[1].map(fld).join('');
+  else if(s[1]=='bodies')b=bodiesHtml();else if(s[1]=='skies')b=skiesHtml();else b=s[1].map(fld).join('');
   return `<div class="sec${i?'':' on'}" data-s="${s[0]}"><h3>${s[0]}</h3>${b}</div>`;}).join('');
  setTimeout(initMap,60);}
 
 function show(n){[...document.querySelectorAll('.tab')].forEach(t=>t.classList.toggle('on',t.dataset.s==n));
  [...document.querySelectorAll('.sec')].forEach(t=>t.classList.toggle('on',t.dataset.s==n));
- if(n=='Location'){if(map)setTimeout(()=>map.invalidateSize(),60);else initMap();}}
+ if(n=='Location'){if(map)setTimeout(()=>map.invalidateSize(),60);else initMap();}
+ if(n=='Memory Skies')skyRows();}
 
 function locHtml(){return `<p class=hint>Click the map, drag the pin, or search an address. Save spots and pick a default.</p>
  <div class=row><input id=_addr type=text placeholder="address or place" style="flex:1"><button onclick=geocode()>Find</button></div>
@@ -112,6 +113,24 @@ function satsHtml(){const wl=(cur.watchlist||[]).map(s=>s.toUpperCase());
 function bodiesHtml(){const ob=cur.orreryBodies||'';let h='<p class=hint>Extra minor bodies on the orrery.</p><div class=grid>';
  for(const b of ORRERY)h+=`<label><input type=checkbox class=orrp value="${b}" ${ob.includes(b)?'checked':''}>${b}</label>`;
  return h+'</div>';}
+function skiesHtml(){const la=cur.locLat??'',lo=cur.locLon??'';
+ return `<p class=hint>Saved skies — the exact stars overhead at a moment and place (a birthday, an anniversary, a first night under the stars). Swipe up/down on the device's Star Map to cycle through them.</p>
+ <label>Title<input id=_skyTitle type=text placeholder="e.g. Mia's birth - Phoenix"></label>
+ <label>Date &amp; time (local)<input id=_skyWhen type=datetime-local></label>
+ <label>Latitude<input id=_skyLat type=number step=any value="${la}"></label>
+ <label>Longitude<input id=_skyLon type=number step=any value="${lo}"></label>
+ <p class=hint>Tip: pin the place on the Location tab's map, then copy its lat/lon here.</p>
+ <div class=row><button onclick=addSky()>+ Add memory sky</button></div>
+ <table id=skylist></table>`;}
+function skyRows(){if(!E('skylist'))return;const L=cur.memorySkies||[];
+ E('skylist').innerHTML=L.map((p,i)=>`<tr><td>${p.title||'(untitled)'}</td><td>${new Date((p.epoch||0)*1000).toLocaleString()}</td>
+  <td>${(+p.lat).toFixed(2)}, ${(+p.lon).toFixed(2)}</td><td style="text-align:right"><button onclick="delSky(${i})">x</button></td></tr>`).join('');}
+function addSky(){const t=E('_skyTitle').value.trim(),w=E('_skyWhen').value;
+ if(!w){msg.textContent='pick a date & time first';return;}
+ const ep=Math.floor(new Date(w).getTime()/1000);
+ cur.memorySkies=[...(cur.memorySkies||[]),{title:t||'Memory sky',epoch:ep,lat:Number(E('_skyLat').value),lon:Number(E('_skyLon').value)}];
+ skyRows();E('_skyTitle').value='';E('_skyWhen').value='';}
+function delSky(i){cur.memorySkies.splice(i,1);skyRows();}
 
 function initMap(){if(mapDone||!E('map'))return;try{
  const lat=Number(E('_locLat').value)||34,lon=Number(E('_locLon').value)||-118;
@@ -133,6 +152,7 @@ function save(){const o={};
  o.watchlist=[...new Set([...sats,...extra])];
  o.orreryBodies=[...document.querySelectorAll('.orrp:checked')].map(c=>c.value).join(',');
  if(cur.locations)o.locations=cur.locations;
+ if(cur.memorySkies)o.memorySkies=cur.memorySkies;
  fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(o)})
  .then(r=>r.json()).then(_=>{msg.textContent='saved (some apply on reboot)';});}
 </script></body></html>
