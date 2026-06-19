@@ -272,6 +272,9 @@ bool WebPortal::begin(Settings* s, const String& hostname) {
         if (!json.is<JsonObject>()) { req->send(400, "application/json", "{\"ok\":false}"); return; }
         for (JsonPair kv : json.as<JsonObject>()) _s->doc()[kv.key()] = kv.value();
         _s->save();
+        // Apply the remote-screenshot toggle LIVE so the web UI can free the 16 KB
+        // buffer on demand (off -> freeShot()), not just at the next reboot.
+        if (_display && json["debugShots"].is<bool>()) _display->setShotsEnabled(json["debugShots"].as<bool>());
         req->send(200, "application/json", "{\"ok\":true}");
       });
   setHandler->setAuthentication(_apiUser.c_str(), _apiPass.c_str());

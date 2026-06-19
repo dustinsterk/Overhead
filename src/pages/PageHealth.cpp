@@ -107,14 +107,14 @@ void PageHealth::tick(App& app, uint32_t nowMs) {
 }
 
 String PageHealth::gridStatus() {
-  if (WiFi.status() != WL_CONNECTED)            return "WiFi down";
-  if (!_time.synced())                          return "no time";
-  if (Display::largestFreeBlock() < 30000)      return "low heap";
+  String blk = String("blk ") + (Display::largestFreeBlock() / 1024) + "k";   // largest contiguous block
+  if (WiFi.status() != WL_CONNECTED)            return "WiFi down  " + blk;
+  if (!_time.synced())                          return "no time  " + blk;
   int err = (_tle.status()    == ProviderStatus::Error) + (_launch.status() == ProviderStatus::Error)
           + (_air.status()    == ProviderStatus::Error) + (_swx.status()    == ProviderStatus::Error)
           + (_wx.status()     == ProviderStatus::Error);
-  if (err) return String(err) + (err == 1 ? " error" : " errors");
-  return "ok";
+  if (err) return String(err) + (err == 1 ? " error  " : " errors  ") + blk;
+  return blk;
 }
 
 void PageHealth::draw(App& app) {

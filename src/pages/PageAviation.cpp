@@ -173,14 +173,8 @@ void PageAviation::onTouch(App& app, int x, int y) {
       if (x >= _mChipX[i] && x < _mChipX[i] + _mChipW[i]) { _sel = i; _needClear = _dirty = true; return; }
   }
   int third = app.contentW() / 3;
-  if (x >= third && x <= 2 * third) {               // centre tap
-    if (_view == View::Pressure) {                  // pressure map centre tap
-      int my = app.contentY() + 16, mh = app.contentH() - 16 - 12;
-      int fx = app.contentW() / 2, fy = my + mh / 2;
-      if (_pmap.scope() != 0) { drillPressure(app, fx, fy); return; }   // US/world: drill in for local fields
-      cyclePresZoom(fx, fy); return;                // regional: step through zoom levels
-    }
-    stepView(+1); return;                           // other views: advance (up/down swipe also cycles)
+  if (x >= third && x <= 2 * third && _view != View::Pressure) {  // centre tap cycles the view
+    stepView(+1); return;                           // (Pressure: tap the MAP to drill/zoom at that point)
   }
   if (_view == View::Map && x < 50 && y < 16) {     // top-left badge: cycle map zoom
     _mapZoom = (_mapZoom + 1) % kMapZoomN;

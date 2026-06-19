@@ -164,6 +164,19 @@ static void runBootUpdater() {
   if (!settings.getBool("bootUpdater", false)) return;
   long cycles = settings.getInt("bootCycles", 0);
   static const long kMaxUpdateBoots = 5;
+
+  // Warm the LOCATION-dependent WEATHER cache too (Open-Meteo is hourly-good, a good
+  // fit for the boot cache). The global feeds (TLE/launch/space-wx) were begun above;
+  // weather needs a location, so resolve it first (preset / last-known fix is instant;
+  // "auto" kicks IP geoloc, briefly waited for), then begin it so a stale fetch joins
+  // this lean pass and is cached before the viewer. (Begun again in the viewer phase —
+  // a no-op on a fresh cache.) METARs are deliberately NOT warmed here: their ~12-min
+  // SPECI-catching TTL is shorter than a boot cycle, so they'd be "stale" almost every
+  // boot and churn the updater — they fetch in the viewer (the cache still displays).
+  locSvc.begin(&settings, &net, &bus, &timeSvc);
+  for (uint32_t t = millis(); !locSvc.active().valid && millis() - t < 6000; ) { net.poll(); delay(20); }
+  if (locSvc.active().valid) weatherProv.begin(&settings, &net, &cache, &bus, &locSvc);
+
   delay(60);                                             // let the NetTask register any queued jobs
   if (net.inFlight() == 0) {                             // nothing stale -> viewer
     if (cycles) { settings.set("bootCycles", (long)0); settings.save(); }
