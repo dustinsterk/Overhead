@@ -35,6 +35,7 @@ private:
   bool conFocus(App& app, int con, int& fx, int& fy, int& count);  // label centre + above-horizon flag
   int  nextVisibleCon(App& app, int from);                   // next con whose label is above the horizon
   int  memCount() const;                                     // number of saved Memory Skies
+  void drawChart(App& app, double jd, double latDeg, double lonDeg);  // memory-sky natal chart readout
   // Effective sky for the active view: live now/here (view 0) or a saved sky.
   // false only when the live view has no time-sync / location yet.
   bool effective(double& jd, double& latDeg, double& lonDeg) const;
@@ -46,6 +47,7 @@ private:
   float _magLimit = 3.0f;
   bool  _labels = true;
   bool  _showSS = true;          // overlay Sun/Moon/planets + ecliptic
+  bool  _chart = false;          // memory-sky natal-chart readout (tropical signs + Ascendant)
   bool  _dirty = true;
   uint32_t _lastDraw = 0;
 

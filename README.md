@@ -203,6 +203,11 @@ strong wind) is surfaced cross-tab as a notice instead (see the Director).
 | ![Memory sky](docs/img/starmap-memory.jpg) |
 | **Memory skies** — save "the sky at *this moment* from *this place*" (a birthday, an eclipse) and it renders the **full** sky for that exact instant and lat/lon, captioned title + place (top-left) and date + coordinates (top-right). **Swipe up/down to cycle** between the live sky and your saved skies — the **view dots on the right edge** show where you are. Add/edit them in the web UI's **Memory Skies** tab. |
 
+| |
+|---|
+| ![Natal chart on a memory sky](docs/img/astro-chart.jpg) |
+| **Natal chart** — on a memory sky, the **chart** chip overlays the real computed **Sun / Moon / Ascendant** + planets in their (tropical) signs, plus the honest twist only an astronomy device can add: the **Sun's actual constellation** right now ("Sun's stars now: Sagittarius") — which differs from the astrological sign because of precession. Astronomy first, with astrology as the cultural lens. |
+
 ### 8 · Device Health — *under the hood*
 
 | |

@@ -87,8 +87,13 @@ void PageStarMap::onTouch(App& app, int x, int y) {
   if (x >= cw - 46 && y >= ch - 20) {              // bottom-right: SS overlay
     _showSS = !_showSS; _dirty = true; return;
   }
-  if (y >= ch - 20 && x > cw / 2 - 26 && x < cw / 2 + 26) {  // bottom-centre: tour
-    _tour = !_tour; _tourCon = -1; _t = 0; _dirty = true; return;
+  if (y >= ch - 20) {                                          // bottom-centre badges
+    if (_view >= 1) {                                          // memory sky: tour (left) + chart (right)
+      if (x >= cw / 2 - 52 && x <= cw / 2 - 4) { _tour = !_tour; _tourCon = -1; _t = 0; _dirty = true; return; }
+      if (x >= cw / 2 + 4 && x <= cw / 2 + 52) { _chart = !_chart; _dirty = true; return; }
+    } else if (x > cw / 2 - 26 && x < cw / 2 + 26) {           // live sky: single tour chip
+      _tour = !_tour; _tourCon = -1; _t = 0; _dirty = true; return;
+    }
   }
   if (_tour) { _tour = false; _t = 0; _dirty = true; return; }   // exit the auto-tour
   if (_zoom && _zoomDir > 0) {                                    // already zoomed -> zoom out
@@ -401,14 +406,70 @@ void PageStarMap::draw(App& app) {
   g.setTextColor(gTheme.fg, gTheme.grid);
   g.setTextSize(1);
   g.drawString(String("mag<=") + String(_magLimit, 0) + (_labels ? " +lbl" : ""), 8, by + 7);
-  // Badge: tour toggle (bottom-centre).
-  g.fillRect(cw / 2 - 24, by, 48, 14, gTheme.grid);
+  // Bottom-centre badges: live sky shows "tour"; a memory sky shows tour + chart.
   g.setTextDatum(textdatum_t::middle_center);
-  g.setTextColor(_tour ? gTheme.ok : gTheme.dim, gTheme.grid);
-  g.drawString(_tour ? "tour*" : "tour", cw / 2, by + 7);
-  // Badge: solar-system overlay toggle (bottom-right).
+  auto chip = [&](int cx, const char* label, bool act) {
+    g.fillRect(cx - 24, by, 48, 14, gTheme.grid);
+    g.setTextColor(act ? gTheme.ok : gTheme.dim, gTheme.grid);
+    g.drawString(label, cx, by + 7);
+  };
+  if (_view >= 1) {
+    chip(cw / 2 - 28, _tour ? "tour*" : "tour", _tour);
+    chip(cw / 2 + 28, _chart ? "chart*" : "chart", _chart);
+  } else {
+    chip(cw / 2, _tour ? "tour*" : "tour", _tour);
+  }
+  // Badge: solar-system overlay toggle (bottom-right) — text centred in the chip.
   g.fillRect(cw - 46, by, 42, 14, gTheme.grid);
+  g.setTextDatum(textdatum_t::middle_center);
   g.setTextColor(_showSS ? gTheme.ok : gTheme.dim, gTheme.grid);
-  g.drawString(_showSS ? "SS on" : "SS off", cw - 42, by + 7);
+  g.drawString(_showSS ? "SS on" : "SS off", cw - 25, by + 7);
+
+  if (_view >= 1 && _chart) drawChart(app, jd, latDeg, lonDeg);   // natal-chart readout over the sky
   g.endWrite();
+}
+
+// Compact natal-chart readout for a memory sky: the REAL computed tropical signs of
+// the Sun/Moon/Ascendant + planets, plus the Sun's actual sidereal constellation
+// (precession). Astronomy, clearly labelled — no fortune-telling.
+void PageStarMap::drawChart(App& app, double jd, double latDeg, double lonDeg) {
+  auto& g = app.display().gfx();
+  const int cw = app.contentW(), cy0 = app.contentY(), ch = app.contentH();
+  static const char* kSign[12] = {"Aries","Taurus","Gemini","Cancer","Leo","Virgo",
+                                   "Libra","Scorpio","Sagit","Capri","Aquar","Pisces"};
+  static const char* kAbbr[12] = {"Ari","Tau","Gem","Can","Leo","Vir","Lib","Sco","Sag","Cap","Aqr","Psc"};
+  const double D2R = astro::DEG2RAD, R2D = astro::RAD2DEG, eps = 23.4393 * D2R;
+  auto signOf = [&](double lonDeg2) { int s = (int)floor(fmod(lonDeg2 + 360.0, 360.0) / 30.0); return s % 12; };
+  // geocentric ecliptic longitude of a body from its RA/Dec
+  auto eclLon = [&](astro::Planet p) {
+    astro::PlanetState s = astro::planetState(p, jd, latDeg, lonDeg);
+    double a = s.raDeg * D2R, d = s.decDeg * D2R;
+    double lam = atan2(sin(a) * cos(eps) + tan(d) * sin(eps), cos(a));
+    return fmod(lam * R2D + 360.0, 360.0);
+  };
+  double sunL = eclLon(astro::Planet::Sun), moonL = eclLon(astro::Planet::Moon);
+  // Ascendant: ecliptic point on the eastern horizon (RAMC = local sidereal time).
+  double ramc = astro::lstRad(jd, lonDeg), phi = latDeg * D2R;
+  double asc = atan2(cos(ramc), -(sin(ramc) * cos(eps) + tan(phi) * sin(eps)));
+  double ascL = fmod(asc * R2D + 360.0, 360.0);
+  const double kAyan = 24.1;                                 // ~2024 ayanamsa: tropical->sidereal offset
+
+  int panelH = 46, py = cy0 + ch - 16 - panelH;              // sit above the badge row
+  g.fillRect(2, py, cw - 4, panelH, gTheme.bg);
+  g.drawRect(2, py, cw - 4, panelH, gTheme.grid);
+  g.setTextDatum(textdatum_t::top_left); g.setTextSize(1);
+  g.setTextColor(gTheme.accent, gTheme.bg);
+  g.drawString("Natal chart (tropical)", 6, py + 2);
+  char l[48];
+  g.setTextColor(gTheme.fg, gTheme.bg);
+  snprintf(l, sizeof(l), "Sun %s  Moon %s  Asc %s", kSign[signOf(sunL)], kSign[signOf(moonL)], kSign[signOf(ascL)]);
+  g.drawString(l, 6, py + 13);
+  snprintf(l, sizeof(l), "Me%s Ve%s Ma%s Ju%s Sa%s",
+           kAbbr[signOf(eclLon(astro::Planet::Mercury))], kAbbr[signOf(eclLon(astro::Planet::Venus))],
+           kAbbr[signOf(eclLon(astro::Planet::Mars))], kAbbr[signOf(eclLon(astro::Planet::Jupiter))],
+           kAbbr[signOf(eclLon(astro::Planet::Saturn))]);
+  g.drawString(l, 6, py + 24);
+  g.setTextColor(gTheme.dim, gTheme.bg);                     // the actual sky (precession): Sun's true constellation
+  snprintf(l, sizeof(l), "Sun's stars now: %s (precession)", kSign[signOf(sunL - kAyan)]);
+  g.drawString(l, 6, py + 35);
 }
