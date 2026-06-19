@@ -1,192 +1,292 @@
 # Overhead
 
-A from-scratch, modular tabbed "what's overhead / around me" dashboard for
-ESP32 touch displays — agenda, rocket launches, aircraft (ADS-B), satellites,
-space weather, solar system, and a star map, with an Intelligent Focus
-"director" that auto-surfaces the most relevant tab. See the project spec for
-the full design.
+**An air-&-space situational-awareness dashboard for a $10 touchscreen — the sky, on your desk, updating in real time.**
 
-This repo is the **clean-room implementation** — existing CYD projects are
-reference material only, not a fork base.
+![The 2017 Great American Eclipse, recreated as a saved "memory sky"](docs/img/starmap-memory.jpg)
 
-## Status — all milestones (0–12) implemented ✅ builds on all 3 boards
+*Above: a saved **memory sky** — the exact sky over Hopkinsville, KY at 18:25 UTC on 21 Aug 2017, the moment of greatest eclipse, with the Sun, Regulus and the planets strung along the ecliptic, recreated on the device.*
 
-Every spec milestone is in and the firmware compiles for `cyd28_ili9341`,
-`cyd4_st7796`, and `crowpanel_s3_5hmi`. Content tabs (carousel, ground→space):
-**Agenda · Launches · Aircraft · Satellites · Space Wx · Solar System · Star Map ·
-Health**, with the **Director** (ambient day/night + pass/launch interrupts +
-AUTO/MANUAL/pin lifecycle + tab badges) and **ThemeController** (day/night palette,
-red dark-adapt, backlight dim + inactivity dimming) on top. Services: NTP/RTC,
-IP-geolocation, threaded NetClient, Cache, Settings (+ a web settings form),
-WiFiManager provisioning, ESPAsyncWebServer + ElegantOTA.
+---
 
-Remaining work is **polish** (tracked in `BACKLOG.md`) and **on-hardware
-verification** beyond the 2.8" CYD (the 4"/CrowPanel panels, and runtime behaviour
-of the data tabs). Astronomy is permissive (Schlyter Sun/Moon/planets + Hopperpop
-SGP4); GPLv3 Ephem stays behind `ENABLE_EPHEM`.
+## What is this?
 
-## Earlier milestone notes
+**Overhead** turns a cheap ESP32 "Cheap Yellow Display" (CYD) into a glanceable
+observation deck for everything happening above you — **right now, from where you
+are.** Satellites passing overhead, rockets about to launch, aircraft on approach,
+aviation and space weather, the solar system, a live all-sky star map, and a
+"tonight at a glance" agenda — all on a $10–15 touchscreen you can leave on a shelf.
 
-First real content tab. `TleProvider` fetches the Celestrak `amateur` + `stations`
-GP groups via the NetTask, caches them in LittleFS (offline-friendly), parses to a
-TLE list, and publishes on the EventBus. `PageSatellites` renders an observer-centred
-az/el **polar plot**, a live info panel (az/el, range, sunlit, next-pass countdown),
-and **live Doppler** for FM birds from a small transponder table. The `App` shell now
-has **swipe carousel navigation** with page-indicator dots (Satellites ↔ Diagnostics).
-Watchlist defaults (ISS + SO-50 + AO-91) are seeded in Settings.
+It knows your location and the time, and an **Intelligent Focus** director quietly
+surfaces the one thing worth looking at across all of those tabs: an ISS pass in
+four minutes, a launch window opening, a geomagnetic storm, a thunderstorm rolling in.
 
-Deferred to follow-ups (noted): world ground-track map, az/el time graph,
-group/min-elevation filter UI, watchlist filtering of the selector, AMSAT
-mode/band sub-filters, and sourcing the live AMSAT transponder set.
+### The heart of it
 
-⚠️ **Flash:** small boards (cyd28/cyd4) at ~88% of the 1.5 MB slot. A partition
-rebalance (single app slot, or smaller LittleFS) is needed before the bundled
-catalogs land (airports m5 / star map m9).
+Beyond being the best little air-&-space *desk clock*, Overhead exists to **inspire
+kids**. It puts the awe of far-away missions on a child's bedside table and makes it
+*real*: space stops being abstract and becomes "look — the ISS goes over **our house**
+in four minutes," "that rocket launches **tonight**," "this is the exact sky from the
+night you were born." A glowing window to the cosmos, always on, always current.
 
-## Status — Milestone 2 (astronomy core) ✅ builds on all 3 boards
+## Why this instead of cloning a weather-station project?
 
-The shared compute core is in (`src/astro/`): `Time` (JD/GMST/LST/ΔT), `Coords`
-(RA/Dec↔Alt/Az + refraction), `Sun` (permissive low-precision solar position —
-drives both the satellite sunlit test and, later, the Director's day/night, with
-no GPLv3), and `SatEngine` over the Hopperpop **SGP4** library (MIT): observer
-az/el, slant range, range-rate→Doppler, sub-satellite point, a cylindrical-umbra
-**sunlit** flag, and pass prediction (AOS/TCA/LOS). `Ephem` (Sun/Moon/planets) is
-written but fully gated behind `ENABLE_EPHEM` (GPLv3, default **off**). A boot
-self-test (`ASTRO_SELFTEST`) validates the core against a known ISS TLE over
-serial.
+Most CYD projects do one thing — a weather screen, a clock, a single gauge.
+Overhead is a **modular multi-page application framework**:
 
-⚠️ **Flash:** SGP4 pushed the 1.5 MB-app boards (cyd28/cyd4) to ~87%. Before the
-bundled catalogs land (m3+), those boards will need a partition rebalance (single
-app slot, or smaller LittleFS); the CrowPanel's 4 MB app slot is unaffected.
+- A **page carousel** + a **provider / scheduler / event-bus core** + a **cross-tab
+  director** — not a single screen, but a whole dashboard you can extend.
+- Engineered to **run real HTTPS data feeds on a no-PSRAM device** — the hard part
+  most projects avoid. A serialized non-blocking network task, heap-floor-aware TLS
+  (serve stale instead of crash), stale-data resilience, and a WiFi watchdog.
+- A full **remote debug / automation API**: a `/remote` browser page that mirrors the
+  live screen with click-to-tap and swipe, plus `/api/screen.jpg`, `/api/tap`,
+  `/api/swipe`, `/api/status`, OTA — almost no hobby firmware ships this.
 
-## Status — Milestone 1 (services + infra) ✅ builds on all 3 boards
+Versus the alternatives: phone apps (Heavens-Above, SkySafari) and desktop orreries
+are great but they're *not always-on, glanceable, and sitting on your shelf*. Generic
+CYD weather stations are single-purpose. Overhead is **always-on, location-aware,
+multi-domain, on dedicated cheap hardware.**
 
-Milestone 0 (HAL bring-up) and Milestone 1 (services + infra) are in. The base
-platform is complete: HAL (display/touch), core plumbing (EventBus, Scheduler,
-Theme, minimal App shell), and the service layer — Settings (LittleFS + schema
-versioning), Cache, a threaded **NetClient** (HTTP on a core-0 FreeRTOS task,
-callbacks marshalled to the UI thread), TimeService (NTP + sync gating + tz),
-LocationService (IP geolocation default), WiFiManager provisioning, and a
-**WebPortal** (ESPAsyncWebServer settings page + JSON API + **ElegantOTA**).
+> **Honest scope:** the astronomy is "good enough for a glanceable dashboard," not an
+> observatory ephemeris (low-precision Schlyter orbits, ~arcminute). It's a window to
+> wonder, not a telescope mount controller (though it could drive one — see the backlog).
 
-A **Diagnostics page** proves the full pipeline: boot → WiFi → NTP → IP
-geolocation (background fetch on the NetTask) → EventBus → screen redraw, with
-the settings/OTA UI live at `http://overhead-XXXX.local/`.
+---
 
-Flash headroom note: with the full infra the 4 MB boards sit at ~1.30 MB of the
-1.5 MB app slot (~82%). The heavy tabs (SGP4 + bundled catalogs) will need
-watching there; the CrowPanel's 4 MB app slot has plenty of room.
+## Feature tour
 
-Still **compile-verified only — not yet flashed to hardware.**
+Eight tabs, swipe left/right to move between them. Most pages have **sub-views you
+cycle with a centre tap**, and **up/down swipe** scrolls or steps sub-views. Tap the
+status strip to toggle **AUTO / MANUAL**; long-press to **pin**.
 
-## Targets (multi-board by design — spec §3.1)
+### 0 · Agenda — tonight at a glance
 
-One project, one renderer (**LovyanGFX**), one `[env:…]` per board. Shared code
-is variant-agnostic and reads pins + capability flags from `src/hal/Board.h`,
-selected by the env's `-D BOARD_*` flag.
+![Agenda](docs/img/page0-agenda.jpg)
 
-| Env | Board | MCU | Panel | Touch | PSRAM | RTC |
-|---|---|---|---|---|---|---|
-| `cyd28_ili9341` *(default)* | 2.8" Cheap Yellow Display (ESP32-2432S028R) | ESP32 | ILI9341 240×320 SPI | XPT2046 resistive (own VSPI bus) | none | no |
-| `cyd4_st7796` | 4" Cheap Yellow Display (ESP32-32E) | ESP32 | ST7796S 480×320 SPI | XPT2046 resistive (shared bus) | none | no |
-| `crowpanel_s3_5hmi` | Elecrow CrowPanel Advance 5.0-HMI | ESP32-S3 | ST7262 800×480 parallel-RGB | GT911 capacitive | 8 MB | PCF8563 |
+The home page. A **24-hour Sky Window** timeline shades darkness and twilight, bands
+the cloud cover and moon-up window, and tick-marks every event (launches, passes,
+sun/moon rise-set) with a legend. Below it: the **clear-&-dark window** verdict
+("Clear & dark 02:35–04:35"), tonight's **visible planets and constellations**, and
+the **Upcoming** list. **Tap any event to jump to its tab.**
 
-Pin sources: 2.8" CYD → `../BladeAir/cyd.md`; 4" CYD → [lcdwiki](https://www.lcdwiki.com/4.0inch_ESP32-32E_Display);
-CrowPanel → `../cyd-radio/crowpanel-5in.md` (silkscreen + factory source —
-authoritative over the Elecrow wiki, which lists a different/wrong pinout).
+### 1 · Launches — what's going up
 
-## Build / flash
+| Card | Map |
+|---|---|
+| ![Launches card](docs/img/launches-card.jpg) | ![Launches map](docs/img/launches-map.jpg) |
 
-```sh
-# 2.8" CYD (default env — the board on hand)
-pio run -e cyd28_ili9341 -t upload
-pio device monitor                      # 115200
+The next launch with provider, vehicle, mission, pad, country, a status pill and a big
+`T-` countdown, then an upcoming list (**Card**). Centre-tap for the **Map** — a world
+map with a marker at every upcoming launch site (side-tap cycles rockets). Filter chips
+narrow by site and company.
 
-# 4" CYD
-pio run -e cyd4_st7796 -t upload
+### 2 · Aircraft — ADS-B radar
 
-# CrowPanel Advance 5.0-HMI
-pio run -e crowpanel_s3_5hmi -t upload
-```
+![Aircraft](docs/img/page2-aircraft.jpg)
 
-> The CrowPanel env uses the **pioarduino** platform (arduino-esp32 3.x) because
-> the S3 parallel-RGB `esp_lcd` driver LovyanGFX needs isn't exposed by the
-> classic 2.0.x platform. If a build fails with `No module named 'esptool'`,
-> install it into the PlatformIO venv: `…/.platformio/penv/Scripts/python -m pip
-> install esptool` (a pioarduino dependency-bootstrap glitch, not a code issue).
+A north-up radar with range rings, heading chevrons, and dead-reckoned blips between
+updates. Tap a contact for callsign, type, altitude, ground speed/track,
+distance/bearing, **look az/el**, and decoded squawk. Auto-selects the first contact and
+cycles until you take over; emergency squawks raise a banner. Range / on-ground /
+altitude / category filter chips; a scrolling **nearest-airport + likely-frequencies**
+marquee.
 
-On first boot the bring-up prints, over serial and on screen:
-board name, panel resolution, **PSRAM size**, **free heap**, and **largest free
-block**, then echoes live touch coordinates.
+### 3 · Aviation weather
 
-## Data generators
+| Map | METAR | TAF |
+|---|---|---|
+| ![Aviation map](docs/img/aviation-map.jpg) | ![METAR](docs/img/aviation-metar.jpg) | ![TAF](docs/img/aviation-taf.jpg) |
 
-Bundled real-world datasets are produced by the scripts in
-[`tools/`](tools/README.md) (run from the repo root) — airport + radio frequencies
-(`gen_airports.py` → LittleFS `data/airports.bin`) and world map coastlines/borders
-(`gen_worldmap.py` → flash `src/assets/Coastline.h`). See
-[`tools/README.md`](tools/README.md) for how to refresh each, including pushing an
-updated airport table to a running device over `/api/fs` (no reflash, non-destructive).
+| Sounding | Area trends | Pressure map |
+|---|---|---|
+| ![Sounding](docs/img/aviation-sounding.jpg) | ![Trends](docs/img/aviation-trends.jpg) | ![Pressure](docs/img/aviation-pressure.jpg) |
 
-## Layout (spec §4)
+Centre-tap cycles the views: a **flight-category map** with wind barbs + airport labels;
+a **decoded METAR** card (°F/mph/inHg + raw); **decoded TAF** periods; a **Skew-T model
+sounding** (temp/dewpoint vs altitude, freezing level, winds-aloft, dry-parcel line,
+soaring analysis); **area trends** (24 h temp/dewpoint/cloud/pressure sparklines + a
+plain-language conclusion); and a makeshift **pressure / cloud map** from major-airport
+METARs (H/L markers, observer crosshair; **tap to step through zoom levels** — off /
+2.6× / 4.5× / 7× — with wind barbs when zoomed). A **Hazards** view appears when there's
+an AIRMET/SIGMET/PIREP nearby; otherwise it's hidden and a hazard (or newly-forecast
+thunderstorm / heavy precip / strong wind) is surfaced cross-tab as a notice instead.
 
-```
-platformio.ini          envs per board; build-flag-selected HAL
-partitions.csv          4" CYD: dual-OTA 1.5MB + ~0.94MB LittleFS
-partitions_16mb.csv     CrowPanel: dual-OTA 4MB + ~7.9MB LittleFS
-include/config.h        build-time feature flags only (on the auto include path)
-data/                   LittleFS image source (catalogs, fonts) — uploadfs
-src/
-  main.cpp              boot orchestration (cold-start sequence, spec §13)
-  hal/
-    Board.h             pins + capability flags per variant
-    LGFX_Config.h       LovyanGFX panel/bus/touch wiring per variant
-    Display.{h,cpp}     panel init, rotation, backlight, heap helpers
-    Touch.{h,cpp}       XPT2046 cal (persisted) / GT911 (no cal)
-    Rtc.{h,cpp}         optional RTC stub (per CAP_HAS_RTC; driver = m2)
-  core/
-    Ids.h               ProviderId
-    EventBus.h          provider -> page/director pub/sub
-    Scheduler.h         cooperative interval runner
-    Theme.h             runtime palette (gTheme) every widget reads
-    Page.h              page interface
-    App.{h,cpp}         minimal shell: status strip + active page routing
-    Canvas.h            abstract draw seam (filled in with the widget toolkit)
-  services/
-    Settings.{h,cpp}    LittleFS JSON store + schema versioning
-    Cache.{h,cpp}       blob cache (body + fetchedAt + status)
-    NetClient.{h,cpp}   queued non-blocking HTTP (core-0 NetTask)
-    TimeService.{h,cpp} NTP + sync gate + tz offset
-    LocationService.{h,cpp}  IP-geoloc default + presets
-    Provisioning.{h,cpp}     WiFiManager captive portal
-    WebPortal.{h,cpp}        async settings page + JSON API + ElegantOTA
-  pages/
-    PageDiag.{h,cpp}    milestone-1 pipeline-proof page
-```
+### 4 · Satellites
 
-Pages currently draw via `Display::gfx()` + `gTheme`; the `core/Canvas`
-renderer-abstraction + widget toolkit land with the first real tabs (m3+), so
-the carousel/quick-jump/corner-glyph chrome (spec §4.1) is not built yet.
+| Polar (pass) | Ground track | Pass graph |
+|---|---|---|
+| ![Polar](docs/img/satellites-polar.jpg) | ![Ground](docs/img/satellites-ground.jpg) | ![Graph](docs/img/satellites-graph.jpg) |
 
-## ⚠️ Needs on-hardware verification
+Centre-tap cycles: a **sky-dome** with the predicted **pass-trajectory arc**, AOS/LOS
+times, max elevation, sunlit flag, and **live Doppler** uplink/downlink for FM birds; a
+world **ground track**; and an **elevation-vs-time** pass profile. A min-elevation filter
+chip; tracking is driven by your watchlist (SGP4 from cached TLEs — works offline).
 
-This bring-up was written from datasheets/reference docs and **has not been
-compiled or flashed here**. Confirm on real hardware:
+### 5 · Space weather
 
-- **4" CYD** — if colours look inverted, set `-D CYD_INVERT_DISPLAY=1`. If the
-  panel stays black, the ST7796 may want a different LovyanGFX panel variant.
-- **CrowPanel** — the RGB **porch timings** in `Board.h` are generic 800×480
-  values; if the image tears/rolls, reconcile against the Elecrow factory
-  `esp_lcd` config. Also confirm the **I²C coexistence** of Wire (expander,
-  I2C_NUM_0) and LovyanGFX's GT911 (I2C_NUM_1) on the shared SDA/SCL pins, and
-  that function jumpers are set to MIC&SPK (`00`).
-- **PSRAM** on the 4" CYD: the heap print is ground truth. If it reports PSRAM,
-  flip `CAP_HAS_PSRAM` in `Board.h` and reconsider the rendering options.
+![Space weather](docs/img/page5-spacewx.jpg)
 
-## Open decisions (spec §11)
+A Kp gauge + history, solar flux, GOES X-ray flare class, solar-wind speed and IMF Bz,
+an **aurora chance** for your geomagnetic latitude, and an HF band-condition table.
 
-Notably: rendering stack is settled as **LovyanGFX for both boards** (one
-renderer, custom graphics are the app's identity; reversible via `Canvas`).
-The CrowPanel's PSRAM would also permit LVGL, but unifying keeps the design
-clean. Remaining §11 items (ADS-B mode, AMSAT bird list, location/GPS, star
-map in v1, license posture, focus defaults) are still open.
+### 6 · Solar System
+
+| Sky-dome | Orbits | Moon | Mars |
+|---|---|---|---|
+| ![Sky-dome](docs/img/solar-skydome.jpg) | ![Orbits](docs/img/solar-orbits.jpg) | ![Moon](docs/img/solar-moon.jpg) | ![Mars](docs/img/solar-mars.jpg) |
+
+| Jupiter | Saturn | Deep space | Meteor showers |
+|---|---|---|---|
+| ![Jupiter](docs/img/solar-jupiter.jpg) | ![Saturn](docs/img/solar-saturn.jpg) | ![Deep space](docs/img/solar-deepspace.jpg) | ![Showers](docs/img/solar-showers.jpg) |
+
+A full orrery tour, centre-tap to cycle: Sun/Moon/planets by az/el with phase,
+naked-eye visibility, rise/transit/set and the closest conjunction (**sky-dome**); a
+top-down **orrery** with minor bodies (the detail line gives each body's **orbital speed
+in km/h and mph**); the **Moon** (phase + near/far-side landing-site maps); **Mars**
+(distance, light-time, surface map, Earth-facing overlay, rover sol); **Jupiter** (the
+Galilean moons, tilted to your sky); **Saturn** (rings, tilted to your sky); a **deep
+space** mission panel (Voyager/New Horizons); and an upcoming **meteor showers** table.
+
+### 7 · Star Map
+
+| Full sky | Tap-to-zoom |
+|---|---|
+| ![Star map](docs/img/starmap-full.jpg) | ![Zoom](docs/img/starmap-zoom.jpg) |
+
+An all-sky azimuthal chart from a real generated catalogue (HYG + d3-celestial): ~1500
+stars, all 88 **constellation figures**, named bright stars, **Messier deep-sky markers**,
+the ecliptic, and the Sun/Moon/planets overlaid (the Sun gets a small corona ring so it
+reads clearly without washing out the chart). **Tap a region to zoom** — fainter stars
+fade in and constellation + star names appear. A **tour** badge auto-zooms each
+above-horizon constellation in turn. **Swipe up/down to cycle your saved memory skies**
+(see below).
+
+### 8 · Device Health
+
+![Health](docs/img/page8-health.jpg)
+
+System table (WiFi, heap + **largest-block low-water** + **httpsSkip**, filesystem,
+uptime, location), per-provider status with **age in d/h/m/s**, display-mode and
+brightness cycles, a remote-screenshot toggle, and Refresh / Recalibrate / two-tap
+Reboot. *(WiFi SSID and LAN IP redacted in the screenshot.)*
+
+---
+
+## Memory skies — the keepsake feature
+
+Save "the sky at *this moment* from *this place*" — a birthday, an anniversary, the
+night someone was born, a historic eclipse. Each entry renders the **full** star map
+(stars, constellation figures, deep-sky, Sun/Moon/planets) for that exact instant and
+latitude/longitude, captioned with the title + place and the date + coordinates. They
+become extra **Star Map sub-views** you swipe through. Add and edit them in the web UI's
+**Memory Skies** tab with a map picker. *(The hero image at the top of this README is
+one.)*
+
+---
+
+## Cross-cutting features
+
+- **Intelligent Focus director** — the cross-tab brain. An ambient resting tab by
+  day/night with a multi-page attract tour, plus interrupts that seize focus for an
+  imminent pass or launch (with a brief "▸ *page*" auto-switch banner), and badged
+  notice pages for Kp storms, aviation SPECIs, hazards and extreme weather. In MANUAL it
+  just badges the tab.
+- **Modes & chrome** — AUTO / MANUAL / pinned (tap the status strip; long-press to pin;
+  MANUAL falls back to AUTO after inactivity). The status strip shows a **WiFi
+  signal-bars** glyph (tap → Health), a **mode glyph** (play/pause/lock), and a
+  **location crosshair** that opens an on-device saved-locations picker.
+- **Clock-mode overlay** — tap the time for a big clock stamped over the live page
+  (static on data pages, corner-hopping on calm ones; 24 h/AM-PM and digital/analog
+  toggles).
+- **3×3 quick-jump grid** — tap the page dots; every tile shows a live micro-status.
+- **Theming** — Day / Night (dark) / Night (red dark-adapt) palettes + brightness, auto
+  by sun or forced from Health.
+- **Offline field mode** — boot with no WiFi and **tap past the captive portal** to run
+  on cached data (satellite passes, star map, orrery, agenda all work offline); the
+  WiFi-down reboot watchdog is suppressed and the last-known location is reused.
+- **Provisioning** — WiFiManager captive portal on first boot; IP geolocation; NTP/RTC.
+
+### Web / remote interface
+
+- **`/remote`** — a live screen mirror in your browser with click-to-tap and swipe
+  buttons. Control your desk clock from a laptop.
+- **`/`** — a tabbed settings app: Location (Leaflet map + address geocode + "My
+  location" + saved locations), Focus (per-page day/night tour checkboxes), Satellites &
+  Bodies pickers, **Memory Skies** (map picker), Appearance, Aircraft, System.
+- **`/update`** — ElegantOTA firmware upload. **`/api/status`** — JSON health/telemetry.
+- Helper scripts: `scripts/ota.ps1` (flash over WiFi) and `scripts/shot.ps1` (screenshot).
+
+### Reliability on a $12 no-PSRAM board
+
+This is the real engineering story (and a genuine differentiator): a single serialized
+non-blocking network task so only one TLS session ever exists; **heap-floor-aware TLS**
+that serves stale data instead of running out of memory and crashing; stale-data release
+to keep the heap clear; a **WiFi watchdog** that reconnects and, if needed, reboots; and
+live memory-pressure telemetry (`heapBlkMin`, `httpsSkip`) you can watch in `/api/status`.
+
+---
+
+## Build one
+
+It runs on a **$10–15 ESP32 "Cheap Yellow Display."** The full bill of materials,
+toolchain setup, first flash, WiFi provisioning, OTA, and board-specific quirks live in
+**[HARDWARE_SETUP.md](HARDWARE_SETUP.md)**.
+
+Quick version: install PlatformIO, `git clone`, build the `cyd28_ili9341` env, flash over
+USB once, then join the `Overhead-Setup-…` WiFi to provision. After that, OTA from your
+desk.
+
+---
+
+## Technical challenges — overcome & still open
+
+**Overcome** (details in [CYD-ESP32-2432S028R.md](CYD-ESP32-2432S028R.md) and
+[PIO_DEBUG.md](PIO_DEBUG.md)):
+- Running real HTTPS feeds on a **no-PSRAM** board — the ~42 KB contiguous-TLS floor; a
+  serialized non-blocking net task; serve-stale-instead-of-OOM.
+- The **JPEG screenshot colour readback** — empirically-derived byte-swap +
+  hi5=B/mid6=R/lo5=G, written B,G,R for JPEGENC.
+- Backlight via **direct LEDC** (LovyanGFX's `Light_PWM` didn't drive GPIO21).
+- **Un-mirroring** the panel (MV=0 rotation 6) and matching touch calibration.
+- Anti-flicker without a framebuffer (`startWrite` batching + redraw-on-change).
+- The **stale-data starvation loop** (retained data pinned the heap floor) and its fix.
+- Observer-relative astronomy: parallactic-angle planet tilt, pass-trajectory arcs.
+
+**Still open / known limits** — candid, because it builds trust:
+- The TLS floor still starves fetches when `heapBlkMin` dips (can't shrink mbedtls
+  buffers on the precompiled classic platform); the 16 KB debug-screenshot buffer eats
+  headroom; **flash is ~99 % full** on the classic env.
+- OTA flakes under AsyncTCP load (boot-settle ~20 s and retry); occasional WiFi drops
+  (now watchdog-recovered).
+- Schlyter astronomy is ~arcminute, not an ephemeris; data caps (TLE watchlist-only,
+  aircraft 24, METAR 12); flicker on dense full-redraw pages.
+
+---
+
+## What's next (highlights)
+
+A few of the juicier backlog items: **az/el rotor output** (drive a real or DIY antenna
+rotator) and an **IMU handheld antenna-aim** mode; externalising the orrery body list to
+LittleFS (comets, NEOs, dwarf planets); Saturn's moons; true WPC surface fronts (blocked
+on a data source); aircraft flight trails; rover/APOD imagery on PSRAM boards; on-device
+watchlist editing; banner + buzzer alerts; and verifying the 4" and ESP32-S3 hardware
+targets.
+
+The complete, living list is in **[BACKLOG.md](BACKLOG.md)**.
+
+---
+
+## Status / license / credits
+
+Active, single-developer project; the 2.8" CYD (`cyd28_ili9341`) is the verified target.
+
+**License: [PolyForm Noncommercial 1.0.0](LICENSE).** Free for personal, hobby,
+educational and research use — clone it, build it, run it, modify and share it. **Any
+commercial use or reselling — of this or derivatives — needs written permission.** See
+[LICENSE](LICENSE).
+
+Built on excellent open-source libraries, each under its own license: **LovyanGFX**,
+**ArduinoJson**, **Hopperpop SGP4**, **JPEGENC** (bitbank2), **ElegantOTA**,
+**ESPAsyncWebServer** / **AsyncTCP**, **WiFiManager**. Data from NOAA SWPC & the Aviation
+Weather Center, Open-Meteo, ip-api, Launch Library 2, CelesTrak, the HYG database,
+d3-celestial, and Natural Earth.
