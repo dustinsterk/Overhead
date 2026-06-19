@@ -81,6 +81,20 @@ void PageAviation::stepView(int dir) {
 
 void PageAviation::cycleView(int dir) { stepView(dir); }   // up/down swipe -> next/prev view
 
+// US/world pressure map: convert a tapped screen point to lat/lon and fetch the
+// local airports around it (drill into the region with regional density).
+void PageAviation::drillPressure(App& app, int absX, int absY) {
+  double w0, w1, a0, a1; _pmap.bbox(w0, w1, a0, a1);
+  const int mx = 2, my = app.contentY() + 16, mw = app.contentW() - 4, mh = app.contentH() - 16 - 12;
+  double zs = 1.0 + _pZoomT * (2.6 - 1.0);                  // undo any active zoom
+  double ux = (absX - _pFx) / zs + _pFx, uy = (absY - _pFy) / zs + _pFy;
+  double lon = w0 + (ux - mx) / (double)mw * (w1 - w0);
+  double lat = a1 - (uy - my) / (double)mh * (a1 - a0);
+  _pmap.fetchAround(lat, lon);
+  _pZoom = false; _pZoomT = 0; _pZoomDir = 0;               // now a regional box; clear zoom
+  _needClear = _dirty = true;
+}
+
 bool PageAviation::anyTaf() const {
   for (const auto& s : _wx.stations()) if (s.taf.length()) return true;
   return false;
@@ -129,9 +143,10 @@ void PageAviation::onTouch(App& app, int x, int y) {
   }
   int third = app.contentW() / 3;
   if (x >= third && x <= 2 * third) {               // centre tap
-    if (_view == View::Pressure) {                  // pressure map: zoom on the map centre
+    if (_view == View::Pressure) {                  // pressure map centre tap
       int my = app.contentY() + 16, mh = app.contentH() - 16 - 12;
       int fx = app.contentW() / 2, fy = my + mh / 2;
+      if (_pmap.scope() != 0) { drillPressure(app, fx, fy); return; }   // US/world: drill in for local fields
       if (!_pZoom) { _pZoom = true; _pFx = fx; _pFy = fy; _pZoomDir = 1; } else _pZoomDir = -1;
       _pZoomMs = millis(); _needClear = _dirty = true; return;
     }
@@ -153,8 +168,9 @@ void PageAviation::onTouch(App& app, int x, int y) {
     _pZoom = false; _pZoomT = 0; _pZoomDir = 0;        // reset map zoom on scope change
     _needClear = _dirty = true; return;
   }
-  if (_view == View::Pressure && y >= 16) {            // tap the map (side) -> tap-to-zoom on that point
-    if (!_pZoom) { _pZoom = true; _pFx = x; _pFy = y + app.contentY(); _pZoomDir = 1; }
+  if (_view == View::Pressure && y >= 16) {            // tap the map
+    if (_pmap.scope() != 0) { drillPressure(app, x, y + app.contentY()); return; }  // US/world: drill in
+    if (!_pZoom) { _pZoom = true; _pFx = x; _pFy = y + app.contentY(); _pZoomDir = 1; }   // 200mi: visual zoom
     else           _pZoomDir = -1;
     _pZoomMs = millis(); _needClear = _dirty = true; return;
   }

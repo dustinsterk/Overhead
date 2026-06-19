@@ -34,6 +34,7 @@ public:
   bool regional()  const { return _scope == 0; }  // ~200mi box around the observer (default)
   int  scope()     const { return _scope; }        // 0 regional, 1 US, 2 world
   void setScope(int s);                            // change scope + refetch
+  void fetchAround(double lat, double lon);        // drill in: regional box around an arbitrary point
   void bbox(double& w0, double& w1, double& a0, double& a1) const { w0=_w0; w1=_w1; a0=_a0; a1=_a1; }
   ProviderStatus status() const { return _status; }
   uint32_t lastFetched() const { return _lastFetched; }
@@ -48,6 +49,8 @@ private:
   LocationService* _loc = nullptr;
 
   std::vector<PressurePt> _pts;
+  bool   _custom = false;                          // regional box centred on a drilled-in point (not observer)
+  double _cLat = 0, _cLon = 0;
   int  _scope = 0;                                // 0 regional (default), 1 US, 2 world
   double _w0 = -126, _w1 = -66, _a0 = 24, _a1 = 50;  // current map bbox (lon0,lon1,lat0,lat1)
   ProviderStatus _status = ProviderStatus::Loading;

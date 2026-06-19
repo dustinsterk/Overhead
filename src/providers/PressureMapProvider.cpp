@@ -26,16 +26,32 @@ static const Airport kWORLD[] = {
 void PressureMapProvider::computeBbox() {
   if (_scope == 2) { _w0 = -180; _w1 = 180; _a0 = -60; _a1 = 78; return; }   // world
   if (_scope == 1) { _w0 = -126; _w1 = -66; _a0 = 24;  _a1 = 50; return; }   // continental US
-  double la = (_loc && _loc->active().valid) ? _loc->active().lat : 39.0;    // regional ~200mi box
-  double lo = (_loc && _loc->active().valid) ? _loc->active().lon : -98.0;
+  double la = _custom ? _cLat : (_loc && _loc->active().valid) ? _loc->active().lat : 39.0;   // regional box
+  double lo = _custom ? _cLon : (_loc && _loc->active().valid) ? _loc->active().lon : -98.0;
   double cl = cos(la * M_PI / 180.0); if (cl < 0.3) cl = 0.3;
   const double dlat = 2.9;                          // ~200 mi radius
   _a0 = la - dlat; _a1 = la + dlat; _w0 = lo - dlat / cl; _w1 = lo + dlat / cl;
 }
 
+void PressureMapProvider::fetchAround(double lat, double lon) {
+  if (_inflight) return;
+  _scope = 0; _custom = true; _cLat = lat; _cLon = lon;   // regional box centred on the drilled-in point
+  computeBbox();
+  _pts.clear();
+  char bb[80]; snprintf(bb, sizeof(bb), "bbox=%.2f,%.2f,%.2f,%.2f", _a0, _w0, _a1, _w1);
+  String url = String("https://aviationweather.gov/api/data/metar?format=json&") + bb;
+  _inflight = true; _status = ProviderStatus::Loading;
+  _net->get(url, [this](int code, const String& body) {     // ad-hoc drill-in: not cached
+    _inflight = false;
+    if (code == 200 && parse(body)) { _lastFetched = (uint32_t)time(nullptr); _status = ProviderStatus::Ready; }
+    else if (_pts.empty()) _status = ProviderStatus::Error;
+  });
+}
+
 void PressureMapProvider::setScope(int s) {
   if (s < 0) s = 0; if (s > 2) s = 2;
-  if (s == _scope) return;
+  _custom = false;                                   // leaving any drilled-in region
+  if (s == _scope) { computeBbox(); return; }
   _scope = s; computeBbox();
   String body; CacheMeta m;                         // serve cache for the new scope while refetching
   _pts.clear();

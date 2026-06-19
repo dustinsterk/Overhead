@@ -44,6 +44,7 @@ private:
   void drawTrends(App& app);
   void drawPressure(App& app);
   void stepView(int dir);                // advance the view (+1 next, -1 prev), skipping empty TAF
+  void drillPressure(App& app, int absX, int absY);  // US/world map: fetch local airports around a tap
   bool anyTaf() const;                   // any loaded field currently carries a TAF?
   bool enterTaf();                       // point _sel at a TAF-bearing field; false if none have one
   int  nextTaf(int from, int dir) const; // next station index with a TAF (wrapping), or -1
