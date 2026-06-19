@@ -26,9 +26,8 @@ public:
 private:
   void draw(App& app);
   void updateTour(App& app, uint32_t nowMs);                 // advance the zoom animation
-  bool conFocus(App& app, int con, int& fx, int& fy, int& count);  // centroid + visible count
-  int  nextVisibleCon(App& app, int from);                   // next con with >=3 stars up
-  bool starInCon(int con, const char* name) const;
+  bool conFocus(App& app, int con, int& fx, int& fy, int& count);  // label centre + above-horizon flag
+  int  nextVisibleCon(App& app, int from);                   // next con whose label is above the horizon
 
   TimeService&     _time;
   LocationService& _loc;

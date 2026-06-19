@@ -335,17 +335,14 @@ void PageSolarSystem::draw(App& app) {
       sy = horY - (int)(el / 90.0 * (domeH - 10)) - 4;
       return true;
     };
-    for (int i = 0; i < kStarLineCount; ++i) {       // constellation lines
-      const Star *a = nullptr, *b = nullptr;
-      for (int k = 0; k < kStarCount; ++k) {
-        if (!strcmp(kStars[k].name, kStarLines[i].a)) a = &kStars[k];
-        if (!strcmp(kStars[k].name, kStarLines[i].b)) b = &kStars[k];
-      }
-      if (!a || !b) continue;
-      int ax, ay, bx, by;
-      if (proj(a->raHours, a->decDeg, ax, ay) && proj(b->raHours, b->decDeg, bx, by) &&
-          abs(ax - bx) < cw / 2)                      // skip the az wraparound seam
-        g.drawLine(ax, ay, bx, by, gTheme.grid);
+    int px = -1, py = -1;                             // constellation figure polylines
+    for (int i = 0; i < kConLineCount; ++i) {
+      if (kConLines[i].raHours >= kSkyBreak) { px = -1; continue; }   // pen up between figures
+      int vx, vy;
+      if (!proj(kConLines[i].raHours, kConLines[i].decDeg, vx, vy)) { px = -1; continue; }
+      if (px >= 0 && abs(px - vx) < cw / 2)           // skip the az wraparound seam
+        g.drawLine(px, py, vx, vy, gTheme.grid);
+      px = vx; py = vy;
     }
     for (int k = 0; k < kStarCount; ++k) {            // star dots (brighter = bigger)
       if (kStars[k].mag > 3.5f) continue;

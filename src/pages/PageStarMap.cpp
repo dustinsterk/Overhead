@@ -15,10 +15,6 @@
 // Constellation data (kCons/kConCount) now lives in assets/StarCatalog.h (shared
 // with the Agenda's "what's up tonight" line).
 
-static const Star* findStar(const char* n) {
-  for (int k = 0; k < kStarCount; ++k) if (!strcmp(kStars[k].name, n)) return &kStars[k];
-  return nullptr;
-}
 static inline float smooth(float x) { x = x < 0 ? 0 : x > 1 ? 1 : x; return x * x * (3 - 2 * x); }
 
 // Project a star to screen (azimuthal: zenith centre, horizon edge). Returns
@@ -28,13 +24,7 @@ static bool project(const Star& s, double jd, double latRad, double lst,
   return astro::projectSky(s.raHours, s.decDeg, latRad, lst, cx, cy, R, sx, sy, alt);
 }
 
-bool PageStarMap::starInCon(int con, const char* name) const {
-  if (con < 0 || con >= kConCount) return false;
-  for (const char* nm : kCons[con].stars) { if (!nm) break; if (!strcmp(nm, name)) return true; }
-  return false;
-}
-
-// Screen centroid + count of a constellation's above-horizon member stars.
+// Screen position of a constellation's label centre; count=1 if above the horizon.
 bool PageStarMap::conFocus(App& app, int con, int& fx, int& fy, int& count) {
   count = 0; fx = app.contentW() / 2; fy = app.contentY() + app.contentH() / 2;
   if (con < 0 || con >= kConCount || !_time.synced() || !_loc.active().valid) return false;
@@ -42,14 +32,10 @@ bool PageStarMap::conFocus(App& app, int con, int& fx, int& fy, int& count) {
   int R = min(cw, ch) / 2 - 8, cx = cw / 2, cy = cy0 + ch / 2;
   double jd = _time.julianDate(), latRad = _loc.active().lat * astro::DEG2RAD;
   double lst = astro::lstRad(jd, _loc.active().lon);
-  long sxs = 0, sys = 0;
-  for (const char* nm : kCons[con].stars) {
-    if (!nm) break;
-    const Star* s = findStar(nm); if (!s) continue;
-    int px, py; float alt;
-    if (project(*s, jd, latRad, lst, cx, cy, R, px, py, alt)) { sxs += px; sys += py; count++; }
+  int px, py; float alt;
+  if (astro::projectSky(kCons[con].raHours, kCons[con].decDeg, latRad, lst, cx, cy, R, px, py, alt)) {
+    fx = px; fy = py; count = 1; return true;
   }
-  if (count) { fx = (int)(sxs / count); fy = (int)(sys / count); return true; }
   return false;
 }
 
@@ -57,7 +43,7 @@ int PageStarMap::nextVisibleCon(App& app, int from) {
   for (int i = 1; i <= kConCount; ++i) {
     int idx = (from + i) % kConCount, fx, fy, c;
     conFocus(app, idx, fx, fy, c);
-    if (c >= 3) return idx;
+    if (c >= 1) return idx;                       // label above the horizon
   }
   return -1;
 }
@@ -90,15 +76,9 @@ String PageStarMap::gridStatus() {
   double latRad = _loc.active().lat * astro::DEG2RAD;
   double lst = astro::lstRad(jd, _loc.active().lon);
   String s; int total = 0, shown = 0;
-  for (int c = 0; c < kConCount; ++c) {                    // a constellation is "up" if >=3 stars are
-    int up = 0;
-    for (const char* nm : kCons[c].stars) {
-      if (!nm) break;
-      const Star* st = findStar(nm); if (!st) continue;
-      astro::Equatorial eq{ st->raHours * 15.0 * astro::DEG2RAD, st->decDeg * astro::DEG2RAD };
-      if (astro::equatorialToHorizontal(eq, latRad, lst).altRad > 0) up++;
-    }
-    if (up < 3) continue;
+  for (int c = 0; c < kConCount; ++c) {                    // a constellation is "up" if its label centre is
+    astro::Equatorial eq{ kCons[c].raHours * 15.0 * astro::DEG2RAD, kCons[c].decDeg * astro::DEG2RAD };
+    if (astro::equatorialToHorizontal(eq, latRad, lst).altRad <= 0) continue;   // above the horizon
     total++;
     if (s.length() + strlen(kCons[c].name) + 1 <= 30) { if (s.length()) s += " "; s += kCons[c].name; shown++; }
   }
@@ -200,7 +180,10 @@ void PageStarMap::draw(App& app) {
   float t = 0.0f; int Fx = cx, Fy = cy;
   if (_tour && _tourCon >= 0) { t = _t; int c; conFocus(app, _tourCon, Fx, Fy, c); }
   else if (_zoom)            { t = _zoomT; Fx = _zFx; Fy = _zFy; }
-  float magLim = (_zoom && _zoomT > 0.35f) ? 4.5f : _magLimit;   // reveal fainter stars zoomed
+  // Reveal fainter stars as we zoom in: wide view shows the bright catalogue (mag
+  // badge), and the faint tail fades in with depth up to the catalogue floor. Cheap
+  // in the wide view — the star loop skips faint stars before it ever projects them.
+  float magLim = _magLimit + t * (kStarMaxMag - _magLimit);
   const float Z = 3.6f;
   float s = 1 + t * (Z - 1);
   auto xf = [&](int px, int py, int& ox, int& oy) {
@@ -217,19 +200,19 @@ void PageStarMap::draw(App& app) {
     g.drawString("E", cx + R + 5, cy); g.drawString("W", cx - R - 5, cy);
   }
 
-  // Constellation lines (both endpoints above horizon).
-  for (int i = 0; i < kStarLineCount; ++i) {
-    const Star *a = nullptr, *b = nullptr;
-    for (int k = 0; k < kStarCount; ++k) {
-      if (!strcmp(kStars[k].name, kStarLines[i].a)) a = &kStars[k];
-      if (!strcmp(kStars[k].name, kStarLines[i].b)) b = &kStars[k];
-    }
-    if (!a || !b) continue;
-    int ax, ay, bx, by; float al, bl;
-    if (project(*a, jd, latRad, lst, cx, cy, R, ax, ay, al) &&
-        project(*b, jd, latRad, lst, cx, cy, R, bx, by, bl)) {
-      int oax, oay, obx, oby; xf(ax, ay, oax, oay); xf(bx, by, obx, oby);
-      g.drawLine(oax, oay, obx, oby, gTheme.grid);
+  // Constellation figures: polylines of RA/Dec vertices (kSkyBreak = pen-up). Draw a
+  // segment only when both consecutive vertices are above the horizon.
+  {
+    int px = -1, py = -1;                              // previous vertex in display coords (-1 = pen up)
+    for (int i = 0; i < kConLineCount; ++i) {
+      if (kConLines[i].raHours >= kSkyBreak) { px = -1; continue; }   // pen up between figures
+      int vx, vy; float alt;
+      if (!astro::projectSky(kConLines[i].raHours, kConLines[i].decDeg, latRad, lst, cx, cy, R, vx, vy, alt)) {
+        px = -1; continue;                            // below horizon -> break the line
+      }
+      int ox, oy; xf(vx, vy, ox, oy);
+      if (px >= 0) g.drawLine(px, py, ox, oy, gTheme.grid);
+      px = ox; py = oy;
     }
   }
 
@@ -251,23 +234,22 @@ void PageStarMap::draw(App& app) {
     }
   }
 
-  // Stars (brightest first so labels favour them). During the tour, member stars of
-  // the framed constellation are always drawn + named once mostly zoomed in.
+  // Stars (brightest first so labels favour them). Only the brighter, *named* stars
+  // carry a label; fainter catalogue stars render as plain dots.
   for (int k = 0; k < kStarCount; ++k) {
     const Star& s2 = kStars[k];
-    bool member = _tour && starInCon(_tourCon, s2.name);
-    if (s2.mag > magLim && !member) continue;
+    if (s2.mag > magLim) continue;
     int sx0, sy0; float alt;
     if (!project(s2, jd, latRad, lst, cx, cy, R, sx0, sy0, alt)) continue;
     int sx, sy; xf(sx0, sy0, sx, sy);
     if (sx < -10 || sx > cw + 10 || sy < cy0 - 10 || sy > cy0 + ch + 10) continue;
     int r = s2.mag < 0.5f ? 3 : s2.mag < 1.5f ? 2 : 1;
-    g.fillCircle(sx, sy, member ? r + 1 : r, member ? gTheme.accent : gTheme.fg);
-    bool zlabel = _zoom && _zoomT > 0.4f;            // zoomed -> name everything in view
-    bool showName = (member && t > 0.45f) || zlabel || (!_tour && !_zoom && _labels && s2.mag <= 1.6f);
+    g.fillCircle(sx, sy, r, gTheme.fg);
+    bool zlabel = _zoom && _zoomT > 0.4f;            // zoomed -> name everything named in view
+    bool showName = s2.name[0] && (zlabel || (!_tour && !_zoom && _labels && s2.mag <= 1.6f));
     if (showName) {
       g.setTextDatum(textdatum_t::bottom_left);
-      g.setTextColor(member ? gTheme.fg : gTheme.dim, gTheme.bg);
+      g.setTextColor(gTheme.dim, gTheme.bg);
       g.drawString(s2.name, sx + 4, sy - 1);
     }
   }
@@ -309,28 +291,17 @@ void PageStarMap::draw(App& app) {
     }
   }
 
-  // Constellation names for any figure in view while zoomed (drawn at the centroid
-  // of its on-screen member stars).
+  // Constellation names for any figure in view while zoomed (drawn at the catalogue
+  // label centre when it projects on-screen and above the horizon).
   if (_zoom && _zoomT > 0.5f) {
     for (int ci = 0; ci < kConCount; ++ci) {
-      long sxs = 0; int n = 0, miny = 99999;
-      for (const char* nm : kCons[ci].stars) {
-        if (!nm) break;
-        const Star* s = findStar(nm); if (!s) continue;
-        int px, py; float alt;
-        if (!project(*s, jd, latRad, lst, cx, cy, R, px, py, alt)) continue;
-        int tx, ty; xf(px, py, tx, ty);
-        if (tx < 0 || tx > cw || ty < cy0 || ty > cy0 + ch) continue;   // on-screen only
-        sxs += tx; if (ty < miny) miny = ty; n++;
-      }
-      if (n >= 2) {
-        // Place the name above the figure's topmost star so it doesn't sit on the
-        // star labels (which extend up-right from each star).
-        int ny = miny - 14; if (ny < cy0 + 11) ny = cy0 + 11;
-        g.setTextDatum(textdatum_t::middle_center);
-        g.setTextColor(gTheme.warn, gTheme.bg);
-        g.drawString(kCons[ci].name, (int)(sxs / n), ny);
-      }
+      int px, py; float alt;
+      if (!astro::projectSky(kCons[ci].raHours, kCons[ci].decDeg, latRad, lst, cx, cy, R, px, py, alt)) continue;
+      int tx, ty; xf(px, py, tx, ty);
+      if (tx < 0 || tx > cw || ty < cy0 || ty > cy0 + ch) continue;   // on-screen only
+      g.setTextDatum(textdatum_t::middle_center);
+      g.setTextColor(gTheme.warn, gTheme.bg);
+      g.drawString(kCons[ci].name, tx, ty);
     }
   }
 
@@ -354,23 +325,13 @@ void PageStarMap::draw(App& app) {
     g.drawString(b, cw - 4, cy0 + 2);
   }
 
-  // Constellation name banner + brightest-star subtitle while touring.
+  // Constellation name banner while touring.
   if (_tour && _tourCon >= 0 && t > 0.25f) {
     g.setTextDatum(textdatum_t::top_center);
     g.setTextColor(gTheme.accent, gTheme.bg);
     g.setTextSize(2);
     g.drawString(kCons[_tourCon].name, cw / 2, cy0 + 3);
     g.setTextSize(1);
-    const Star* br = nullptr;                       // brightest member star
-    for (const char* nm : kCons[_tourCon].stars) {
-      if (!nm) break;
-      const Star* s = findStar(nm);
-      if (s && (!br || s->mag < br->mag)) br = s;
-    }
-    if (br) {
-      g.setTextColor(gTheme.dim, gTheme.bg);
-      g.drawString(String("brightest: ") + br->name + " m" + String(br->mag, 1), cw / 2, cy0 + 21);
-    }
   }
 
   // Badge: magnitude limit.

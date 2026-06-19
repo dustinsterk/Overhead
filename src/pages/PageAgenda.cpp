@@ -308,17 +308,9 @@ void PageAgenda::draw(App& app) {
         for (auto& e : P)
           if (astro::planetState(e.p, jd, lat, lon).elDeg > 0 && ni < 24) items[ni++] = e.n;
         double latRad = lat * astro::DEG2RAD, lst = astro::lstRad(jd, lon);
-        for (int c = 0; c < kConCount && ni < 24; ++c) {
-          int up = 0;
-          for (const char* nm : kCons[c].stars) {
-            if (!nm) break;
-            const Star* st = nullptr;
-            for (int k = 0; k < kStarCount; ++k) if (!strcmp(kStars[k].name, nm)) { st = &kStars[k]; break; }
-            if (!st) continue;
-            astro::Equatorial eq{ st->raHours * 15.0 * astro::DEG2RAD, st->decDeg * astro::DEG2RAD };
-            if (astro::equatorialToHorizontal(eq, latRad, lst).altRad > 0) up++;
-          }
-          if (up >= 3) items[ni++] = kCons[c].name;
+        for (int c = 0; c < kConCount && ni < 24; ++c) {       // constellation up = label centre above horizon
+          astro::Equatorial eq{ kCons[c].raHours * 15.0 * astro::DEG2RAD, kCons[c].decDeg * astro::DEG2RAD };
+          if (astro::equatorialToHorizontal(eq, latRad, lst).altRad > 0) items[ni++] = kCons[c].name;
         }
 
         const int maxChars = (cw - sx - 4) / 6;         // chars per line at size 1

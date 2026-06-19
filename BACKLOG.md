@@ -178,9 +178,23 @@ hazards, SPECI Director badge. Remaining:
   cycles the saved skies; the existing star renderer already takes an arbitrary jd +
   observer, so it's mostly a saved-entry list + a caption. Strongly on the "bring the
   cosmos to the bedside" mission (a kid seeing the sky from the night they were born).
-- Expand the catalog (PC-generated to mag ~5.5, ~1000-1600 stars) bundled in LittleFS;
-  current is ~40 brightest in flash. Measure render time on no-PSRAM.
-- More constellation lines + labels. (Sun/Moon/planets are now plotted on the chart.)
+- **Build out the star + constellation database (real catalogs, generated). — DONE.**
+  `tools/gen_stars.py` bakes `src/assets/StarCatalog.h` from real datasets (same flash-header
+  pattern as gen_worldmap.py; re-run + reflash to refresh):
+  - Stars: **HYG v41** -> `kStars[]` (name, raHours, decDeg, mag), brightest 1500 to mag 5.2,
+    161 proper-named, `kStarMaxMag` emitted. Wide view filters to the mag badge; the renderer
+    reveals the fainter tail up to `kStarMaxMag` as you zoom (faint stars skipped before
+    projection, so the deeper catalogue is ~free in the wide view).
+  - Figures: **d3-celestial** `constellations.lines.json` -> `kConLines[]` RA/Dec polylines
+    (all 88; `kSkyBreak` raHours sentinel = pen-up) — direct draw, no fragile HIP/name lookup.
+  - Labels: d3-celestial `constellations.json` -> `kCons[]` (name + label centre); `kDeepSky[]`
+    a curated naked-eye Messier set. Consumers (PageStarMap lines/`conFocus`/labels/gridStatus,
+    PageAgenda "tonight", PageSolarSystem sky-dome) refactored to polylines + label centres.
+  - tools/README documents the workflow + knobs. (Stellarium `constellationship.fab` was the
+    original plan but its URLs 404'd — d3-celestial polylines are cleaner anyway.)
+  - Remaining stretch: personal/memory skies reuse this renderer; tiny flash fallback if absent.
+- Pan/zoom (+/- buttons), magnitude limit persisted; gridlines / ecliptic. (Sun/Moon/
+  planets are plotted on the chart.)
 - Pan/zoom (+/- buttons), magnitude limit persisted; gridlines / ecliptic.
 
 ## M10 — Agenda + observability

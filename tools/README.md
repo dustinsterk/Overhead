@@ -66,3 +66,35 @@ Launches map and Aviation pressure map.
 python tools/gen_worldmap.py src/assets/Coastline.h
 pio run -e cyd28_ili9341            # then flash via scripts/ota.ps1
 ```
+
+---
+
+## Stars + constellations — `gen_stars.py`
+
+Builds the Star Map's catalogue (also feeds the Solar System sky-dome overlay and the
+Agenda's "what's up tonight" line).
+
+- **Sources** (all auto-downloaded, real datasets):
+  - **Stars:** [HYG database](https://github.com/astronexus/HYG-Database) `hygdata_v41.csv`
+    — magnitude, RA/Dec, proper names.
+  - **Constellation figures:** [d3-celestial](https://github.com/ofrohn/d3-celestial)
+    `constellations.lines.json` — RA/Dec polylines for all 88 figures (no star-index
+    mapping, so no fragile HIP lookups).
+  - **Constellation labels:** d3-celestial `constellations.json` — name + label centre.
+- **Output:** `src/assets/StarCatalog.h` — `kStars[]` (name, raHours, decDeg, mag) +
+  `kStarMaxMag`; `kConLines[]` figure polylines (`kSkyBreak` raHours sentinel = pen-up
+  between segments) + `kConLineCount`; `kCons[]` (name + label centre) + `kConCount`;
+  `kDeepSky[]` a curated set of naked-eye/binocular Messier highlights. Lives in flash
+  `.rodata`, so refreshing needs a **firmware rebuild + flash**.
+
+```sh
+python tools/gen_stars.py [magLimit]   # default magLimit 5.2, capped to MAX_STARS=1500 brightest
+pio run -e cyd28_ili9341               # then flash via scripts/ota.ps1
+```
+
+Knobs at the top of the script: `MAG_LIMIT` (faintest star kept), `MAX_STARS` (flash
+budget — the field is ~98% of flash at 1500; lower it if you add other features),
+`NAME_MAG` (only stars brighter than this carry a proper-name label). The wide Star Map
+view filters to the bottom-left **mag** badge; the renderer reveals the fainter tail up
+to `kStarMaxMag` as you zoom in, so a deeper catalogue costs almost nothing in the wide
+view (faint stars are skipped before they're ever projected).
