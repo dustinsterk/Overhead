@@ -57,11 +57,17 @@ private:
   LocationService&    _loc;
   Settings&           _settings;
   int   _presMode = 0;         // pressure-map mode: 0=hPa, 1=inHg, 2=cloud
-  bool  _pZoom = false;        // pressure-map tap-to-zoom (like the star map)
-  float _pZoomT = 0;           // 0 = full extent, 1 = zoomed in
-  int   _pZoomDir = 0;         // +1 zooming in, -1 zooming out, 0 idle
+  // pressure-map tap-to-zoom: discrete levels cycled by tapping the map (off, then a
+  // few fixed magnifications about the tapped point).
+  static constexpr int kPZoomN = 4;   // level 0 = off, then 3 zoom factors (see kPZoomF)
+  int   _pZoomLevel = 0;       // current level index (0 = full extent)
+  float _pZoomCur = 1.f;       // animated displayed factor (1 = full extent)
+  float _pZoomFrom = 1.f;      // factor at the start of the current animation
+  bool  _pZoom = false;        // zoomed in at all (level > 0)
   int   _pFx = 0, _pFy = 0;    // zoom focus (absolute screen px) = the tapped point
   uint32_t _pZoomMs = 0;
+  void  cyclePresZoom(int fx, int fy);   // advance to the next zoom level about (fx,fy)
+  void  resetPresZoom() { _pZoomLevel = 0; _pZoomCur = 1.f; _pZoomFrom = 1.f; _pZoom = false; }
   uint32_t _presRetryMs = 0;   // retry an empty (un-cached) pressure scope
   static constexpr int kMChips = 8;        // METAR field-selector chips (reuse App::drawChipRow)
   int   _mChipX[kMChips] = {0}, _mChipW[kMChips] = {0}, _mChipN = 0;

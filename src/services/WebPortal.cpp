@@ -23,7 +23,8 @@ static const char kIndexHtml[] PROGMEM = R"HTML(
 .sec{display:none}.sec.on{display:block}
 h3{color:#9bf;border-bottom:1px solid #233;margin:.2rem 0 .5rem}
 label{display:flex;justify-content:space-between;align-items:center;gap:1rem;padding:.18rem 0}
-input,select{background:#11161f;color:#e6e8f0;border:1px solid #334;border-radius:4px;padding:.25rem;min-width:11rem}
+input,select{background:#11161f;color:#e6e8f0;border:1px solid #334;border-radius:4px;padding:.25rem;width:13rem;flex:none}
+.row input{flex:1 1 auto}
 button{background:#2563c0;color:#fff;border:0;border-radius:6px;padding:.45rem 1rem;margin:.2rem .3rem .2rem 0;cursor:pointer;font-size:15px}
 #map,#smap{height:240px;margin:.4rem 0;border:1px solid #334;border-radius:6px}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:.1rem 1rem}.grid label{justify-content:flex-start;gap:.5rem}
@@ -76,7 +77,7 @@ function show(n){[...document.querySelectorAll('.tab')].forEach(t=>t.classList.t
  if(n=='Location'){if(map)setTimeout(()=>map.invalidateSize(),60);else initMap();}
  if(n=='Memory Skies'){skyRows();if(smap)setTimeout(()=>smap.invalidateSize(),60);else setTimeout(initSkyMap,60);}}
 
-function locHtml(){return `<p class=hint>Click the map, drag the pin, or search an address. Save spots and pick a default.</p>
+function locHtml(){return `<p class=hint>Click the map, drag the pin, or search an address. Save spots and pick a default. <b>Source</b>: <i>auto</i> locates you over the internet (IP); <i>preset</i> uses the latitude/longitude below (set automatically when you pick on the map).</p>
  <div class=row><input id=_addr type=text placeholder="address or place" style="flex:1"><button onclick=geocode()>Find</button><button onclick=geoMe()>My location</button></div>
  <div id=map></div>${fld('locName')}${fld('locLat')}${fld('locLon')}${fld('locMode')}
  <div class=row><button onclick=saveLoc()>+ Save current as a location</button></div>

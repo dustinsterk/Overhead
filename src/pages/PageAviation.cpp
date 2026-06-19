@@ -61,8 +61,21 @@ void PageAviation::onEnter(App& app) {
   _presMode = (int)_settings.getInt("presMode", 0);
   if (_presMode < 0 || _presMode > 2) _presMode = 0;
   _pmap.setScope((int)_settings.getInt("presScope", 0));   // default regional (~200mi)
-  _pZoom = false; _pZoomT = 0; _pZoomDir = 0;
+  resetPresZoom();
   _dirty = _needClear = true;
+}
+
+// Pressure-map zoom levels (index by _pZoomLevel; 0 = full extent). Tapping the map
+// steps through these about the tapped point, wrapping back to off.
+static const float kPZoomF[] = { 1.0f, 2.6f, 4.5f, 7.0f };
+
+void PageAviation::cyclePresZoom(int fx, int fy) {
+  _pZoomLevel = (_pZoomLevel + 1) % kPZoomN;
+  _pZoomFrom = _pZoomCur;
+  _pFx = fx; _pFy = fy;
+  _pZoom = _pZoomLevel > 0;
+  _pZoomMs = millis();
+  _needClear = _dirty = true;
 }
 
 void PageAviation::focusSpeci() {
@@ -77,7 +90,7 @@ void PageAviation::stepView(int dir) {
   int cur = 0; for (int i = 0; i < n; ++i) if (order[i] == _view) { cur = i; break; }
   cur = (cur + dir + n) % n; _view = order[cur];
   if (_view == View::Taf && !enterTaf()) { cur = (cur + dir + n) % n; _view = order[cur]; }  // skip empty TAF
-  _pZoom = false; _pZoomT = 0; _pZoomDir = 0;
+  resetPresZoom();
   _needClear = _dirty = true;
 }
 
@@ -88,12 +101,12 @@ void PageAviation::cycleView(int dir) { stepView(dir); }   // up/down swipe -> n
 void PageAviation::drillPressure(App& app, int absX, int absY) {
   double w0, w1, a0, a1; _pmap.bbox(w0, w1, a0, a1);
   const int mx = 2, my = app.contentY() + 16, mw = app.contentW() - 4, mh = app.contentH() - 16 - 12;
-  double zs = 1.0 + _pZoomT * (2.6 - 1.0);                  // undo any active zoom
+  double zs = _pZoomCur;                                    // undo any active zoom
   double ux = (absX - _pFx) / zs + _pFx, uy = (absY - _pFy) / zs + _pFy;
   double lon = w0 + (ux - mx) / (double)mw * (w1 - w0);
   double lat = a1 - (uy - my) / (double)mh * (a1 - a0);
   _pmap.fetchAround(lat, lon);
-  _pZoom = false; _pZoomT = 0; _pZoomDir = 0;               // now a regional box; clear zoom
+  resetPresZoom();                                          // now a regional box; clear zoom
   _needClear = _dirty = true;
 }
 
@@ -149,8 +162,7 @@ void PageAviation::onTouch(App& app, int x, int y) {
       int my = app.contentY() + 16, mh = app.contentH() - 16 - 12;
       int fx = app.contentW() / 2, fy = my + mh / 2;
       if (_pmap.scope() != 0) { drillPressure(app, fx, fy); return; }   // US/world: drill in for local fields
-      if (!_pZoom) { _pZoom = true; _pFx = fx; _pFy = fy; _pZoomDir = 1; } else _pZoomDir = -1;
-      _pZoomMs = millis(); _needClear = _dirty = true; return;
+      cyclePresZoom(fx, fy); return;                // regional: step through zoom levels
     }
     stepView(+1); return;                           // other views: advance (up/down swipe also cycles)
   }
@@ -167,14 +179,12 @@ void PageAviation::onTouch(App& app, int x, int y) {
     int ns = (_pmap.scope() + 1) % 3;
     _pmap.setScope(ns);
     _settings.set("presScope", (long)ns); _settings.save();
-    _pZoom = false; _pZoomT = 0; _pZoomDir = 0;        // reset map zoom on scope change
+    resetPresZoom();                                   // reset map zoom on scope change
     _needClear = _dirty = true; return;
   }
   if (_view == View::Pressure && y >= 16) {            // tap the map
     if (_pmap.scope() != 0) { drillPressure(app, x, y + app.contentY()); return; }  // US/world: drill in
-    if (!_pZoom) { _pZoom = true; _pFx = x; _pFy = y + app.contentY(); _pZoomDir = 1; }   // 200mi: visual zoom
-    else           _pZoomDir = -1;
-    _pZoomMs = millis(); _needClear = _dirty = true; return;
+    cyclePresZoom(x, y + app.contentY()); return;      // regional: step through zoom levels
   }
   int n = (int)_wx.stations().size();
   if (n && (_view == View::Metar || _view == View::Map || _view == View::Taf)) {   // edges step stations
@@ -210,12 +220,13 @@ bool PageAviation::autoAdvance(App&) {
 }
 
 void PageAviation::tick(App& app, uint32_t nowMs) {
-  if (_pZoomDir != 0) {                          // ease the pressure-map zoom in/out
+  float zTgt = kPZoomF[_pZoomLevel];             // ease the pressure map toward the level's factor
+  if (fabs(_pZoomCur - zTgt) > 0.001f) {
     const uint32_t DUR = 260;
     float p = (nowMs - _pZoomMs) >= DUR ? 1.f : (float)(nowMs - _pZoomMs) / DUR;
     float e = p * p * (3 - 2 * p);
-    _pZoomT = _pZoomDir > 0 ? e : 1.f - e;
-    if (p >= 1.f) { if (_pZoomDir < 0) _pZoom = false; _pZoomDir = 0; }
+    _pZoomCur = _pZoomFrom + e * (zTgt - _pZoomFrom);
+    if (p >= 1.f) _pZoomCur = zTgt;
     _needClear = _dirty = true;
   }
   if (_view == View::Pressure && _pmap.points().empty() && nowMs - _presRetryMs > 8000) {
@@ -687,7 +698,8 @@ void PageAviation::drawPressure(App& app) {
   g.fillRect(2, cy0 + 2, 52, 12, gTheme.grid);                 // mode badge (tap: hPa/inHg/cloud)
   g.setTextColor(gTheme.fg, gTheme.grid); g.drawString(ml, 6, cy0 + 3);
   g.setTextColor(gTheme.fg, gTheme.bg);
-  g.drawString(String(cloud ? "cloud" : "pressure") + "  [tap: zoom]", 60, cy0 + 3);
+  char zlbl[20]; snprintf(zlbl, sizeof(zlbl), "[tap: zoom %.1fx]", _pZoomCur);
+  g.drawString(String(cloud ? "cloud" : "pressure") + "  " + zlbl, 60, cy0 + 3);
   g.fillRect(cw - 48, cy0 + 2, 46, 12, gTheme.grid);           // scope badge (tap: zoom 200mi/US/world)
   g.setTextDatum(textdatum_t::top_right);
   g.setTextColor(gTheme.fg, gTheme.grid); g.drawString(sc, cw - 4, cy0 + 3);
@@ -703,30 +715,9 @@ void PageAviation::drawPressure(App& app) {
         q.hpa = r->hpa; q.cloud = r->cloud; q.wdir = r->wdir; q.wspd = r->wspd; merged.push_back(q); }
     } }
   int mx = 2, my = cy0 + 16, mw = cw - 4, mh = ch - 16 - 12;
-  auto BX = [&](double lon) { return mx + (lon - w0) / (w1 - w0) * mw; };   // base (un-zoomed) projection
-  auto BY = [&](double lat) { return my + (a1 - lat) / (a1 - a0) * mh; };
-  // Tap-to-zoom frames the data CLUSTER: fit its bounding box to the map and centre
-  // it so a tight group (e.g. the Phoenix/DVT airports) fills the screen, instead of
-  // a fixed 2.6x. zMax comes from the cluster spread; the transform is identity at t=0.
-  const double mapCx = mx + mw / 2.0, mapCy = my + mh / 2.0;
-  double clCx = mapCx, clCy = mapCy; float zMax = 2.6f;
-  if (!merged.empty()) {
-    double minx = 1e9, maxx = -1e9, miny = 1e9, maxy = -1e9;
-    for (const auto& p : merged) {
-      if (p.lon < w0 || p.lon > w1 || p.lat < a0 || p.lat > a1) continue;
-      double bx = BX(p.lon), by = BY(p.lat);
-      if (bx < minx) minx = bx; if (bx > maxx) maxx = bx;
-      if (by < miny) miny = by; if (by > maxy) maxy = by;
-    }
-    if (maxx >= minx && maxy >= miny) {
-      clCx = (minx + maxx) / 2.0; clCy = (miny + maxy) / 2.0;
-      double clw = max(8.0, maxx - minx), clh = max(8.0, maxy - miny);
-      zMax = (float)max(1.5, min(9.0, min(mw * 0.85 / clw, mh * 0.85 / clh)));
-    }
-  }
-  float t = _pZoomT, zs = 1.f + t * (zMax - 1.f);
-  auto SX = [&](double lon) { return (int)(clCx + zs * (BX(lon) - clCx) + t * (mapCx - clCx)); };
-  auto SY = [&](double lat) { return (int)(clCy + zs * (BY(lat) - clCy) + t * (mapCy - clCy)); };
+  float zs = _pZoomCur;                                         // discrete tap-to-zoom factor about the focus
+  auto SX = [&](double lon) { int x = mx + (int)((lon - w0) / (w1 - w0) * mw); return _pFx + (int)(zs * (x - _pFx)); };
+  auto SY = [&](double lat) { int y = my + (int)((a1 - lat) / (a1 - a0) * mh); return _pFy + (int)(zs * (y - _pFy)); };
   g.drawRect(mx, my, mw, mh, gTheme.grid);
   // Coastlines + borders, then (regional view only) state/province lines, both
   // clipped to the bbox. Natural Earth coords are in 0.1-degree units.
@@ -765,7 +756,7 @@ void PageAviation::drawPressure(App& app) {
     Color pc = p.hpa >= 1019 ? gTheme.accent : p.hpa <= 1009 ? gTheme.warn : gTheme.fg; // pressure band
     g.fillCircle(x, y, 2, cloud ? cc : pc);
     if (!cloud) g.drawCircle(x, y, 4, cc);                   // colour-coded cloud ring
-    if (_pZoomT > 0.4f) windBarb(g, x, y, p.wdir, p.wspd, gTheme.fg);   // wind barb when zoomed in
+    if (_pZoomCur > 1.3f) windBarb(g, x, y, p.wdir, p.wspd, gTheme.fg);   // wind barb when zoomed in
     String id = p.icao; if (id.length() == 4 && id[0] == 'K') id = id.substring(1);     // drop US K
     g.setTextDatum(textdatum_t::top_left);
     g.setTextColor(gTheme.dim, gTheme.bg); g.drawString(id, x + 3, y - 9);              // id
@@ -775,7 +766,7 @@ void PageAviation::drawPressure(App& app) {
     else if (_presMode == 1) snprintf(b, sizeof(b), "%.2f", p.hpa * 0.02953f);  // full inHg
     else                     snprintf(b, sizeof(b), "%d", p.hpa);               // full hPa
     g.setTextColor(cloud ? cc : pc, gTheme.bg); g.drawString(b, x + 3, y - 1);  // readout
-    if (_pZoomT > 0.4f && p.wspd >= 0) {                                        // wind speed below, when zoomed
+    if (_pZoomCur > 1.3f && p.wspd >= 0) {                                      // wind speed below, when zoomed
       g.setTextColor(gTheme.dim, gTheme.bg);
       g.drawString(p.wspd == 0 ? String("calm") : String(p.wspd) + "kt", x + 3, y + 7);
     }

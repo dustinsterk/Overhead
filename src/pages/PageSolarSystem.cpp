@@ -500,11 +500,21 @@ void PageSolarSystem::drawOrbit(App& app) {
   astro::HelioPos sel = selB.minor ? astro::orbitMinorPos(selB.idx, jd) : astro::heliocentricBody(selB.idx, jd);
   const char* selName = selB.minor ? astro::orbitMinorName(selB.idx) : astro::orbitBodyName(selB.idx);
 
+  // Orbital speed around the Sun: finite-difference the heliocentric position over a
+  // short step (works for any body without needing its elements). In-ecliptic-plane.
+  astro::HelioPos s2 = selB.minor ? astro::orbitMinorPos(selB.idx, jd + 0.01)
+                                  : astro::heliocentricBody(selB.idx, jd + 0.01);
+  double x1 = sel.rAu * cos(sel.lonDeg * D2R), y1 = sel.rAu * sin(sel.lonDeg * D2R);
+  double x2 = s2.rAu  * cos(s2.lonDeg  * D2R), y2 = s2.rAu  * sin(s2.lonDeg  * D2R);
+  double dAu = sqrt((x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1));
+  double kmh = dAu * 1.495978707e8 / (0.01 * 86400.0) * 3600.0;   // AU/step -> km/h
+  double mph = kmh / 1.609344;
+
   // Selected-body readout (bottom-left) + inner/all scope badge (bottom-right).
   g.setTextDatum(textdatum_t::bottom_left);
   g.setTextColor(gTheme.ok, gTheme.bg);
-  char b[44];
-  snprintf(b, sizeof(b), "%s  %.2f AU  lon %d", selName, sel.rAu, (int)round(sel.lonDeg));
+  char b[72];
+  snprintf(b, sizeof(b), "%s  %.2f AU  %.0f km/h (%.0f mph)", selName, sel.rAu, kmh, mph);
   g.drawString(b, 4, cy0 + ch - 2);
   int by = cy0 + ch - 15;
   g.fillRect(cw - 50, by, 48, 14, gTheme.grid);

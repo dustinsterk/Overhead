@@ -15,7 +15,7 @@ header in .rodata, no device RAM cost, updatable by re-running + reflash):
 Usage:  python tools/gen_stars.py [magLimit]      (default 5.0)
 Requires internet. Writes src/assets/StarCatalog.h.
 """
-import sys, os, io, csv, json, urllib.request
+import sys, os, io, csv, json, unicodedata, urllib.request
 
 MAG_LIMIT  = float(sys.argv[1]) if len(sys.argv) > 1 else 5.2
 NAME_MAG   = 3.2          # keep proper names only for stars at least this bright
@@ -57,8 +57,11 @@ def fetch(url, binary=False):
         d = r.read()
     return d if binary else d.decode("utf-8", "replace")
 
-def cesc(s):  # C string-literal escape
-    return s.replace("\\", "\\\\").replace('"', '\\"')
+def fold(s):  # ASCII-fold so the device's ASCII font renders it (Boötes -> Bootes)
+    return unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode("ascii")
+
+def cesc(s):  # ASCII-fold + C string-literal escape
+    return fold(s).replace("\\", "\\\\").replace('"', '\\"')
 
 def main():
     print("[stars] downloading HYG...")

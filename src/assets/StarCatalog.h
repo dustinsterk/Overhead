@@ -2572,7 +2572,7 @@ static const Constellation kCons[] = {
   {"Ara", 17.2000f, -56.000f},
   {"Aries", 2.8000f, 22.000f},
   {"Auriga", 5.5000f, 37.000f},
-  {"Boötes", 14.9000f, 35.000f},
+  {"Bootes", 14.9000f, 35.000f},
   {"Caelum", 4.9000f, -42.000f},
   {"Camelopardalis", 5.6000f, 72.000f},
   {"Cancer", 8.5500f, 27.000f},
