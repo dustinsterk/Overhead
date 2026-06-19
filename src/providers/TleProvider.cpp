@@ -121,13 +121,3 @@ void TleProvider::parseInto(std::vector<TleEntry>& target, const String& tleText
   }
 }
 
-int TleProvider::indexOfPrefix(const String& namePrefix) const {
-  for (size_t i = 0; i < _sats.size(); ++i)
-    if (satNameMatches(_sats[i].name, namePrefix)) return (int)i;
-  return -1;
-}
-
-const TleEntry* TleProvider::findByPrefix(const String& namePrefix) const {
-  int idx = indexOfPrefix(namePrefix);
-  return idx >= 0 ? &_sats[idx] : nullptr;
-}

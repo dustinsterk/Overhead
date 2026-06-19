@@ -24,7 +24,6 @@ public:
   static MetarStore& instance() { static MetarStore s; return s; }
 
   void upsert(const MetarRec& r);                 // merge by ICAO (newest wins), bounded + LRU-evicted
-  const MetarRec* byId(const char* icao) const;
   void inBox(double a0, double w0, double a1, double w1, std::vector<const MetarRec*>& out) const;
   const std::vector<MetarRec>& all() const { return _recs; }
 

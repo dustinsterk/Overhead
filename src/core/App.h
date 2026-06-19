@@ -56,10 +56,7 @@ public:
   int contentH() const;
   int contentW() const;
 
-  void requestStatusRedraw() { _statusDirty = true; }
-
   void openGrid();                       // show the 3x3 quick-jump grid (page taps open it)
-  bool gridOpen() const { return _grid; }
   void setPin(bool on) { _pinned = on; _statusDirty = true; }   // pages can pin (clock rests)
 
   void setClockOverlay(ClockOverlay* c) { _clock = c; }         // device-wide bouncing-clock screensaver
@@ -120,7 +117,6 @@ private:
   LocationService* _pickLoc = nullptr;
   Mode     _mode = Mode::Auto;
   bool     _pinned = false;
-  bool     _pinToggled = false;        // pin toggled during the current press
   uint32_t _lastInteractMs = 0;
   uint32_t _pressStartMs = 0;
   uint32_t _lastTouchMs = 0;     // for release debounce (resistive touch flickers)

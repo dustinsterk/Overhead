@@ -23,11 +23,6 @@ void MetarStore::upsert(const MetarRec& r) {
   _recs.push_back(r);
 }
 
-const MetarRec* MetarStore::byId(const char* icao) const {
-  for (auto& e : _recs) if (e.icao == icao) return &e;
-  return nullptr;
-}
-
 void MetarStore::inBox(double a0, double w0, double a1, double w1, std::vector<const MetarRec*>& out) const {
   for (auto& e : _recs)
     if (e.lat >= a0 && e.lat <= a1 && e.lon >= w0 && e.lon <= w1) out.push_back(&e);

@@ -13,10 +13,8 @@ constexpr double DEG2RAD = kPI / 180.0;
 constexpr double RAD2DEG = 180.0 / kPI;
 
 double julianDate(time_t utc);        // Julian Date (days) from a unix UTC time
-double julianCenturies(double jd);    // centuries from J2000.0
 double gmstRad(double jd);            // Greenwich mean sidereal time [0,2pi)
 double lstRad(double jd, double lonDeg); // local mean sidereal time [0,2pi)
-double deltaTSeconds(int year);       // approx TT - UT1 (Espenak/Meeus, 2005-2050)
 
 double wrapTwoPi(double a);           // normalise to [0,2pi)
 

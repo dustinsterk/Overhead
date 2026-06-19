@@ -43,8 +43,6 @@ public:
   struct SubPoint { double latDeg; double lonDeg; double altKm; };
   SubPoint subPoint(time_t utc);
 
-  double elevationAt(time_t utc);   // observer elevation only (one propagation)
-
   // Observed frequency for an emitted frequency, given range-rate (km/s):
   // f_obs = f * (1 - v_radial/c).
   static double dopplerHz(double emitHz, double rangeRateKmS);

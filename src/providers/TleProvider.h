@@ -37,8 +37,6 @@ public:
   void refresh(bool force = false);
 
   const std::vector<TleEntry>& sats() const { return _sats; }
-  const TleEntry* findByPrefix(const String& namePrefix) const;
-  int indexOfPrefix(const String& namePrefix) const;
 
   ProviderStatus status() const { return _status; }
   uint32_t       lastFetched() const { return _lastFetched; }

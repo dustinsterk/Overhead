@@ -17,11 +17,5 @@ Horizontal equatorialToHorizontal(const Equatorial& eq, double latRad, double ls
   return { wrapTwoPi(az), alt };
 }
 
-double refractionDeg(double trueAltDeg) {
-  if (trueAltDeg < -1.0) return 0.0;             // below horizon: ignore
-  // Bennett (1982): R in arcminutes.
-  double r = 1.0 / tan((trueAltDeg + 7.31 / (trueAltDeg + 4.4)) * DEG2RAD);
-  return r / 60.0;                               // arcmin -> deg
-}
 
 } // namespace astro

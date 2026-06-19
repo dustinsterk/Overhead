@@ -300,11 +300,16 @@ void setup() {
       spaceWxProv.refresh(false);
     }
     if (id != ProviderId::Location) return;
+    // ADS-B FIRST, while the heap is freshest: its TLS fetch needs the ~42 KB
+    // contiguous block, and the String-heavy feeds below fragment the heap — so
+    // queueing aircraft ahead of them gets the live radar its clean-heap window
+    // (it's the feed most prone to the heap-floor httpsSkip). Combined with the
+    // web-off-at-boot default, the first radar load now actually populates.
+    aircraftProv.poll();
     weatherProv.refresh(true);
     avwxProv.refresh(true);
     sndProv.refresh(true);
     hazProv.refresh(true);
-    aircraftProv.poll();
   });
 
   // Periodic maintenance.

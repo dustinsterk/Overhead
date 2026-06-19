@@ -76,11 +76,6 @@ SatEngine::SubPoint SatEngine::subPoint(time_t utc) {
   return s;
 }
 
-double SatEngine::elevationAt(time_t utc) {
-  if (!_haveTle) return -90.0;
-  _sat.findsat((unsigned long)utc);
-  return _sat.satEl;
-}
 
 double SatEngine::dopplerHz(double emitHz, double rangeRateKmS) {
   return emitHz * (1.0 - (rangeRateKmS * 1000.0) / kCmS);
