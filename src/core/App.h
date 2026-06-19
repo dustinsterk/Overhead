@@ -63,6 +63,11 @@ public:
   void setClockOverlay(ClockOverlay* c) { _clock = c; }         // device-wide bouncing-clock screensaver
   void repaintActive();                  // force a clean full repaint of the active page
   void drawViewDots(int count, int index);   // vertical view-position dots on the right edge
+  // Shared horizontal chip row (ADS-B field chips, METAR field chips...). Draws
+  // `labels` highlighting index `sel`, writes per-chip hit boxes into hitX/hitW
+  // (sized >= maxN); returns the number drawn (chip j maps to labels[j]).
+  int  drawChipRow(int x0, int top, int h, const String* labels, int n, int sel,
+                   int* hitX, int* hitW, int maxN);
 
 private:
   void drawStatus();

@@ -83,6 +83,27 @@ void App::repaintActive() {                                  // clean full repai
   _statusDirty = true;
 }
 
+// Shared horizontal chip row (ADS-B + METAR field selectors). chip j -> labels[j].
+int App::drawChipRow(int x0, int top, int h, const String* labels, int n, int sel,
+                     int* hitX, int* hitW, int maxN) {
+  auto& g = _display.gfx();
+  g.setTextSize(1);
+  g.setTextDatum(textdatum_t::middle_left);
+  const int cw = contentW();
+  int x = x0, cnt = 0;
+  for (int i = 0; i < n && cnt < maxN; ++i) {
+    int w = (int)labels[i].length() * 6 + 8;
+    if (x + w > cw - 2) break;
+    bool s = (i == sel);
+    g.fillRect(x, top, w, h, s ? gTheme.accent : gTheme.grid);
+    g.setTextColor(s ? gTheme.bg : gTheme.fg, s ? gTheme.accent : gTheme.grid);
+    g.drawString(labels[i], x + 4, top + h / 2);
+    hitX[cnt] = x; hitW[cnt] = w; cnt++;
+    x += w + 3;
+  }
+  return cnt;
+}
+
 // Vertical "view-position" dots on the right edge (mirrors the top-bar page dots):
 // where you are in a page's sub-view structure. Pages call this from draw().
 void App::drawViewDots(int count, int index) {

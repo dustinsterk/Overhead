@@ -248,25 +248,17 @@ int PageAircraft::drawChips(App& app) {
     for (const auto& s : st) if (s.icao == _centerIcao) { found = true; break; }
     if (!found) { _centerIcao = ""; _ap.clearCenter(); }
   }
-  auto& g = app.display().gfx();
-  const int cw = app.contentW(), cy0 = app.contentY();
-  const int h = 13, top = cy0 + 3;          // small gap below the status strip
-  int x = 2;
-  g.setTextSize(1);
-  g.setTextDatum(textdatum_t::middle_left);
-  auto chip = [&](const String& label, bool sel, const String& icao) -> bool {
-    int w = (int)label.length() * 6 + 8;
-    if (x + w > cw - 2 || _chipCount >= kMaxChips) return false;
-    g.fillRect(x, top, w, h, sel ? gTheme.accent : gTheme.grid);
-    g.setTextColor(sel ? gTheme.bg : gTheme.fg, sel ? gTheme.accent : gTheme.grid);
-    g.drawString(label, x + 4, top + h / 2);
-    _chipX[_chipCount] = x; _chipW[_chipCount] = w; _chipIcao[_chipCount] = icao; _chipCount++;
-    x += w + 3;
-    return true;
-  };
-  chip("HOME", _centerIcao.length() == 0, "");
-  for (const auto& s : st) if (!chip(s.icao, _centerIcao == s.icao, s.icao)) break;
-  return h + 5;                              // 3 top gap + chip + 1 bottom
+  // Build HOME + nearby-airport labels, then draw via the shared chip-row renderer.
+  String labels[kMaxChips]; int n = 0, sel = 0;
+  labels[n++] = "HOME";                      // HOME selected when not recentred on an airport
+  for (const auto& s : st) {
+    if (n >= kMaxChips) break;
+    if (_centerIcao == s.icao) sel = n;
+    labels[n++] = s.icao;
+  }
+  _chipCount = app.drawChipRow(2, app.contentY() + 3, 13, labels, n, sel, _chipX, _chipW, kMaxChips);
+  for (int j = 0; j < _chipCount; ++j) _chipIcao[j] = (j == 0) ? String("") : labels[j];   // chip 0 = HOME
+  return 13 + 5;                             // 3 top gap + chip + 1 bottom
 }
 
 bool PageAircraft::handleChipTap(App& app, int x, int yRel) {

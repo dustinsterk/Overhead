@@ -123,6 +123,10 @@ void PageAviation::onData(App& app, ProviderId id) {
 }
 
 void PageAviation::onTouch(App& app, int x, int y) {
+  if (_view == View::Metar && y < 16) {              // tap a field chip -> select that station
+    for (int i = 0; i < _mChipN; ++i)
+      if (x >= _mChipX[i] && x < _mChipX[i] + _mChipW[i]) { _sel = i; _needClear = _dirty = true; return; }
+  }
   int third = app.contentW() / 3;
   if (x >= third && x <= 2 * third) {               // centre tap
     if (_view == View::Pressure) {                  // pressure map: zoom on the map centre
@@ -230,9 +234,14 @@ void PageAviation::drawMetar(App& app) {
     return;
   }
   if (_sel >= (int)list.size()) _sel = 0;
+  // Field-selector chips (shared with the ADS-B page): tap a chip to jump to it.
+  String labels[12]; int nl = (int)list.size(); if (nl > 12) nl = 12;
+  for (int i = 0; i < nl; ++i) labels[i] = list[i].icao;
+  _mChipN = app.drawChipRow(2, cy0 + 2, 13, labels, nl, _sel, _mChipX, _mChipW, kMChips);
+
   const Metar& m = list[_sel];
   const int maxc = (cw - 10) / 6;
-  int x0 = 6, y = cy0 + 4;
+  int x0 = 6, y = cy0 + 19;                                    // below the chip row
 
   g.setTextDatum(textdatum_t::top_left);
   g.setTextColor(gTheme.accent, gTheme.bg);
@@ -240,12 +249,7 @@ void PageAviation::drawMetar(App& app) {
   g.setTextDatum(textdatum_t::top_right);
   g.setTextColor(catColor(m.cat), gTheme.bg); g.drawString(m.cat, cw - 6, y + 2);
   g.setTextDatum(textdatum_t::top_left); g.setTextSize(1);
-  if (list.size() > 1) {                                       // hint: side-tap steps fields
-    g.setTextColor(gTheme.dim, gTheme.bg);
-    g.drawString("side tap: " + list[(_sel + 1) % list.size()].icao, x0 + 58, y + 7);
-  }
   y += 20;
-  g.setTextSize(1);
   auto line = [&](const String& s, Color c) { g.setTextColor(c, gTheme.bg); g.drawString(padRight(s, maxc), x0, y); y += 12; };
 
   // Observation time: Zulu + local, e.g. 160354Z / 8:54PM.
