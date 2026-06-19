@@ -67,7 +67,9 @@ void PageAircraft::rebuildFilt() {
 
 String PageAircraft::gridStatus() {
   int n = (int)_ap.aircraft().size();
-  return n ? String(n) + " ac" : String();
+  if (n) return String(n) + " ac";
+  if (_ap.status() == ProviderStatus::Error) return "feed down";   // ADS-B source unavailable
+  return "no ac";                                                  // feed ok, nothing in range
 }
 
 void PageAircraft::onEnter(App& app) {

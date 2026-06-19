@@ -108,13 +108,16 @@ void PageHealth::tick(App& app, uint32_t nowMs) {
 
 String PageHealth::gridStatus() {
   String blk = String("blk ") + (Display::largestFreeBlock() / 1024) + "k";   // largest contiguous block
-  if (WiFi.status() != WL_CONNECTED)            return "WiFi down  " + blk;
-  if (!_time.synced())                          return "no time  " + blk;
-  int err = (_tle.status()    == ProviderStatus::Error) + (_launch.status() == ProviderStatus::Error)
-          + (_air.status()    == ProviderStatus::Error) + (_swx.status()    == ProviderStatus::Error)
-          + (_wx.status()     == ProviderStatus::Error);
-  if (err) return String(err) + (err == 1 ? " error  " : " errors  ") + blk;
-  return blk;
+  String pre;                                                                  // problem on its own line above blk
+  if (WiFi.status() != WL_CONNECTED)            pre = "WiFi down";
+  else if (!_time.synced())                     pre = "no time";
+  else {
+    int err = (_tle.status()    == ProviderStatus::Error) + (_launch.status() == ProviderStatus::Error)
+            + (_air.status()    == ProviderStatus::Error) + (_swx.status()    == ProviderStatus::Error)
+            + (_wx.status()     == ProviderStatus::Error);
+    if (err) pre = String(err) + (err == 1 ? " error" : " errors");
+  }
+  return pre.length() ? pre + "\n" + blk : blk;                                // '\n' forces a new line
 }
 
 void PageHealth::draw(App& app) {

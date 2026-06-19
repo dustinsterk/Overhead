@@ -156,16 +156,19 @@ void App::drawGrid() {
     g.setTextColor(gTheme.dim, gTheme.bg);           // word-wrap the status into the tile
     int ly = yy + 30, maxLines = (chc - 30) / 9; if (maxLines > 3) maxLines = 3;
     int start = 0, line = 0; String cur;
+    auto flush = [&]() { if (cur.length() && line < maxLines) { g.drawString(cur, cx, ly); ly += 9; line++; } cur = ""; };
     while (start <= (int)st.length() && line < maxLines) {
-      int sp = st.indexOf(' ', start);
-      String word = (sp < 0) ? st.substring(start) : st.substring(start, sp);
+      int sp = st.indexOf(' ', start), nlp = st.indexOf('\n', start);   // '\n' = forced line break
+      bool nlFirst = (nlp >= 0 && (sp < 0 || nlp < sp));
+      int end = nlFirst ? nlp : sp;
+      String word = (end < 0) ? st.substring(start) : st.substring(start, end);
       String trial = cur.length() ? cur + " " + word : word;
       if ((int)trial.length() <= maxChars) cur = trial;
-      else if (cur.length()) { g.drawString(cur, cx, ly); ly += 9; line++; cur = word; }
-      else { g.drawString(word.substring(0, maxChars), cx, ly); ly += 9; line++; }
-      if (sp < 0) break; start = sp + 1;
+      else { flush(); cur = word.substring(0, maxChars); }
+      if (nlFirst) flush();
+      if (end < 0) break; start = end + 1;
     }
-    if (cur.length() && line < maxLines) g.drawString(cur, cx, ly);
+    flush();
   }
 }
 
