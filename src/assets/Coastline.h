@@ -8,7 +8,10 @@
 // {9999,9999} is a pen-up separator between polylines.
 struct CoastPt { int16_t lon; int16_t lat; };
 
-static const CoastPt kCoastline[] = {
+// Single-definition guard (see StarCatalog.h): only src/assets/Assets.cpp emits the
+// real data; other includers see externs. Avoids a per-.cpp copy of these big arrays.
+#ifdef OVERHEAD_ASSETS_IMPL
+extern const CoastPt kCoastline[] = {
   {612,357},{630,354},{657,377},{692,372},{708,385},{718,367},{733,375},{752,371},{718,365},{709,340},{699,340},{703,334},{693,319},{669,313},{663,299},{641,293},{609,298},{618,307},{605,330},{612,357},{9999,9999},
   {239,-117},{240,-129},{219,-129},{219,-161},{232,-175},{117,-173},{122,-144},{137,-113},{123,-61},{163,-59},{175,-81},{190,-80},{201,-69},{217,-73},{222,-111},{239,-109},{239,-117},{9999,9999},
   {122,-58},{119,-50},{126,-44},{130,-48},{122,-58},{9999,9999},
@@ -298,9 +301,14 @@ static const CoastPt kCoastline[] = {
   {232,-175},{219,-161},{219,-129},{240,-129},{239,-109},{258,-118},{272,-116},{297,-133},{296,-122},{284,-118},{287,-85},{303,-82},{332,-97},{327,-137},{332,-140},{302,-148},{303,-155},{270,-179},{232,-175},{9999,9999},
   {294,-221},{280,-215},{253,-177},{270,-179},{303,-155},{328,-167},{328,-197},{312,-223},{294,-221},{9999,9999},
 };
-static const int kCoastlineCount = sizeof(kCoastline) / sizeof(kCoastline[0]);
+extern const int kCoastlineCount = sizeof(kCoastline) / sizeof(kCoastline[0]);
+#else
+extern const CoastPt kCoastline[];
+extern const int kCoastlineCount;
+#endif
 
-static const CoastPt kStateLines[] = {
+#ifdef OVERHEAD_ASSETS_IMPL
+extern const CoastPt kStateLines[] = {
   {1131,-260},{1129,-255},{1131,-260},{9999,9999},
   {1154,-207},{1154,-209},{1154,-207},{9999,9999},
   {1246,-153},{1246,-154},{1246,-153},{9999,9999},
@@ -724,4 +732,8 @@ static const CoastPt kStateLines[] = {
   {-820,375},{-826,381},{-826,384},{-809,397},{-806,406},{-805,397},{-795,397},{-795,392},{-788,396},{-778,395},{-778,391},{-783,395},{-792,385},{-796,386},{-804,375},{-816,372},{-820,375},{9999,9999},
   {-1040,410},{-1110,410},{-1111,450},{-1040,450},{-1040,410},{9999,9999},
 };
-static const int kStateLinesCount = sizeof(kStateLines) / sizeof(kStateLines[0]);
+extern const int kStateLinesCount = sizeof(kStateLines) / sizeof(kStateLines[0]);
+#else
+extern const CoastPt kStateLines[];
+extern const int kStateLinesCount;
+#endif

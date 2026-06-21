@@ -6,7 +6,12 @@
 // Constellation figures: d3-celestial (RA/Dec polylines). J2000.
 
 struct Star { const char* name; float raHours; float decDeg; float mag; };
-static const Star kStars[] = {
+// Big arrays use a single-definition guard: every .cpp that includes this header used
+// to get its OWN file-static copy (~24 KB each), duplicating tens of KB of flash. Now
+// only src/assets/Assets.cpp (which defines OVERHEAD_ASSETS_IMPL) emits the real data;
+// everyone else sees the extern declarations. (Keep this when re-running gen_stars.py.)
+#ifdef OVERHEAD_ASSETS_IMPL
+extern const Star kStars[] = {
   {"Sol", 0.0000f, 0.000f, -26.70f},
   {"Sirius", 6.7525f, -16.716f, -1.44f},
   {"Canopus", 6.3992f, -52.696f, -0.62f},
@@ -1508,13 +1513,18 @@ static const Star kStars[] = {
   {"", 14.1807f, -16.302f, 4.93f},
   {"", 14.8503f, -2.299f, 4.93f},
 };
-static const int kStarCount = sizeof(kStars) / sizeof(kStars[0]);
+extern const int kStarCount = sizeof(kStars) / sizeof(kStars[0]);
+#else
+extern const Star kStars[];
+extern const int kStarCount;
+#endif
 static constexpr float kStarMaxMag = 4.93f;  // faintest star in the catalogue
 
 // Constellation figure polylines: raHours==kSkyBreak is a pen-up between segments.
 static constexpr float kSkyBreak = 99.0f;
 struct SkyVtx { float raHours; float decDeg; };
-static const SkyVtx kConLines[] = {
+#ifdef OVERHEAD_ASSETS_IMPL
+extern const SkyVtx kConLines[] = {
   {2.0650f, 42.330f},
   {1.1622f, 35.621f},
   {0.6555f, 30.861f},
@@ -2559,7 +2569,11 @@ static const SkyVtx kConLines[] = {
   {20.2628f, 27.814f},
   {99.0000f, 0.000f},
 };
-static const int kConLineCount = sizeof(kConLines) / sizeof(kConLines[0]);
+extern const int kConLineCount = sizeof(kConLines) / sizeof(kConLines[0]);
+#else
+extern const SkyVtx kConLines[];
+extern const int kConLineCount;
+#endif
 
 // Constellations: display name + label centre (raHours, decDeg).
 struct Constellation { const char* name; float raHours; float decDeg; };
