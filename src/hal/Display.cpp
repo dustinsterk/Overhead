@@ -7,18 +7,24 @@
 #else
   static constexpr int kBlChannel = 7;   // LEDC channel for the backlight PWM
 #endif
+// LovyanGFX's Bus_RGB scans its own framebuffer continuously (the factory V1.2 path),
+// so there's nothing to push each frame. Kept as a no-op for the shared main loop.
+void Display::flushFramebuffer() {}
 
 bool Display::begin(bool enableShots) {
   _shotsEnabled = enableShots;
+
+  // LovyanGFX init: on the CrowPanel this only allocates the framebuffer + sets up
+  // drawing/touch (its RGB scan is neutered — see Bus_RGB.cpp override); esp_lcd does
+  // the actual scan-out below. On the CYDs this is the full SPI panel init.
+  if (!_lcd.init()) return false;
+
 #if BACKLIGHT_VIA_EXPANDER
-  // CrowPanel: the I2C expander gates LCD reset + backlight, so it must come
-  // up before/around the panel (crowpanel-5in.md §4). Wire owns I2C_NUM_0;
-  // LovyanGFX's GT911 is configured on I2C_NUM_1 to avoid driver contention.
+  // I2C bus + the backlight/reset expander (crowpanel-5in.md §4). Wire owns I2C_NUM_0;
+  // LovyanGFX's GT911 is on I2C_NUM_1 to avoid driver contention.
   Wire.begin(PIN_I2C_SDA, PIN_I2C_SCL, I2C_FREQ_HZ);
   expanderBegin();
 #endif
-
-  if (!_lcd.init()) return false;
 
   _lcd.setRotation(DISPLAY_DEFAULT_ROTATION);
   _lcd.fillScreen(TFT_BLACK);
@@ -30,6 +36,11 @@ bool Display::begin(bool enableShots) {
   ledcAttachPin(PIN_TFT_BL, kBlChannel);
 #endif
   setBacklight(255);
+#if defined(BOARD_CROWPANEL_S3_5HMI)
+  Serial.printf("[disp] psram=%d psramSize=%u freePsram=%u  panel=%dx%d\n",
+                (int)psramFound(), (unsigned)ESP.getPsramSize(),
+                (unsigned)ESP.getFreePsram(), _lcd.width(), _lcd.height());
+#endif
   // Screenshot buffer is allocated LAZILY on the first screenshot request (see
   // serviceShot), not here. On a no-PSRAM board this 16 KB sits in the band TLS
   // needs, so deferring it until a screenshot is actually taken keeps the heap
@@ -115,10 +126,13 @@ void Display::setBacklight(uint8_t level) {
 #if BACKLIGHT_VIA_EXPANDER
   if (!_expanderAddr) return;
   if (_expanderAddr == I2C_ADDR_EXP_STC8) {
-    // STC8 has coarse levels; a dim byte alone blanks the panel, so 0x10 must
-    // precede it (doc §7). Bring-up only needs on/off granularity.
+    // V1.2 STC8: the byte IS a brightness level, not a command code — 0 = max,
+    // 244 = min, 245 = off (Elecrow wiki). (V1.1 used command codes 0x10=on /
+    // 0x05=off; V1.2 superseded them and is the board on hand.) Map our 0..255
+    // (255 = full brightness) onto the inverted 0..244 scale.
+    uint8_t v = level ? (uint8_t)(244 - (uint32_t)level * 244 / 255) : 245;
     Wire.beginTransmission(_expanderAddr);
-    Wire.write(level ? STC8_CMD_BL_MAX : STC8_CMD_BL_OFF);
+    Wire.write(v);
     Wire.endTransmission();
   } else {
     Wire.beginTransmission(_expanderAddr);

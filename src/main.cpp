@@ -265,9 +265,15 @@ void setup() {
   // data), so the device is usable away from any network.
   splash("Connecting WiFi…");
   String apName = "Overhead-Setup-" + chipSuffix();
+#if defined(OVERHEAD_BRINGUP_OFFLINE)
+  // Board bring-up: don't let the captive portal block setup() (the panel/UI never
+  // render until loop() runs). Boot straight to OFFLINE field mode.
+  bool wifiOk = false; (void)apName;
+#else
   bool wifiOk = prov.begin(apName, 180,
       []() -> bool { int16_t tx, ty; return touch.read(display, tx, ty); },   // tap = go offline
       [apName]() { splashPortal(apName); });                                  // portal opened -> prompt
+#endif
   gOffline = !wifiOk;
   WiFi.setAutoReconnect(true);            // let the stack retry drops on its own too
   WiFi.persistent(true);
@@ -409,8 +415,34 @@ static void serviceSerialCmd() {
     Serial.printf("[cmd] free=%u largestBlock=%u\n", (unsigned)ESP.getFreeHeap(), (unsigned)ESP.getMaxAllocHeap());
   } else if (cmd == "reboot") {
     Serial.println("[cmd] rebooting"); delay(50); ESP.restart();
+  } else if (cmd == "shot") {
+    // WiFi-independent screenshot: JPEG-encode the framebuffer and dump it base64 over
+    // serial (decode on the host). Proof-of-display for board bring-up without WiFi.
+    display.setShotsEnabled(true);
+    display.requestShot();
+    display.serviceShot();                          // encodes synchronously on this (UI) thread
+    const uint8_t* p = display.jpeg(); size_t n = display.jpegLen();
+    if (!p || !n) { Serial.println("[shot] FAILED (no jpeg)"); }
+    else {
+      static const char b64[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+      Serial.printf("[shot] BEGIN len=%u\n", (unsigned)n);
+      String line; line.reserve(80);
+      for (size_t i = 0; i < n; i += 3) {
+        uint32_t v = (uint32_t)p[i] << 16;
+        if (i + 1 < n) v |= (uint32_t)p[i + 1] << 8;
+        if (i + 2 < n) v |= p[i + 2];
+        line += b64[(v >> 18) & 63];
+        line += b64[(v >> 12) & 63];
+        line += (i + 1 < n) ? b64[(v >> 6) & 63] : '=';
+        line += (i + 2 < n) ? b64[v & 63] : '=';
+        if (line.length() >= 76) { Serial.println(line); line = ""; }
+      }
+      if (line.length()) Serial.println(line);
+      Serial.println("[shot] END");
+    }
+    display.freeShot();
   } else if (cmd.length()) {
-    Serial.printf("[cmd] unknown: '%s' (try: web on|off, heap, reboot)\n", cmd.c_str());
+    Serial.printf("[cmd] unknown: '%s' (try: web on|off, heap, reboot, shot)\n", cmd.c_str());
   }
 }
 
@@ -424,6 +456,7 @@ void loop() {
   themeCtl.tick(now);   // day/night palette + backlight
   director.tick(now);   // Intelligent Focus
   app.tick(now);
+  display.flushFramebuffer();   // RGB panels: push the drawn cache out to PSRAM for the scan-out
 
   // WiFi watchdog (headless device): the radio occasionally drops and doesn't come
   // back on its own, which kills OTA + the debug API. Nudge a reconnect after a few

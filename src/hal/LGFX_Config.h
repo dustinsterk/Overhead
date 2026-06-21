@@ -237,9 +237,9 @@ public:
       cfg.vsync_front_porch = RGB_VSYNC_FRONT;
       cfg.vsync_pulse_width = RGB_VSYNC_PULSE;
       cfg.vsync_back_porch  = RGB_VSYNC_BACK;
-      cfg.pclk_active_neg   = 1;
+      cfg.pclk_active_neg   = 0;            // V1.2 factory: idle-high, not active-neg
       cfg.de_idle_high      = 0;
-      cfg.pclk_idle_high    = 0;
+      cfg.pclk_idle_high    = 1;            // ST7262 V1.2 latches with pclk idling high
       _bus.config(cfg);
       _panel.setBus(&_bus);
     }
@@ -262,6 +262,10 @@ public:
     }
     setPanel(&_panel);
   }
+  // The continuous RGB scan-out reads the framebuffer straight from PSRAM, but CPU
+  // draws land in the (write-back) cache — so the panel shows stale/black PSRAM while
+  // the cache holds the real image. Expose the FB so hal/Display can flush the cache.
+  uint8_t* framebuffer() { return _bus.getDMABuffer(0); }
 };
 
 #endif

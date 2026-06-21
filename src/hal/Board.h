@@ -163,15 +163,17 @@
   #define PIN_RGB_VSYNC 41
   #define PIN_RGB_DE    42
   // Pixel clock: 12 MHz is the doc's documented-stable value (factory uses
-  // 21 MHz; lower buys PSRAM-bus headroom). Porches below are generic 800x480
-  // values — VERIFY against the Elecrow factory esp_lcd config on hardware.
-  #define RGB_PCLK_HZ        12000000
+  // Values from the Elecrow V1.2 factory LovyanGFX driver (which works on THIS board):
+  // 21 MHz pclk + pclk_idle_high=1. (cyd-radio's V1.1 ran 12 MHz / pclk_active_neg, but
+  // the V1.2 ST7262 needs the factory 21 MHz + idle-high or the panel never latches —
+  // stays black though the framebuffer is correct.) Porches 8/4/8 both axes.
+  #define RGB_PCLK_HZ        21000000
   #define RGB_HSYNC_FRONT    8
   #define RGB_HSYNC_PULSE    4
-  #define RGB_HSYNC_BACK     43
+  #define RGB_HSYNC_BACK     8
   #define RGB_VSYNC_FRONT    8
   #define RGB_VSYNC_PULSE    4
-  #define RGB_VSYNC_BACK     12
+  #define RGB_VSYNC_BACK     8
 
   // Shared I2C bus (400 kHz): GT911 touch, RTC, I/O expander
   #define PIN_I2C_SDA          15

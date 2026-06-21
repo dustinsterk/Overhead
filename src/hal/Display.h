@@ -17,6 +17,9 @@ public:
   void setBacklight(uint8_t level);       // 0..255 (spec §7.9 night dimming)
   int  width()  { return _lcd.width(); }
   int  height() { return _lcd.height(); }
+  // RGB panels only: flush the framebuffer cache to PSRAM so the DMA scan-out sees
+  // the latest pixels (no-op where the panel isn't a cached PSRAM framebuffer).
+  void flushFramebuffer();
 
   // --- Memory budget helpers (the milestone-0 deliverable, spec §2) ----------
   static uint32_t freeHeap();
