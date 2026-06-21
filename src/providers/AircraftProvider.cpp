@@ -113,7 +113,12 @@ void AircraftProvider::parseStream(Stream& body) {
   double olat = centerLat(), olon = centerLon();
   int maxAlt = (int)_s->getInt("adsbMaxAltFt", 0);
 
-  std::vector<Aircraft> out;
+  // Keep only the nearest kMax as we scan, so `out` never grows to hold a whole busy
+  // feed (~150 contacts). A growing vector would need an ever-larger CONTIGUOUS block,
+  // which bad_alloc-aborts at a low largest-free-block (exceptions are off) -> reboot.
+  // Reserved once at the cap, it stays a small fixed allocation.
+  static constexpr int kMax = 24;
+  std::vector<Aircraft> out; out.reserve(kMax + 1);
   for (JsonObject o : arr) {
     if (!o["lat"].is<double>() || !o["lon"].is<double>()) continue;
     Aircraft a;
@@ -136,10 +141,12 @@ void AircraftProvider::parseStream(Stream& body) {
     if (maxAlt > 0 && a.altFt > maxAlt) continue;          // altitude filter
     relPos(olat, olon, a.lat, a.lon, a.distNm, a.bearingDeg);
     if (a.distNm > _radiusNm * 1.2f) continue;
-    out.push_back(a);
+    if ((int)out.size() < kMax) { out.push_back(a); continue; }
+    int far = 0;                                           // else replace the farthest kept, if closer
+    for (int k = 1; k < (int)out.size(); ++k) if (out[k].distNm > out[far].distNm) far = k;
+    if (a.distNm < out[far].distNm) out[far] = a;
   }
   std::sort(out.begin(), out.end(), [](const Aircraft& a, const Aircraft& b) { return a.distNm < b.distNm; });
-  if (out.size() > 24) out.resize(24);   // bound RAM on no-PSRAM boards
   _acStaging = std::move(out);
   _staged = true;                        // tell the UI-thread cb a good parse is ready
 }
