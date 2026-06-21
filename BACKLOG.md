@@ -455,3 +455,22 @@ REMAINING (stretch):
   Source auto/preset explanation.
 
 <!-- new milestones append below as they land -->
+
+## CrowPanel V1.2 — eliminate display tearing
+
+The 5.0" V1.2 panel now renders correctly (see the crowpanel commit), but there's
+visible tearing. Root cause (verified against the Elecrow V1.2 factory repo): the
+factory uses **LVGL with two full-screen PSRAM draw buffers** and `pushImageDMA` —
+i.e. it renders a complete frame off-screen, then pushes it. LovyanGFX's `Panel_RGB`
+is **single-framebuffer** (its `config_detail` exposes only `use_psram`), so Overhead
+draws straight into the buffer that's being scanned out → the scan catches mid-draw.
+
+Fix options (in rough order of preference):
+- **esp_lcd RGB with `num_fbs = 2`** (double framebuffer, swapped on vsync) — the only
+  true tear-free path. Earlier esp_lcd blit attempt showed a byte-order mismatch (blue
+  text); resolve by drawing into esp_lcd's own FB (via `get_frame_buffer`, if present on
+  IDF 4.4) or matching LovyanGFX's RGB565 byte order to esp_lcd's scan.
+- Off-screen LGFX_Sprite canvas + one `pushImageDMA` per frame timed to vblank (the
+  factory principle) — reduces but may not fully eliminate tearing on a single FB.
+- Both need the Display/touch split (gfx() -> sprite, touch read via a Display wrapper
+  since LGFX_Sprite has no getTouch). Bring-up is iterative (needs eyes-on each build).
