@@ -18,17 +18,24 @@
 class NetClient {
 public:
   using Callback = std::function<void(int httpCode, const String& body)>;
+  // Optional in-task parser: runs ON THE NET TASK with the live response Stream, so a
+  // large payload (ADS-B) can be filtered/streamed straight into the provider without
+  // ever buffering the whole body as a String (avoids a huge contiguous alloc on the
+  // no-PSRAM board). When set, the body String is NOT built; cb still fires on the UI
+  // thread afterwards to commit the parsed result (use happens-before, not locks).
+  using StreamParse = std::function<void(int httpCode, Stream& body)>;
 
   // stackBytes: ESP-IDF task stack is in BYTES. TLS (mbedtls) is stack-heavy,
   // so HTTPS fetches (Celestrak, SWPC, Open-Meteo) need >=16 KB or they fail.
   bool begin(uint32_t stackBytes = 16384, BaseType_t core = 0);
   bool get(const String& url, Callback cb);   // returns false if the queue is full
+  bool get(const String& url, Callback cb, StreamParse inTask);   // + in-task stream parse
   void poll();                                 // UI thread: dispatch completed jobs
   size_t inFlight() const { return _inFlight; }
   size_t httpsSkips() const { return _httpsSkips; }   // HTTPS jobs skipped at the heap floor
 
 private:
-  struct Job { String url; Callback cb; int code = 0; String body; };
+  struct Job { String url; Callback cb; StreamParse inTask; int code = 0; String body; };
 
   static void taskEntry(void* arg);
   void taskLoop();

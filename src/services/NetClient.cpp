@@ -13,6 +13,16 @@ bool NetClient::begin(uint32_t stackWords, BaseType_t core) {
   return ok == pdPASS;
 }
 
+bool NetClient::get(const String& url, Callback cb, StreamParse inTask) {
+  Job* job = new Job();
+  job->url    = url;
+  job->cb     = std::move(cb);
+  job->inTask = std::move(inTask);
+  if (xQueueSend(_reqQ, &job, 0) != pdTRUE) { delete job; return false; }
+  _inFlight++;
+  return true;
+}
+
 bool NetClient::get(const String& url, Callback cb) {
   Job* job = new Job();
   job->url = url;
@@ -70,22 +80,25 @@ void NetClient::perform(Job* job) {
   http.setUserAgent("Overhead/0.1");
   http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
 
+  // Build the body String, OR (if an in-task parser is supplied) stream the response
+  // straight through it without buffering — avoids a huge contiguous String alloc.
+  auto consume = [&]() {
+    job->code = http.GET();
+    if (job->code > 0) {
+      if (job->inTask) job->inTask(job->code, http.getStream());
+      else             job->body = http.getString();
+    }
+    http.end();
+  };
+
   bool ok;
   if (job->url.startsWith("https://")) {
     WiFiClientSecure secure;
     secure.setInsecure();             // hobby LAN device — no cert pinning
     ok = http.begin(secure, job->url);
-    if (ok) {
-      job->code = http.GET();
-      if (job->code > 0) job->body = http.getString();
-      http.end();
-    } else job->code = -2;
+    if (ok) consume(); else job->code = -2;
   } else {
     ok = http.begin(job->url);
-    if (ok) {
-      job->code = http.GET();
-      if (job->code > 0) job->body = http.getString();
-      http.end();
-    } else job->code = -2;
+    if (ok) consume(); else job->code = -2;
   }
 }

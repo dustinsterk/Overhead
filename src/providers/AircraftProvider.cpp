@@ -56,35 +56,47 @@ void AircraftProvider::poll() {
     if (!host.length()) { _status = ProviderStatus::Error; return; }
     url = "http://" + host + "/data/aircraft.json";
   } else {
+    // Cloud feed over PLAIN HTTP (adsb.lol) so it dodges the ~42 KB contiguous-TLS
+    // floor that makes the HTTPS sources httpsSkip-fail on the no-PSRAM board — the
+    // radar then populates even with the web server up. Same {"ac":[...]} schema as
+    // airplanes.live, so parse() is unchanged. (airplanes.live 301-redirects http->
+    // https, so it can't be used without TLS.)
     char b[96];
-    snprintf(b, sizeof(b), "https://api.airplanes.live/v2/point/%.4f/%.4f/%d",
+    snprintf(b, sizeof(b), "http://api.adsb.lol/v2/point/%.4f/%.4f/%d",
              centerLat(), centerLon(), (int)_radiusNm);
     url = b;
   }
 
   _inflight = true;
-  bool sent = _net->get(url, [this](int code, const String& body) {
-    _inflight = false;
-    if (code == 200 && body.length() > 2) {
-      parse(body);
-      _lastFetched = (uint32_t)time(nullptr);
-      _status = ProviderStatus::Ready;
-    } else {
-      // code -3 = heap-floor TLS skip (most common cause of long staleness),
-      // 429 = rate limited, <0 = connect/timeout. Keep the last contacts (Stale).
-      _status = _ac.empty() ? ProviderStatus::Error : ProviderStatus::Stale;
-      Serial.printf("[adsb] poll code=%d len=%u (keep %u, stale)\n", code, (unsigned)body.length(), (unsigned)_ac.size());
-    }
-    if (_bus) _bus->publish(ProviderId::Aircraft);
-  });
+  _staged = false;
+  bool sent = _net->get(url,
+    [this](int code, const String&) {            // UI thread: commit the staged parse
+      _inflight = false;
+      if (code == 200 && _staged) {
+        _ac = std::move(_acStaging); _acStaging.clear(); _staged = false;
+        _lastFetched = (uint32_t)time(nullptr);
+        _status = ProviderStatus::Ready;
+      } else {
+        // code -3 = heap-floor TLS skip, 429 = rate limited, <0 = connect/timeout,
+        // or a parse miss. Keep the last contacts (Stale).
+        _status = _ac.empty() ? ProviderStatus::Error : ProviderStatus::Stale;
+        Serial.printf("[adsb] poll code=%d staged=%d (keep %u)\n", code, (int)_staged, (unsigned)_ac.size());
+      }
+      if (_bus) _bus->publish(ProviderId::Aircraft);
+    },
+    [this](int code, Stream& s) {                // NET TASK: stream-filter into staging
+      if (code == 200) parseStream(s);
+    });
   if (sent) _lastPollMs = nowMs;
   else      _inflight = false;           // req queue full; retry on the next poll
                                          // (otherwise _inflight sticks -> "scanning" forever)
 }
 
-void AircraftProvider::parse(const String& body) {
-  // Filter the (potentially large) feed down to the fields we use. Accept both
-  // "ac" (airplanes.live) and "aircraft" (tar1090/readsb) array keys.
+void AircraftProvider::parseStream(Stream& body) {
+  // Runs on the NET TASK. Filter the (potentially large) feed straight off the HTTP
+  // stream so the full body is never buffered as a String (no huge contiguous alloc on
+  // the no-PSRAM board). Accept both "ac" (adsb.lol/airplanes.live) and "aircraft"
+  // (tar1090/readsb) array keys. Result lands in _acStaging; the UI-thread cb commits.
   JsonDocument filter;
   for (const char* key : {"ac", "aircraft"}) {
     JsonObject e = filter[key].add<JsonObject>();
@@ -128,5 +140,6 @@ void AircraftProvider::parse(const String& body) {
   }
   std::sort(out.begin(), out.end(), [](const Aircraft& a, const Aircraft& b) { return a.distNm < b.distNm; });
   if (out.size() > 24) out.resize(24);   // bound RAM on no-PSRAM boards
-  _ac = std::move(out);
+  _acStaging = std::move(out);
+  _staged = true;                        // tell the UI-thread cb a good parse is ready
 }

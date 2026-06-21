@@ -1,5 +1,6 @@
 #pragma once
 #include <Arduino.h>
+#include <Stream.h>
 #include <vector>
 #include "TleProvider.h"   // ProviderStatus
 
@@ -50,7 +51,7 @@ public:
   }
 
 private:
-  void parse(const String& body);
+  void parseStream(Stream& body);   // runs on the NET TASK: filter-stream into _acStaging
   double centerLat() const;
   double centerLon() const;
 
@@ -59,7 +60,9 @@ private:
   EventBus*        _bus = nullptr;
   LocationService* _loc = nullptr;
 
-  std::vector<Aircraft> _ac;
+  std::vector<Aircraft> _ac;          // committed list (UI thread reads this in draw)
+  std::vector<Aircraft> _acStaging;   // net task parses into here; UI cb swaps -> _ac
+  volatile bool _staged = false;      // net task set true after a good parse; UI commits
   ProviderStatus _status = ProviderStatus::Loading;
   uint32_t _lastFetched = 0;
   float    _radiusNm = 50;

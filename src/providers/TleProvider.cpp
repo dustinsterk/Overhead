@@ -46,7 +46,9 @@ void TleProvider::refresh(bool force) {
 }
 
 void TleProvider::fetchGroup(int idx) {
-  String url = String("https://celestrak.org/NORAD/elements/gp.php?")
+  // Plain HTTP (CelesTrak serves TLE over http without redirect) so the catalog still
+  // refreshes when the contiguous-TLS heap floor would otherwise httpsSkip the fetch.
+  String url = String("http://celestrak.org/NORAD/elements/gp.php?")
              + kGroups[idx].query + "&FORMAT=tle";
   if (_sats.empty()) _status = ProviderStatus::Loading;
   _pendingFetches++;

@@ -21,6 +21,21 @@ move out on the next sweep.
   `wcalm`, guards `vis--` + missing temp. Map/METAR/Sounding/Trends verified; TAF +
   Hazards correctly auto-hidden when empty. Selection hit radius widened (12→16px).
 
+### Aircraft feed over plain HTTP — FIXED (Jun 2026)
+The cloud ADS-B feed (`https://api.airplanes.live`) was effectively dead on the
+no-PSRAM board: HTTPS needs a ~42 KB contiguous block for the TLS handshake, so
+NetClient httpsSkip'd it whenever the web server / screenshot buffer was up — "feed
+unavailable". Fix: switch the cloud source to **adsb.lol over plain HTTP**
+(`http://api.adsb.lol/v2/point/...`, same `{"ac":[...]}` schema) — NetClient only
+applies the TLS-heap skip to `https://` URLs, so HTTP fetches even under pressure.
+To avoid buffering the ~40-90 KB body as a String (a huge contiguous alloc), added an
+in-task stream parser to NetClient (`get(url, cb, inTask)`): the net task filters the
+response straight off `http.getStream()` into a staging vector; the UI-thread cb
+commits it (happens-before, no locks). TLE also moved to `http://celestrak.org` as a
+low-heap fallback. Verified on-device: radar populated 24/24 with the web server ON,
+heapBlk ~24 KB, httpsSkip 0. (airplanes.live 301-redirects http->https so it can't be
+used plain; HTTPS-only sources — NOAA/aviationweather/thespacedevs/NASA — unchanged.)
+
 ### Satellites (playtested 2026-06-20 — clean)
 - [x] **Watchlist `ISS` CONTAINS-matched extra objects ("ISS OBJECT XY") — FIXED.**
   Pure-substring `satNameMatches` made `ISS` match every "ISS*" catalog object (a
