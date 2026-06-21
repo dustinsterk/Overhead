@@ -38,6 +38,9 @@ public:
 private:
   void fetchLL2();
   void fetchFallback();
+  // Status when a fetch fails/skips: keep the cache "Ready" while it's within TTL (a
+  // skipped refresh shouldn't flip fresh data to "stale"), else Stale, else Error.
+  ProviderStatus freshness() const;
   bool parseLL2(const String& body);   // returns true if it yielded launches
   bool parseRLL(const String& body);
 

@@ -62,7 +62,8 @@ bool App::autoAdvanceActive() {
   return false;
 }
 
-void App::setAlert(const String& s) {
+void App::setAlert(const String& s, int targetPage) {
+  _alertTarget = s.length() ? targetPage : -1;
   if (_alert != s) { _alert = s; _statusDirty = true; }
 }
 
@@ -230,6 +231,9 @@ void App::tapAt(int x, int y) {
   }
   if (y < contentY()) {                                      // status strip
     if (x < 48 && _clock) { _clock->toggle(*this); return; } // tap the clock -> clock mode on/off
+    if (_alert.length() && _alertTarget >= 0) {              // tap the alert banner -> the page it's about
+      _mode = Mode::Manual; setPage(_alertTarget); _statusDirty = true; return;
+    }
     if (dotsHit(x)) { openGrid(); return; }                  // tap the page dots -> grid
     const int W = _display.width();
     if (x >= W - 15) {                                       // WiFi bars -> Device Health

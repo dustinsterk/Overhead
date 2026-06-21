@@ -40,6 +40,13 @@ void LaunchProvider::refresh(bool force) {
   else if (!_launches.empty()) _status = ProviderStatus::Ready;   // fresh persisted cache is ready
 }
 
+ProviderStatus LaunchProvider::freshness() const {
+  if (_launches.empty()) return ProviderStatus::Error;
+  uint32_t ttl = (uint32_t)_s->getInt("refreshLaunchMin", 45) * 60UL, now = (uint32_t)time(nullptr);
+  bool fresh = _lastFetched && now > 1600000000UL && (now - _lastFetched) <= ttl;
+  return fresh ? ProviderStatus::Ready : ProviderStatus::Stale;   // within TTL -> still good
+}
+
 void LaunchProvider::fetchLL2() {
   if (_launches.empty()) _status = ProviderStatus::Loading;
   const char* url = "https://ll.thespacedevs.com/2.2.0/launch/upcoming/?limit=8&mode=list";
@@ -53,8 +60,8 @@ void LaunchProvider::fetchLL2() {
       if (_bus) _bus->publish(ProviderId::Launch);
     } else {
       Serial.printf("[launch] LL2 failed (code %d) -> fallback\n", code);
-      // Keep any cached launches as stale; try the fallback for fresh data.
-      if (!_launches.empty()) _status = ProviderStatus::Stale;
+      // Keep fresh cache "Ready" (a skipped/failed refresh isn't staleness); try fallback.
+      _status = freshness();
       fetchFallback();
     }
   });
@@ -69,7 +76,7 @@ void LaunchProvider::fetchFallback() {
       _status = ProviderStatus::Ready;
       Serial.printf("[launch] RLL fallback ok: %u launches\n", (unsigned)_launches.size());
     } else {
-      _status = _launches.empty() ? ProviderStatus::Error : ProviderStatus::Stale;
+      _status = freshness();                          // within TTL stays Ready, not Stale
       Serial.printf("[launch] fallback failed (code %d)\n", code);
     }
     if (_bus) _bus->publish(ProviderId::Launch);

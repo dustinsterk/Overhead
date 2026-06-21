@@ -139,7 +139,7 @@ void Director::tick(uint32_t nowMs) {
              + (dt > 0 ? "in " + String(dt / 60 + 1) + "m" : "NOW");
     if (_passVisible) a += (_passCloud >= 70) ? " VIS(cloud)" : " VIS";   // overcast = not worth it
     if (_passRadio)   a += " RF";
-    _app->setAlert(a);
+    _app->setAlert(a, satIdx);
     bool onSat = (_app->activeIndex() == satIdx);
     if (_app->autoFocus(satIdx)) onSat = true;
     else if (!onSat) _app->setBadge(satIdx, true);
@@ -151,13 +151,13 @@ void Director::tick(uint32_t nowMs) {
   if (launchNow) {
     _lastTourMs = nowMs;
     long dt = (long)(lnet - now);
-    _app->setAlert(String("Launch ") + (dt > 0 ? "in " + String(dt / 60 + 1) + "m" : "NOW"));
+    _app->setAlert(String("Launch ") + (dt > 0 ? "in " + String(dt / 60 + 1) + "m" : "NOW"), lchIdx);
     if (!_app->autoFocus(lchIdx) && _app->activeIndex() != lchIdx) _app->setBadge(lchIdx, true);
     return;
   }
   // Nothing imminent: a plane overhead, else a fresh weather announcement, else clear.
-  if (overhead)                                           _app->setAlert("Overhead " + ohMsg);
-  else if (nowMs < _avAlertUntil && _avAlertMsg.length()) _app->setAlert(_avAlertMsg);
+  if (overhead)                                           _app->setAlert("Overhead " + ohMsg, acIdx);
+  else if (nowMs < _avAlertUntil && _avAlertMsg.length()) _app->setAlert(_avAlertMsg, avIdx);
   else _app->setAlert("");
 
   // Ambient resting default + multi-page attract tour. ambientDay/Night may be a

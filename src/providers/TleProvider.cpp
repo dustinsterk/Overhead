@@ -68,7 +68,12 @@ void TleProvider::fetchGroup(int idx) {
     rebuildMerged();
     if (_sats.empty())            _status = ProviderStatus::Error;
     else if (_pendingFetches > 0) _status = ProviderStatus::Loading;
-    else                          _status = ok ? ProviderStatus::Ready : ProviderStatus::Stale;
+    else if (ok)                  _status = ProviderStatus::Ready;
+    else {                        // fetch failed/skipped: cache within TTL is still Ready, not Stale
+      uint32_t ttl = (uint32_t)_s->getInt("refreshTleHour", 12) * 3600UL, now = (uint32_t)time(nullptr);
+      _status = (_lastFetched && now > 1600000000UL && (now - _lastFetched) <= ttl)
+              ? ProviderStatus::Ready : ProviderStatus::Stale;
+    }
 
     Serial.printf("[tle] %u sats (%s)\n", (unsigned)_sats.size(),
                   _status == ProviderStatus::Ready ? "ready" : "stale/err");
