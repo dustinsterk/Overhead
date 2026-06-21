@@ -54,8 +54,8 @@ static int drawWrapped(LGFX& g, const String& text, int x, int y, int maxChars, 
 }
 
 void PageAviation::onEnter(App& app) {
-  _presMode = (int)_settings.getInt("presMode", 3);   // default: flight-category layer
-  if (_presMode < 0 || _presMode > 3) _presMode = 3;
+  _presMode = (int)_settings.getInt("presMode", 0);   // layers: 0 cat / 1 cloud / 2 wind / 3 inHg
+  if (_presMode < 0 || _presMode > 3) _presMode = 0;
   _pmap.setScope((int)_settings.getInt("presScope", 0));   // default regional (~200mi)
   resetPresZoom();
   _dirty = _needClear = true;
@@ -255,17 +255,16 @@ bool PageAviation::autoAdvance(App& app) {
     _sel = (_sel + 1) % n;
     if (++_tourN >= n) nextView();         // toured all stations -> next view
   } else if (_view == View::Pressure) {
-    // Cinematic zoom-in that alternates the layer each beat (pressure <-> flight
-    // category), walking every zoom level. The bottom strip keeps showing the closest
-    // field's METAR throughout. world -> US -> 200mi 1x -> 2.6x -> 4.5x -> 7x.
+    // Cinematic: cycle all four layers at 1x (regional, centred on the observer), then
+    // zoom into the observer step by step (2.6x -> 4.5x -> 7x). At regional scope the
+    // observer sits at the box centre, so zooming about the screen centre = on the user.
     int fx = app.contentW() / 2, fy = app.contentY() + 16 + (app.contentH() - 28) / 2;
     switch (++_presTourStep) {
-      case 0: _pmap.setScope(2); resetPresZoom(); _presMode = 0; break;   // world, pressure
-      case 1: _pmap.setScope(1); resetPresZoom(); _presMode = 3; break;   // US, category
-      case 2: _pmap.setScope(0); resetPresZoom(); _presMode = 0; break;   // 200mi 1x, pressure
-      case 3: cyclePresZoom(fx, fy);             _presMode = 3; break;     // 2.6x, category
-      case 4: cyclePresZoom(fx, fy);             _presMode = 0; break;     // 4.5x, pressure
-      case 5: cyclePresZoom(fx, fy);             _presMode = 3; break;     // 7x, category
+      case 0: _pmap.setScope(0); resetPresZoom(); _presMode = 0; break;   // 1x, category
+      case 1: _presMode = 1; break;                                       // 1x, cloud
+      case 2: _presMode = 2; break;                                       // 1x, wind
+      case 3: _presMode = 3; break;                                       // 1x, inHg
+      case 4: case 5: case 6: cyclePresZoom(fx, fy); break;              // zoom in on the observer
       default: _presTourStep = -1; nextView(); break;                     // done -> next view
     }
   } else {
@@ -683,17 +682,21 @@ void PageAviation::drawPressure(App& app) {
   const auto& pts = _pmap.points();
   bool world = _pmap.worldwide();
 
-  bool cloud = (_presMode == 2);
-  bool catv  = (_presMode == 3);                               // flight-category layer
+  // Layers (top-left badge cycles): category / cloud / wind / inHg. The dot is ALWAYS
+  // coloured by pressure (inHg: blue hi / grey normal / red low) and the ICAO text by
+  // flight category; at 1x the layer picks the extra value shown next to each dot.
+  // Zoomed in (>=2.6x) a richer 2-3 line readout shows regardless of layer.
   int scope = _pmap.scope();
-  const char* ml = _presMode == 0 ? "hPa" : _presMode == 1 ? "inHg" : _presMode == 2 ? "cloud" : "cat";
+  const char* ml = _presMode == 0 ? "cat" : _presMode == 1 ? "cloud" : _presMode == 2 ? "wind" : "inHg";
   const char* sc = scope == 0 ? "200mi" : scope == 1 ? "US" : "world";
+  bool zoom2 = _pZoomCur > 1.6f;                               // 2.6x+: multi-line readout
+  bool zoom3 = _pZoomCur > 3.5f;                               // 4.5x+: + wind kt line
   g.setTextDatum(textdatum_t::top_left); g.setTextSize(1);
-  g.fillRect(2, cy0 + 2, 52, 12, gTheme.grid);                 // mode badge (tap: hPa/inHg/cloud/cat)
+  g.fillRect(2, cy0 + 2, 40, 12, gTheme.grid);                 // layer badge (tap: cat/cloud/wind/inHg)
   g.setTextColor(gTheme.fg, gTheme.grid); g.drawString(ml, 6, cy0 + 3);
   g.setTextColor(gTheme.fg, gTheme.bg);
   char zlbl[20]; snprintf(zlbl, sizeof(zlbl), "[tap: zoom %.1fx]", _pZoomCur);
-  g.drawString(String(cloud ? "cloud" : catv ? "category" : "pressure") + "  " + zlbl, 60, cy0 + 3);
+  g.drawString(zlbl, 46, cy0 + 3);
   g.fillRect(cw - 82, cy0 + 2, 30, 12, gTheme.grid);           // recenter badge (tap: home @1x)
   g.setTextDatum(textdatum_t::top_left);
   g.setTextColor(gTheme.ok, gTheme.grid); g.drawString("home", cw - 80, cy0 + 3);
@@ -742,12 +745,6 @@ void PageAviation::drawPressure(App& app) {
     return;
   }
 
-  int hi = -1, lo = -1, hv = -9999, lv = 9999;
-  for (size_t i = 0; i < merged.size(); ++i) {
-    int p = merged[i].hpa; if (p < 0) continue;
-    if (p > hv) { hv = p; hi = (int)i; }
-    if (p < lv) { lv = p; lo = (int)i; }
-  }
   // Station shown in the bottom strip: the user's pick, else the closest field to the
   // observer (so a METAR is always on screen). The matching dot gets the ring.
   String tgt = _mapSelIcao;
@@ -759,44 +756,42 @@ void PageAviation::drawPressure(App& app) {
     const PressurePt& p = merged[i];
     int x = SX(p.lon), y = SY(p.lat);
     if (x < mx || x > mx + mw || y < my || y > my + mh) continue;
-    Color cc = p.cloud < 30 ? gTheme.ok : p.cloud < 70 ? gTheme.accent : gTheme.warn;   // cloud band
-    Color pc = p.hpa >= 1019 ? gTheme.accent : p.hpa <= 1009 ? gTheme.warn : gTheme.fg; // pressure band
-    Color ctc = p.cat.length() ? catColor(p.cat) : gTheme.dim;                          // category (dim=unknown)
-    Color dot = catv ? ctc : cloud ? cc : pc;
+    Color cc  = p.cloud < 30 ? gTheme.ok : p.cloud < 70 ? gTheme.accent : gTheme.warn;   // cloud band
+    Color pc  = p.hpa >= 1019 ? gTheme.accent : p.hpa <= 1009 ? gTheme.warn : gTheme.fg; // inHg band -> the dot
+    Color ctc = p.cat.length() ? catColor(p.cat) : gTheme.dim;                           // flight category -> id text
     bool seld = (tgt.length() && p.icao == tgt);
-    g.fillCircle(x, y, seld ? 3 : 2, dot);
-    if (seld)                   g.drawCircle(x, y, 5, gTheme.fg);   // selection ring
-    else if (!cloud && !catv)   g.drawCircle(x, y, 4, cc);         // pressure mode: colour-coded cloud ring
-    if (_pZoomCur > 1.3f) windBarb(g, x, y, p.wdir, p.wspd, catv ? ctc : gTheme.fg);   // wind barb when zoomed in
+    g.fillCircle(x, y, seld ? 3 : 2, pc);                     // dot ALWAYS coloured by pressure (inHg)
+    if (seld) g.drawCircle(x, y, 5, gTheme.fg);              // selection ring
     if (_mapDotN < kMapDots) { _mapDotIcao[_mapDotN] = p.icao; _mapDotX[_mapDotN] = (int16_t)x; _mapDotY[_mapDotN] = (int16_t)y; _mapDotN++; }
-    String id = p.icao; if (id.length() == 4 && id[0] == 'K') id = id.substring(1);     // drop US K
+    String id = p.icao; if (id.length() == 4 && id[0] == 'K') id = id.substring(1);      // drop US K
+    char inhg[8] = ""; if (p.hpa > 0) snprintf(inhg, sizeof(inhg), "%.2f", p.hpa * 0.02953f);
     g.setTextDatum(textdatum_t::top_left);
-    g.setTextColor(seld ? gTheme.fg : gTheme.dim, gTheme.bg); g.drawString(id, x + 4, y - 9);   // id
-    if (catv) {                                              // category: id + VFR/MVFR/IFR tag
-      if (p.cat.length()) { g.setTextColor(ctc, gTheme.bg); g.drawString(p.cat, x + 4, y - 1); }
-    } else {
-      if (!cloud) { g.setTextColor(cc, gTheme.bg); g.drawString(String(p.cloud) + "%", x + 4 + ((int)id.length() + 1) * 6, y - 9); }  // cloud% after id
-      char b[12];
-      if (cloud)               snprintf(b, sizeof(b), "%d%%", p.cloud);
-      else if (_presMode == 1) snprintf(b, sizeof(b), "%.2f", p.hpa * 0.02953f);  // full inHg
-      else                     snprintf(b, sizeof(b), "%d", p.hpa);               // full hPa
-      g.setTextColor(cloud ? cc : pc, gTheme.bg); g.drawString(b, x + 4, y - 1);  // readout
-      if (_pZoomCur > 1.3f && p.wspd >= 0) {                                      // wind speed below, when zoomed
+    if (zoom2) {                                              // 2.6x+: wind barb + multi-line readout near the dot
+      windBarb(g, x, y, p.wdir, p.wspd, gTheme.fg);
+      g.setTextColor(ctc, gTheme.bg); g.drawString(id, x + 5, y - 10);                              // line 1: id (cat) ...
+      g.setTextColor(cc, gTheme.bg);  g.drawString(String(p.cloud) + "%", x + 5 + ((int)id.length() + 1) * 6, y - 10);  // ... + cloud%
+      if (inhg[0]) { g.setTextColor(pc, gTheme.bg); g.drawString(inhg, x + 5, y - 1); }            // line 2: inHg (pressure colour)
+      if (zoom3 && p.wspd >= 0) {                                                                   // line 3 (4.5x+): wind kt
         g.setTextColor(gTheme.dim, gTheme.bg);
-        g.drawString(p.wspd == 0 ? String("calm") : String(p.wspd) + "kt", x + 4, y + 7);
+        g.drawString(p.wspd == 0 ? String("calm") : String(p.wspd) + "kt", x + 5, y + 8);
       }
+    } else {                                                  // 1x: id (cat colour) + the active layer's value
+      g.setTextColor(ctc, gTheme.bg); g.drawString(id, x + 4, y - 4);
+      int lx = x + 4 + ((int)id.length() + 1) * 6;
+      if (_presMode == 0) { if (p.cat.length()) g.drawString(p.cat, lx, y - 4); }                   // category (id colour shows it)
+      else if (_presMode == 1) { g.setTextColor(cc, gTheme.bg); g.drawString(String(p.cloud) + "%", lx, y - 4); }
+      else if (_presMode == 2) { windBarb(g, x, y, p.wdir, p.wspd, gTheme.fg);
+        if (p.wspd >= 0) { g.setTextColor(gTheme.dim, gTheme.bg);
+          g.drawString(p.wspd == 0 ? String("calm") : String(p.wspd) + "kt", lx, y - 4); } }
+      else { if (inhg[0]) { g.setTextColor(pc, gTheme.bg); g.drawString(inhg, lx, y - 4); } }       // inHg
     }
   }
-  if (!cloud && !catv) {                                       // H / L markers (pressure modes only)
-    if (hi >= 0) { g.setTextDatum(textdatum_t::middle_center); g.setTextColor(gTheme.accent, gTheme.bg); g.drawString("H", SX(merged[hi].lon), SY(merged[hi].lat) - 8); }
-    if (lo >= 0) { g.setTextDatum(textdatum_t::middle_center); g.setTextColor(gTheme.warn,   gTheme.bg); g.drawString("L", SX(merged[lo].lon), SY(merged[lo].lat) - 8); }
-  }
-  // Observer location marker.
+  // Observer location: green circle + black centre dot (matches the Satellites/Launches maps).
   if (_loc.active().valid) {
     double ox = _loc.active().lon, oy = _loc.active().lat;
     if (ox >= w0 && ox <= w1 && oy >= a0 && oy <= a1) {
       int x = SX(ox), y = SY(oy);
-      g.drawFastHLine(x - 3, y, 7, gTheme.ok); g.drawFastVLine(x, y - 3, 7, gTheme.ok);
+      g.fillCircle(x, y, 4, gTheme.ok); g.fillCircle(x, y, 1, 0x0000);
     }
   }
   // Bottom strip: decoded METAR for the selected/closest field, sourced from the unified
@@ -833,9 +828,6 @@ void PageAviation::drawPressure(App& app) {
            g.drawString("(decoded from area feed - no raw METAR here)", 4, by + 11); }
   } else {
     g.setTextDatum(textdatum_t::bottom_left); g.setTextColor(gTheme.dim, gTheme.bg);
-    if (catv)                g.drawString("flight category  green VFR / blue MVFR / red IFR", 4, cy0 + ch - 1);
-    else if (cloud)          g.drawString("cloud %  green clear / blue part / dim overcast", 4, cy0 + ch - 1);
-    else if (_presMode == 1) g.drawString(String("H ") + String(hv * 0.02953f, 2) + " L " + String(lv * 0.02953f, 2) + " inHg  blue=hi red=lo", 4, cy0 + ch - 1);
-    else                     g.drawString(String("H ") + hv + " L " + lv + " hPa  blue=hi red=lo", 4, cy0 + ch - 1);
+    g.drawString("dot=inHg (blue hi/red lo)  id=flight cat  layer " + String(ml), 4, cy0 + ch - 1);
   }
 }
