@@ -58,8 +58,10 @@ multi-domain, on dedicated cheap hardware.**
 
 Eight tabs — swipe left/right between them. Most pages **cycle sub-views on a centre
 tap**; **up/down swipe** scrolls a list or steps sub-views; **side taps** step items
-(a satellite, an aircraft, a launch). Tap the status strip to toggle **AUTO / MANUAL**;
-long-press to **pin**.
+(a satellite, an aircraft, a launch). **Tap the page title** for a **views menu** that
+lists the current page's sub-views by name so you can jump straight to one. Tap the
+status strip to toggle **AUTO / MANUAL** (and **tap a Director alert banner to jump to
+the page it's about**); long-press to **pin**.
 
 ### 0 · Agenda — *your night at a glance*
 
@@ -85,14 +87,14 @@ long-press to **pin**.
 | |
 |---|
 | ![Aircraft radar](docs/img/page2-aircraft.jpg) |
-| A north-up **ADS-B radar** with range rings (your range + 5/10 nm reference), per-blip **heading chevrons**, and **dead-reckoned** motion between updates. Tap a blip → callsign, type, altitude, ground speed + track, distance/bearing, and the **look az/el** (where to point binoculars). An **emergency squawk** (7700/7600/7500) rings the contact and raises a banner; HOME + airport chips recenter the radar; chips filter range / on-ground / altitude / category; a marquee scrolls the **nearest airport + its frequencies**. *(Shown at a quiet field — and note a real limit: on a no-PSRAM board the live ADS-B fetch competes with the screenshot buffer for heap, so a busy radar is hard to **screenshot** even when it's lively on the glass — see Limitations.)* |
+| A north-up **ADS-B radar** with range rings (your range + 5/10 nm reference), per-blip **heading chevrons**, and **dead-reckoned** motion between updates. Tap a blip → callsign, type, altitude, ground speed + track, distance/bearing, and the **look az/el** (where to point binoculars). An **emergency squawk** (7700/7600/7500) rings the contact and raises a banner, and a plane passing **nearly overhead** (within 5 nm and >20° up) fires a cross-tab "Overhead" alert + tab badge; HOME + airport chips recenter the radar; chips filter range / on-ground / altitude / category; a marquee scrolls the **nearest airport + its frequencies**. *(Shown at a quiet field — and note a real limit: on a no-PSRAM board the live ADS-B fetch competes with the screenshot buffer for heap, so a busy radar is hard to **screenshot** even when it's lively on the glass — see Limitations.)* |
 
 ### 3 · Aviation weather — *the sky's flight briefing*
 
 | |
 |---|
 | ![Flight-category map](docs/img/aviation-map.jpg) |
-| **Map** — airports coloured by flight category (VFR green / MVFR cyan / IFR-LIFR orange), with **wind barbs**, id labels, an observer crosshair, and tappable zoom. Side-tap steps fields; centre-tap cycles views. |
+| **Map** — the unified weather map. Every airport **dot is coloured by pressure** (inHg: blue high / grey normal / red low) and its **id by flight category** (VFR green / MVFR cyan / IFR-LIFR orange), so you read two layers at once. The top-left badge cycles which value rides beside each field — **category / cloud / wind / inHg** — and **zooming in** (tap a point) grows a **wind barb** on each dot plus a 2–3 line readout (id + cloud %, inHg, then wind kt). A **home** chip recenters on you at 1×; the scope badge cycles **200 mi / US / world** (tap the US/world map to drill into a region); dense areas auto-declutter and reveal more as you zoom. Your location is the green dot. |
 
 | |
 |---|
@@ -109,10 +111,7 @@ long-press to **pin**.
 | ![24h area trends](docs/img/aviation-trends.jpg) |
 | **Trends** — 24 h area sparklines for temp / dewpoint / cloud / pressure with a plain-language conclusion ("pressure steady", "+ fog/low-cld risk", "clearing"). |
 
-| |
-|---|
-| ![Synoptic pressure map](docs/img/aviation-pressure.jpg) |
-| **Pressure** — a makeshift synoptic map from major-airport METARs: H/L markers, blue-high/red-low colouring, cloud rings, hPa/inHg/cloud modes, and **tap-to-zoom levels** (off / 2.6× / 4.5× / 7×) that bring in wind barbs. |
+*(The old standalone synoptic "Pressure" view is now folded into the **Map** above — pressure is the dot colour at every zoom, with inHg as one of its layers.)*
 
 Two more views appear **only when there's data**: a **TAF** view (decoded FM/BECMG/TEMPO/PROB
 periods) when a field carries one, and a **Hazards** view (AIRMET/SIGMET/PIREP in plain
@@ -125,7 +124,7 @@ strong wind) is surfaced cross-tab as a notice instead (see the Director).
 | |
 |---|
 | ![Polar pass view](docs/img/satellites-polar.jpg) |
-| **Polar** — a sky-dome with the predicted **pass-trajectory arc** (solid above your min-elevation, dashed below), AOS/LOS markers + times, max elevation, sunlit-vs-eclipsed flag, live range, and — for FM birds — **live Doppler** uplink/downlink ("DL 145.800 −1.2k"). Counts down "AOS T-7h17m max 44°". |
+| **Polar** — a sky-dome with the predicted **pass-trajectory arc** (solid above your min-elevation, dashed below), AOS/LOS markers + times, max elevation, sunlit-vs-eclipsed flag, live range, and — for FM birds — **live Doppler** uplink/downlink ("DL 145.800 −1.2k"). Counts down "AOS T-7h17m max 44°", and for the bright birds (ISS / Tiangong / Hubble) gives a **naked-eye verdict** — "✱ VISIBLE to eye ✱" when it'll be sunlit against a dark sky, or *why not* ("daylight" / "in shadow"). A row of **tap-chips** along the top jumps straight between your tracked birds. |
 
 | |
 |---|
@@ -239,9 +238,10 @@ These have no single tab — they're part of the whole experience.
 - **Intelligent Focus director** — the cross-tab brain. An ambient resting tab by
   day/night with a multi-page attract tour; **interrupts** that seize focus for an
   imminent **pass** ("ISS 45° in 3m · VIS") or **launch** ("Launch in 6m" — *the
-  Launches shot above*); and **notice badges** for Kp storms, aviation SPECIs, hazards,
-  and extreme weather. In AUTO it switches the carousel (with a brief **"▸ page"**
-  banner) and pre-focuses the exact item; in MANUAL it just badges the tab. A *new*
+  Launches shot above*); a plane passing **overhead**; and **notice badges** for Kp
+  storms, aviation SPECIs, hazards, and extreme weather. In AUTO it switches the carousel
+  (with a brief **"▸ page"** banner) and pre-focuses the exact item; in MANUAL it just
+  badges the tab — and **tapping the alert banner jumps to the page it's about**. A *new*
   severe condition fires a one-shot cross-tab alert so a dangerous change gets noticed.
 - **Modes & status-strip chrome** — AUTO / MANUAL / pinned. The right cluster is icons:
   **WiFi signal bars** (tap → Health), a **mode glyph** (play/pause/lock), and a
@@ -277,9 +277,17 @@ It runs on a **$10–15 ESP32 "Cheap Yellow Display."** The full bill of materia
 toolchain setup, first flash, WiFi provisioning, OTA, and board-specific quirks live in
 **[HARDWARE_SETUP.md](HARDWARE_SETUP.md)**.
 
-Quick version: install PlatformIO, `git clone`, build the `cyd28_ili9341` env, flash over
-USB once, then join the `Overhead-Setup-…` WiFi to provision. After that, OTA from your
-desk.
+### ⚡ Flash from your browser — no toolchain
+
+Open the **[web flasher](https://jamesdavid.github.io/Overhead/)** in desktop **Chrome**
+or **Edge**, plug the CYD in over USB, and click **Install** — it flashes over Web Serial
+in about a minute, then you join the `Overhead-setup` WiFi to provision. (Source for the
+page: `docs/index.html`.)
+
+### Build from source
+
+Install PlatformIO, `git clone`, build the `cyd28_ili9341` env, flash over USB once, then
+join the `Overhead-setup` WiFi to provision. After that, OTA from your desk.
 
 ---
 
