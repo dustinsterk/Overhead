@@ -11,12 +11,11 @@
   #include <esp_lcd_panel_rgb.h>
   #include <esp_lcd_panel_ops.h>
 
-// Per-row hash of the last frame pushed to the panel. flushFramebuffer() pushes only the
-// rows that actually changed — exactly what LVGL/cyd-radio do (dirty rectangles). Small
-// row-band copies are an imperceptible tear window; pushing the whole 768 KB frame hits the
-// PSRAM bandwidth wall (tearing) and stalls the scan (roll). The app draws into LovyanGFX's
-// own (off-screen) work framebuffer; only changed rows are copied to esp_lcd's scanned FB.
-static uint32_t s_rowHash[TFT_PANEL_HEIGHT];
+// Per-(row, column-strip) hash of the last frame pushed to the panel, so flushFramebuffer()
+// pushes only a TIGHT sub-rectangle of what changed — like LVGL/cyd-radio's small dirty rects.
+// A small rect = imperceptible tear window on the single FB; full-width row bands were too big.
+static constexpr int RGB_NSTRIP = 8;                       // 800/8 = 100 px column strips
+static uint32_t s_cellHash[TFT_PANEL_HEIGHT * RGB_NSTRIP];
 
 // esp_lcd RGB panel that OWNS the scan-out (its own framebuffer). LovyanGFX's Bus_RGB scan is
 // neutered (patch_lovyangfx.py) and allocates a SEPARATE work framebuffer. data_gpio uses the
@@ -57,40 +56,39 @@ void Display::rgbPanelBegin() {
 }
 #endif
 
-// CrowPanel: push ONLY the rows that changed since last frame to esp_lcd's scanned FB
-// (LVGL-style dirty rectangles). Per-row sampled hash detects changes; consecutive dirty
-// rows are coalesced into one draw_bitmap. Small copies = imperceptible tear, no roll.
+// CrowPanel: push only a TIGHT sub-rectangle of what changed to esp_lcd's scanned FB
+// (LVGL-style dirty rect). A per-(row,strip) sampled hash finds the changed bbox; the rect is
+// copied through a small INTERNAL-SRAM staging buffer (so draw_bitmap reads SRAM, not PSRAM,
+// while writing — never contending with the scan). Small rect = imperceptible tear, no roll.
 void Display::flushFramebuffer() {
 #if defined(BOARD_CROWPANEL_S3_5HMI)
   if (!_rgbPanel) return;
   const uint16_t* cv = (const uint16_t*)_lcd.framebuffer();   // LovyanGFX work FB (the app drew here)
   if (!cv) return;
   const int W = TFT_PANEL_WIDTH, H = TFT_PANEL_HEIGHT;
-  // cyd-radio's trick: push only the rows that changed, and stage them through a small INTERNAL
-  // SRAM buffer first. draw_bitmap then reads SRAM (not PSRAM) while writing the FB, so it doesn't
-  // contend with the continuous scan reading the same PSRAM — that contention is what tore. Each
-  // push is at most CHUNK rows (tiny), so any tear window is imperceptible (single FB, no swap).
-  static const int CHUNK = 10;
+  const int NS = RGB_NSTRIP, SW = W / NS;
+  int minY = H, maxY = -1, minS = NS, maxS = -1;             // changed bounding box (rows + strips)
+  for (int y = 0; y < H; ++y) {
+    const uint16_t* row = cv + (size_t)y * W;
+    for (int s = 0; s < NS; ++s) {
+      uint32_t h = 2166136261u;                              // FNV-1a over every 4th px in the strip
+      for (int x = s * SW; x < s * SW + SW; x += 4) h = (h ^ row[x]) * 16777619u;
+      uint32_t& slot = s_cellHash[(size_t)y * NS + s];
+      if (h != slot) { slot = h;
+        if (y < minY) minY = y; if (y > maxY) maxY = y;
+        if (s < minS) minS = s; if (s > maxS) maxS = s; }
+    }
+  }
+  if (maxY < minY) return;                                   // nothing changed -> push nothing
+  const int x0 = minS * SW, x1 = (maxS + 1) * SW, bw = x1 - x0;
+  static const int CHUNK = 16;                               // rows per draw_bitmap (keep each push small)
   static uint16_t* stage = (uint16_t*)heap_caps_malloc((size_t)W * CHUNK * 2, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
   if (!stage) return;
-  int bandStart = -1;
-  for (int y = 0; y <= H; ++y) {
-    bool dirty = false;
-    if (y < H) {
-      const uint16_t* row = cv + (size_t)y * W;
-      uint32_t h = 2166136261u;                        // FNV-1a over every 4th pixel
-      for (int x = 0; x < W; x += 4) h = (h ^ row[x]) * 16777619u;
-      if (h != s_rowHash[y]) { s_rowHash[y] = h; dirty = true; }
-    }
-    if (dirty && bandStart < 0) bandStart = y;
-    else if (!dirty && bandStart >= 0) {               // flush the band [bandStart, y) in CHUNK rows
-      for (int by = bandStart; by < y; by += CHUNK) {
-        int bh = (y - by < CHUNK) ? (y - by) : CHUNK;
-        memcpy(stage, cv + (size_t)by * W, (size_t)W * bh * 2);
-        esp_lcd_panel_draw_bitmap((esp_lcd_panel_handle_t)_rgbPanel, 0, by, W, by + bh, stage);
-      }
-      bandStart = -1;
-    }
+  for (int y = minY; y <= maxY; y += CHUNK) {
+    int bh = (maxY - y + 1 < CHUNK) ? (maxY - y + 1) : CHUNK;
+    for (int r = 0; r < bh; ++r)                             // gather the rect's rows (stride W -> bw) into SRAM
+      memcpy(stage + (size_t)r * bw, cv + (size_t)(y + r) * W + x0, (size_t)bw * 2);
+    esp_lcd_panel_draw_bitmap((esp_lcd_panel_handle_t)_rgbPanel, x0, y, x1, y + bh, stage);
   }
 #endif
 }
