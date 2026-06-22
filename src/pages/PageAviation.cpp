@@ -214,10 +214,13 @@ void PageAviation::onTouch(App& app, int x, int y) {
     }
     return;
   }
-  if (_view == View::Pressure && x > app.contentW() - 50 && y < 16) {  // top-right: zoom 200mi/US/world
-    int ns = (_pmap.scope() + 1) % 3;
-    _pmap.setScope(ns);
-    _settings.set("presScope", (long)ns); _settings.save();
+  if (_view == View::Pressure && x > app.contentW() - 50 && y < 16) {  // top-right: 50mi/200mi/US/world
+    int sc = _pmap.scope();
+    if      (sc == 0 && _pmap.regionalMi() > 100) _pmap.setRegionalMi(50);    // 200mi -> 50mi (zoom in)
+    else if (sc == 0)                             _pmap.setScope(1);          // 50mi  -> US
+    else if (sc == 1)                             _pmap.setScope(2);          // US    -> world
+    else                                          _pmap.setRegionalMi(200);   // world -> 200mi
+    _settings.set("presScope", (long)_pmap.scope()); _settings.save();
     resetPresZoom();                                   // reset map zoom on scope change
     _mapSelIcao = "";                                  // selection no longer in this bbox
     _needClear = _dirty = true; return;
@@ -702,7 +705,7 @@ void PageAviation::drawPressure(App& app) {
   // Zoomed in (>=2.6x) a richer 2-3 line readout shows regardless of layer.
   int scope = _pmap.scope();
   const char* ml = _presMode == 0 ? "cat" : _presMode == 1 ? "cloud" : _presMode == 2 ? "wind" : "inHg";
-  const char* sc = scope == 0 ? "200mi" : scope == 1 ? "US" : "world";
+  const char* sc = scope == 0 ? (_pmap.regionalMi() > 100 ? "200mi" : "50mi") : scope == 1 ? "US" : "world";
   bool big   = app.contentW() >= 640;                          // large screens (CrowPanel): room for the
   bool zoom2 = big || _pZoomCur > 1.6f;                        // full per-dot readout at 1x, like 7x does on
   bool zoom3 = big || _pZoomCur > 3.5f;                        // the small screen (multi-line + wind kt)

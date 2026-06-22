@@ -30,8 +30,17 @@ void PressureMapProvider::computeBbox() {
   double la = _custom ? _cLat : (_loc && _loc->active().valid) ? _loc->active().lat : 39.0;   // regional box
   double lo = _custom ? _cLon : (_loc && _loc->active().valid) ? _loc->active().lon : -98.0;
   double cl = cos(la * M_PI / 180.0); if (cl < 0.3) cl = 0.3;
-  const double dlat = 2.9;                          // ~200 mi radius
+  const double dlat = _regionalMi / 69.0;           // box radius (200 mi -> 2.9 deg; 50 mi -> 0.72 deg)
   _a0 = la - dlat; _a1 = la + dlat; _w0 = lo - dlat / cl; _w1 = lo + dlat / cl;
+}
+
+// Change the regional box radius (e.g. 200 -> 50 mi to zoom in) and refetch around the current
+// centre (the drilled-in point if any, else the observer).
+void PressureMapProvider::setRegionalMi(double mi) {
+  _regionalMi = mi;
+  double la = _custom ? _cLat : (_loc && _loc->active().valid) ? _loc->active().lat : 39.0;
+  double lo = _custom ? _cLon : (_loc && _loc->active().valid) ? _loc->active().lon : -98.0;
+  fetchAround(la, lo);
 }
 
 void PressureMapProvider::fetchAround(double lat, double lon) {
