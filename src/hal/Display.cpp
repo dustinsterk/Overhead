@@ -23,7 +23,8 @@ static uint32_t s_cellHash[TFT_PANEL_HEIGHT * RGB_NSTRIP];
 void Display::rgbPanelBegin() {
   esp_lcd_rgb_panel_config_t pc = {};
   pc.clk_src = LCD_CLK_SRC_PLL160M;
-  pc.timings.pclk_hz           = RGB_PCLK_HZ;
+  pc.timings.pclk_hz           = 14000000;   // stable interim: ~34 Hz, "a lot better". 12M black, 21M glitches
+                                             // until the SRAM renderer lands. Factory 21M target after that.
   pc.timings.h_res             = TFT_PANEL_WIDTH;
   pc.timings.v_res             = TFT_PANEL_HEIGHT;
   pc.timings.hsync_pulse_width = RGB_HSYNC_PULSE;
@@ -35,10 +36,9 @@ void Display::rgbPanelBegin() {
   pc.timings.flags.pclk_idle_high = 1;       // V1.2 factory setting
   pc.data_width     = 16;
   pc.bits_per_pixel = 16;
-  pc.num_fbs        = 1;                      // single FB, like cyd-radio. We push only changed rows
-                                              // through a small SRAM staging buffer (flushFramebuffer),
-                                              // so each draw_bitmap is tiny -> imperceptible tear, no
-                                              // bandwidth wall. No bounce (cyd-radio runs without it).
+  pc.num_fbs        = 1;                      // single FB; we push tiny dirty-rects (flushFramebuffer).
+  pc.bounce_buffer_size_px = (size_t)TFT_PANEL_WIDTH * 10;  // small bounce (32KB) — keeps heap healthy.
+                                              // (40 lines starved the heap to 13KB -> unstable.)
   pc.hsync_gpio_num = PIN_RGB_HSYNC;
   pc.vsync_gpio_num = PIN_RGB_VSYNC;
   pc.de_gpio_num    = PIN_RGB_DE;

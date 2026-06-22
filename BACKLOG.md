@@ -456,25 +456,33 @@ REMAINING (stretch):
 
 <!-- new milestones append below as they land -->
 
-## CrowPanel V1.2 — display tearing (RESOLVED, cyd-radio model)
+## CrowPanel V1.2 — display tearing (PARTIAL: 14 MHz interim; real fix = SRAM renderer, TODO)
 
-Root cause: an 800×480 RGB framebuffer scanned continuously from PSRAM tears whenever the
-scan catches a write, and any whole-frame move (draw-into-scanned-FB, or a full-frame copy)
-saturates the PSRAM bus → tearing/roll/scramble. The fix is what cyd-radio/LVGL do: push
-ONLY the changed pixels, and stage them through SRAM so the copy doesn't contend with the
-scan's PSRAM reads.
+**Root cause (confirmed on device):** the 800×480 RGB framebuffer is scanned continuously from
+PSRAM. At the factory 21 MHz the scan alone needs ~39 MB/s of PSRAM; Overhead *renders the whole
+frame into a PSRAM work buffer*, so its render writes collide with the scan's reads → the scan
+starves → glitch/tear/scramble. The factory demo runs 21 MHz **clean** because LVGL renders into
+small **SRAM** tiles and pushes tiny rects — it never loads PSRAM during render.
 
-**Final approach** (after trying single-FB direct-draw, num_fbs=2 full copy, num_fbs=2
-partial — all worse): pioarduino/IDF5 `esp_lcd` RGB panel (`num_fbs=1`, V1.2 timings,
-data_gpio i^8 to match LovyanGFX's FB byte order) owns the scan-out. LovyanGFX's Bus_RGB
-scan is neutered (`scripts/patch_lovyangfx.py`, LovyanGFX pinned 1.2.21) and allocates a
-separate work framebuffer the app draws into normally. `Display::flushFramebuffer()` hashes
-each row (sampled), finds the changed rows, and pushes only those — copied through a 10-line
-INTERNAL-SRAM staging buffer, then `esp_lcd_panel_draw_bitmap`. So `draw_bitmap` reads SRAM
-(not PSRAM) while writing the FB, never contending with the scan → no tear. Idle frames push
-nothing. ~45 fps loop. Touch moved to a direct Wire GT911 read (the LovyanGFX Touch_GT911
-wanted I2C port 1 on the same pins as the expander on port 0 — they fought, touch died).
-Screenshot JPEG buffer bumped to 160 KB (PSRAM) for the 800×480 frame (was 503-ing at 16 KB).
+**What's tried (all still glitch at 21 MHz):** single-FB direct-draw, num_fbs=2 full copy (roll),
+num_fbs=2 partial (worse), SRAM-staged dirty-row push, tight dirty-rect push, +bounce. The bounce
+(esp_lcd's scan-from-SRAM) only absorbs *jitter*; sized big enough to absorb Overhead's render it
+starves the heap (40 lines → 13 KB free, unstable). Lowering pclk helps (less bandwidth): **21 MHz
+glitches, 14 MHz "a lot better" (user), 12 MHz is BLACK (V1.2 floor ~14 MHz).**
 
-Watch: if a future page animates large regions every frame, the per-frame changed-row push
-grows; a full page change is a transient larger push (still SRAM-staged).
+**Current shipped state (interim):** `pclk = 14 MHz` (~34 Hz), `num_fbs=1`, 10-line bounce,
+tight dirty-rect push (per row+100px-strip bbox, SRAM-staged). "A lot better" but still residual
+jitter/lines — NOT clean. Touch = direct Wire GT911 read (works). Screenshot buffer = 160 KB PSRAM.
+
+**The real fix — SRAM renderer (LVGL-style), TODO (dedicated effort):** stop rendering into PSRAM.
+Render into INTERNAL-SRAM tiles, push each tile. Then the 21 MHz scan has full PSRAM bandwidth →
+clean 51 Hz. Plan:
+1. Make `Display::gfx()` redirectable — return `lgfx::LovyanGFX&` from a `_drawTarget` pointer
+   (default `&_lcd`), add `setDrawTarget()`. Pages already take `lgfx::LovyanGFX&`.
+2. Validate cheaply: render the **status strip** (y=0, needs NO translation) into an SRAM sprite,
+   push it. Kills the every-second clock-tick glitch; proves the redirect.
+3. Content tiles need **coordinate translation** (content is at y>0; an SRAM tile can't hold the
+   768 KB frame). LovyanGFX has NO draw-offset (`setClipRect`/`pushSprite` only), so this needs a
+   translation layer (offset all draws by −tile_y) — the hard part. Options: a translating gfx
+   wrapper, or render the page per-tile with a y-offset plumbed through App's render.
+4. Once rendering is off PSRAM, bump pclk back to 21 MHz (factory ~51 Hz) and drop the bounce.
