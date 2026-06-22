@@ -409,10 +409,10 @@ void PageAircraft::draw(App& app) {
       else if (a.vsFpm < -256) g.fillTriangle(hx, hy + 3, hx - 3, hy - 2, hx + 3, hy - 2, tc);
       else                     g.drawFastHLine(hx - 3, hy, 6, tc);
     }
-    if (sel) {                                        // label the selected blip with its callsign
+    {                                                 // flight number on every target: grey, selected green
       String cs = a.flight.length() ? a.flight : a.hex;
       g.setTextDatum(textdatum_t::bottom_left);
-      g.setTextColor(gTheme.ok, gTheme.bg);
+      g.setTextColor(sel ? gTheme.ok : gTheme.dim, gTheme.bg);
       g.drawString(cs, ax + 4, ay - 2);
     }
   }
