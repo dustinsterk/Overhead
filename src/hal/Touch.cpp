@@ -40,7 +40,7 @@ bool Touch::begin(Display& display) {
 #if CAP_TOUCH_NEEDS_CAL
   uint16_t cal[8];
   if (loadCalibration(cal)) {
-    display.gfx().setTouchCalibrate(cal);
+    display.setTouchCalibrate(cal);
     Serial.println("[touch] loaded saved calibration");
     return true;
   }
@@ -63,7 +63,7 @@ bool Touch::calibrate(Display& display) {
 
   uint16_t cal[8];
   // Draws a crosshair in each corner and waits for a firm press at each.
-  lcd.calibrateTouch(cal, TFT_GREEN, TFT_BLACK, std::max(lcd.width(), lcd.height()) >> 6);
+  display.calibrateTouch(cal, TFT_GREEN, TFT_BLACK, std::max(lcd.width(), lcd.height()) >> 6);
   saveCalibration(cal);
 
   Serial.print("[touch] calibrated: ");

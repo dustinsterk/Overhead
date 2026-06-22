@@ -15,9 +15,17 @@ public:
   // LovyanGFX draws into _lcd's framebuffer (its Bus_RGB scan is neutered — see the
   // patch script). On the CrowPanel, esp_lcd owns the actual scan-out and we push
   // _lcd's framebuffer to it each frame in flushFramebuffer().
-  LGFX& gfx() { return _lcd; }            // raw device (bring-up / Renderer / drawing)
+  // Drawing goes to _drawTarget (default = the panel device). The CrowPanel can redirect it to
+  // an INTERNAL-SRAM sprite so a region renders off-PSRAM (no scan contention), then push it.
+  lgfx::LovyanGFX& gfx() { return *(_drawTarget ? _drawTarget : static_cast<lgfx::LovyanGFX*>(&_lcd)); }
+  void setDrawTarget(lgfx::LovyanGFX* t) { _drawTarget = t; }   // nullptr -> the panel device
+  // CrowPanel SRAM render: redirect drawing of the status strip to an SRAM sprite, then push it to
+  // the scanned FB (no-ops on other boards, where the status draws to the panel device directly).
+  void beginStatusTile();
+  void endStatusTile();
   bool getTouch(int16_t* x, int16_t* y) { return _lcd.getTouch(x, y); }
   void setTouchCalibrate(uint16_t* data) { _lcd.setTouchCalibrate(data); }
+  void calibrateTouch(uint16_t* data, uint32_t fg, uint32_t bg, uint8_t size) { _lcd.calibrateTouch(data, fg, bg, size); }
 
   void setBacklight(uint8_t level);       // 0..255 (spec §7.9 night dimming)
   int  width()  { return _lcd.width(); }
@@ -47,9 +55,11 @@ public:
 private:
   int encodeJpeg(int quality);            // -> JPEG size in _jpg, or 0 if it overflowed
   LGFX _lcd;
+  lgfx::LovyanGFX* _drawTarget = nullptr; // current draw target (nullptr -> &_lcd)
 #if defined(BOARD_CROWPANEL_S3_5HMI)
-  void* _rgbPanel = nullptr;              // esp_lcd_panel_handle_t (num_fbs=2 + bounce; owns scan)
+  void* _rgbPanel = nullptr;              // esp_lcd_panel_handle_t (owns scan)
   void  rgbPanelBegin();                  // create + start the esp_lcd RGB panel
+  lgfx::LGFX_Sprite _statusTile{ &_lcd };  // INTERNAL-SRAM status-strip render target (off-PSRAM)
 #endif
 #if defined(BOARD_CROWPANEL_S3_5HMI)
   static constexpr int kJpgMax = 160000;  // 800x480 is 5x the CYD's pixels -> bigger JPEG (PSRAM has room)

@@ -331,7 +331,9 @@ void App::tick(uint32_t nowMs) {
   if (_statusDirty || nowMs - _lastStatusMs >= 1000) {
     _lastStatusMs = nowMs;
     _statusDirty = false;
+    _display.beginStatusTile();   // CrowPanel: render the status strip off-PSRAM into SRAM...
     drawStatus();
+    _display.endStatusTile();     // ...then push the SRAM tile to the panel (no-op on other boards)
   }
 }
 

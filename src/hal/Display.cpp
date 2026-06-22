@@ -37,8 +37,8 @@ void Display::rgbPanelBegin() {
   pc.data_width     = 16;
   pc.bits_per_pixel = 16;
   pc.num_fbs        = 1;                      // single FB; we push tiny dirty-rects (flushFramebuffer).
-  pc.bounce_buffer_size_px = (size_t)TFT_PANEL_WIDTH * 10;  // small bounce (32KB) — keeps heap healthy.
-                                              // (40 lines starved the heap to 13KB -> unstable.)
+  // NO bounce at 14 MHz: the scan reads PSRAM directly fine at this rate, and the bounce was the
+  // thing DESYNCING during activity spikes (web-toggle/boot) -> top-bar-wraps-to-bottom roll.
   pc.hsync_gpio_num = PIN_RGB_HSYNC;
   pc.vsync_gpio_num = PIN_RGB_VSYNC;
   pc.de_gpio_num    = PIN_RGB_DE;
@@ -93,6 +93,28 @@ void Display::flushFramebuffer() {
 #endif
 }
 
+static constexpr int kStatusTileH = 20;   // = App::kStatusH (keep in sync)
+
+// CrowPanel SRAM renderer (piece 1): render the status strip into an INTERNAL-SRAM sprite — off the
+// PSRAM bus, so it never contends with the scan — then push that SRAM tile to the scanned FB. The
+// status strip is at y=0, so it needs no coordinate translation (the content tiling will). No-op on
+// other boards (there the status draws straight to the panel device via gfx()).
+void Display::beginStatusTile() {
+#if defined(BOARD_CROWPANEL_S3_5HMI)
+  if (_statusTile.getBuffer()) setDrawTarget(&_statusTile);
+#endif
+}
+void Display::endStatusTile() {
+#if defined(BOARD_CROWPANEL_S3_5HMI)
+  if (_drawTarget == &_statusTile) {
+    setDrawTarget(nullptr);
+    if (_rgbPanel)
+      esp_lcd_panel_draw_bitmap((esp_lcd_panel_handle_t)_rgbPanel, 0, 0, TFT_PANEL_WIDTH, kStatusTileH,
+                                _statusTile.getBuffer());
+  }
+#endif
+}
+
 bool Display::begin(bool enableShots) {
   _shotsEnabled = enableShots;
 
@@ -116,6 +138,15 @@ bool Display::begin(bool enableShots) {
 
   _lcd.setRotation(DISPLAY_DEFAULT_ROTATION);
   _lcd.fillScreen(TFT_BLACK);
+#if defined(BOARD_CROWPANEL_S3_5HMI)
+  // SRAM render target for the status strip (INTERNAL RAM, off the PSRAM bus).
+  _statusTile.setColorDepth(16);
+  _statusTile.setPsram(false);
+  if (!_statusTile.createSprite(_lcd.width(), kStatusTileH))
+    Serial.println("[disp] status tile alloc FAILED");
+  else
+    Serial.printf("[disp] status tile %dx%d in SRAM @%p\n", _lcd.width(), kStatusTileH, _statusTile.getBuffer());
+#endif
 #if !BACKLIGHT_VIA_EXPANDER
   // Drive the backlight PWM ourselves (LovyanGFX's Light_PWM didn't actually vary
   // brightness on the cyd28 unit — stuck dim). Same channel as the LGFX config;
