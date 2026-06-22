@@ -310,7 +310,6 @@ void App::tick(uint32_t nowMs) {
     _clock->toggle(*this);
   }
 
-  _display.setContentTiled(false);                            // default: the work-FB push path (overlays/clock/un-tiled)
   if (_active >= 0 && !_grid && !_locPicker && !_viewMenu) {   // grid/picker/views overlay holds the content
     Page* pg = _pages[_active];
     if (_clock && _clock->active()) {
@@ -325,7 +324,6 @@ void App::tick(uint32_t nowMs) {
       pg->tick(*this, nowMs);                                  // update; tiled pages set needsDraw (no draw here)
       int th = _display.tileRows();
       if (th > 0 && pg->tiled()) {                             // CrowPanel: render this page off-PSRAM, band by band
-        _display.setContentTiled(true);
         if (pg->needsDraw()) {
           for (int by = kStatusH; by < _display.height(); by += th) {
             int bh = (_display.height() - by < th) ? (_display.height() - by) : th;
@@ -337,7 +335,10 @@ void App::tick(uint32_t nowMs) {
           pg->clearNeedsDraw();
         }
       } else {
-        drawViewDots(pg->viewCount(), pg->viewIndex());        // un-tiled page: dots over the work-FB content
+        // No SRAM tiling (other boards / tile unavailable): a tiled page draws via render() straight
+        // to the device here; a non-tiled page already drew inside tick().
+        if (pg->tiled() && pg->needsDraw()) { pg->render(*this); pg->clearNeedsDraw(); }
+        drawViewDots(pg->viewCount(), pg->viewIndex());
       }
     }
   }

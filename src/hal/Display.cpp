@@ -64,13 +64,12 @@ void Display::rgbPanelBegin() {
 void Display::flushFramebuffer() {
 #if defined(BOARD_CROWPANEL_S3_5HMI)
   if (!_rgbPanel) return;
-  if (_contentTiled) return;                                  // status+content already on SRAM tiles
-  const uint16_t* cv = (const uint16_t*)_lcd.framebuffer();   // LovyanGFX work FB (the app drew here)
-  if (!cv) return;
+  const uint16_t* cv = (const uint16_t*)_lcd.framebuffer();   // LovyanGFX work FB — holds the full assembled
+  if (!cv) return;                                            // frame (tiled pages memcpy here; others draw here)
   const int W = TFT_PANEL_WIDTH, H = TFT_PANEL_HEIGHT;
   const int NS = RGB_NSTRIP, SW = W / NS;
   int minY = H, maxY = -1, minS = NS, maxS = -1;             // changed bounding box (rows + strips)
-  for (int y = kTileRows; y < H; ++y) {                       // skip the status rows — the status is tiled (SRAM)
+  for (int y = 0; y < H; ++y) {
     const uint16_t* row = cv + (size_t)y * W;
     for (int s = 0; s < NS; ++s) {
       uint32_t h = 2166136261u;                              // FNV-1a over every 4th px in the strip
@@ -115,13 +114,15 @@ void Display::beginTile(int bandY, int bandH) {
   setDrawTarget(&_tile);
 #endif
 }
-// Push the rendered band (SRAM) to the scanned FB at (0, bandY); restore the panel as the draw target.
+// Copy the rendered band (SRAM) into the work framebuffer at row bandY, then restore the draw target.
+// We DON'T push per-band to the scan (that draws visibly top-to-bottom and is slow). Instead the
+// assembled work FB is pushed once by flushFramebuffer(), which only sends the pixels that changed.
 void Display::endTile(int bandY, int bandH) {
 #if defined(BOARD_CROWPANEL_S3_5HMI)
   if (_drawTarget != &_tile) return;
   setDrawTarget(nullptr);
-  if (_rgbPanel)
-    esp_lcd_panel_draw_bitmap((esp_lcd_panel_handle_t)_rgbPanel, 0, bandY, TFT_PANEL_WIDTH, bandY + bandH, _tileBuf);
+  uint16_t* work = (uint16_t*)_lcd.framebuffer();
+  if (work) memcpy(work + (size_t)bandY * TFT_PANEL_WIDTH, _tileBuf, (size_t)bandH * TFT_PANEL_WIDTH * 2);
 #endif
 }
 
