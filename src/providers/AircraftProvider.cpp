@@ -130,8 +130,13 @@ void AircraftProvider::parseStream(Stream& body) {
   // Keep only the nearest kMax as we scan, so `out` never grows to hold a whole busy
   // feed (~150 contacts). A growing vector would need an ever-larger CONTIGUOUS block,
   // which bad_alloc-aborts at a low largest-free-block (exceptions are off) -> reboot.
-  // Reserved once at the cap, it stays a small fixed allocation.
+  // Reserved once at the cap, it stays a small fixed allocation. Larger-screen/heap boards (CrowPanel)
+  // keep more contacts so traffic out toward the ring edge shows, not just the nearest handful.
+#if defined(BOARD_CROWPANEL_S3_5HMI)
+  static constexpr int kMax = 48;
+#else
   static constexpr int kMax = 24;
+#endif
   std::vector<Aircraft> out; out.reserve(kMax + 1);
   for (JsonObject o : arr) {
     if (!o["lat"].is<double>() || !o["lon"].is<double>()) continue;

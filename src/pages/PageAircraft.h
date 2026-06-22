@@ -66,6 +66,11 @@ private:
   uint32_t _lastDraw = 0;
   uint32_t _lastDataMs = 0;  // millis() of the last data update, for dead-reckoning blips
   uint32_t _marqMs = 0;      // last marquee scroll-frame time
+  // Breadcrumb trails: a short ring of each contact's recent reported positions, in lat/lon (so they
+  // survive a recentre) and drawn as fading dots behind each blip. Fixed-bounded -> heap-safe.
+  struct Trail { String hex; static const int K = 6; double lat[K] = {0}, lon[K] = {0}; uint8_t n = 0, head = 0; };
+  std::vector<Trail> _trails;
+  void pushTrails();         // append the current fixes to the trails (called on fresh data)
 
   static constexpr int kMaxChips = 8;
   int    _chipX[kMaxChips] = {0}, _chipW[kMaxChips] = {0}, _chipCount = 0;

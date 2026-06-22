@@ -115,8 +115,32 @@ void PageAircraft::onData(App& app, ProviderId id) {
     bool empty = (n == 0);
     if (empty != _wasEmpty) { _needClear = true; _wasEmpty = empty; }  // message<->radar
     _lastDataMs = millis();                    // reset the dead-reckoning clock on fresh data
+    if (app.display().width() >= 640) pushTrails();   // breadcrumb trails: large screens only
   }
   _dirty = true;
+}
+
+// Append each live contact's current fix to its breadcrumb trail (matched by hex), and drop trails
+// whose contact has left the feed. Bounded to 40 trails x K fixes so it never grows the heap.
+void PageAircraft::pushTrails() {
+  const auto& list = _ap.aircraft();
+  for (const auto& a : list) {
+    if (a.onGround) continue;
+    Trail* t = nullptr;
+    for (auto& tr : _trails) if (tr.hex == a.hex) { t = &tr; break; }
+    if (!t) {
+      if (_trails.size() >= 40) continue;
+      _trails.push_back(Trail{}); t = &_trails.back(); t->hex = a.hex;
+    }
+    t->lat[t->head] = a.lat; t->lon[t->head] = a.lon;
+    t->head = (t->head + 1) % Trail::K;
+    if (t->n < Trail::K) t->n++;
+  }
+  for (size_t i = 0; i < _trails.size(); ) {            // prune contacts that have left
+    bool live = false;
+    for (const auto& a : list) if (a.hex == _trails[i].hex) { live = true; break; }
+    if (live) ++i; else { _trails[i] = _trails.back(); _trails.pop_back(); }
+  }
 }
 
 void PageAircraft::onTouch(App& app, int x, int y) {
@@ -177,7 +201,7 @@ void PageAircraft::drawFilterBadges(App& app) {
 bool PageAircraft::handleRadiusTap(App& app, int x, int yRel) {
   if (x > 64 || yRel < app.contentH() - 20) return false;
   int r = (int)_settings.getInt("adsbRadiusNm", 50);
-  int next = (r <= 10) ? 15 : (r <= 15) ? 25 : (r <= 25) ? 50 : 10;   // 10/15/25/50
+  int next = (r <= 5) ? 10 : (r <= 10) ? 15 : (r <= 15) ? 25 : (r <= 25) ? 50 : 5;   // 5/10/15/25/50
   _settings.set("adsbRadiusNm", (long)next);
   _settings.save();
   _ap.poll();                                      // refetch with the new radius
@@ -358,26 +382,62 @@ void PageAircraft::draw(App& app) {
   g.drawString("N", cx, cy - R - 6);
   g.drawString(String((int)maxR) + "nm", cx + R - 8, cy - 6);
 
-  // Nearby airports at their true radar position, marked + labelled in the ring colour, so you can
-  // read traffic relative to the fields. Centre = the recentred airport (if any), else the observer.
+  // Shared radar centre (recentred airport, else the observer) for trails / airports / home marker.
+  double clat = _loc.active().lat, clon = _loc.active().lon;
+  if (_centerIcao.length())
+    for (const auto& s : _wx.stations()) if (s.icao == _centerIcao) { clat = s.lat; clon = s.lon; break; }
+  float coslat = cosf((float)clat * D2R);
+  auto place = [&](double lat, double lon, int& px, int& py) -> bool {   // lat/lon -> radar pixel
+    double dN = (lat - clat) * 60.0, dE = (lon - clon) * 60.0 * coslat;
+    double d = sqrt(dN * dN + dE * dE);
+    if (d > maxR) return false;
+    double brg = atan2(dE, dN) / D2R, rr = d / maxR * R;
+    px = cx + (int)round(rr * sin(brg * D2R));
+    py = cy - (int)round(rr * cos(brg * D2R));
+    return true;
+  };
+
+  // Breadcrumb trails (faded recent positions) drawn first, under the airports + blips.
+  // Large-screen devices only (e.g. CrowPanel) — too dense on the small CYD radar.
+  if (app.display().width() >= 640)
+    for (const auto& tr : _trails) {
+      int px, py;
+      for (int j = 0; j < tr.n; ++j) {
+        int idx = (tr.head - tr.n + j + 2 * Trail::K) % Trail::K;
+        if (place(tr.lat[idx], tr.lon[idx], px, py)) g.fillCircle(px, py, 1, gTheme.dim);
+      }
+    }
+
+  // Nearby airports at their true radar position, marked + labelled in the ring colour.
+  g.setTextDatum(textdatum_t::top_center);
+  g.setTextColor(gTheme.grid, gTheme.bg);
+  for (const auto& s : _wx.stations()) {
+    int px, py;
+    if (s.icao == _centerIcao || !place(s.lat, s.lon, px, py)) continue;   // centre field is the origin
+    g.drawCircle(px, py, 2, gTheme.grid);
+    g.drawString(s.icao, px, py + 3);
+  }
+
+  // Centre designator: what the radar is centred on (airport ICAO, or HOME), marked in the middle
+  // like the other fields.
   {
-    double clat = _loc.active().lat, clon = _loc.active().lon;
-    if (_centerIcao.length())
-      for (const auto& s : _wx.stations()) if (s.icao == _centerIcao) { clat = s.lat; clon = s.lon; break; }
-    float coslat = cosf((float)clat * D2R);
+    bool home = !_centerIcao.length();
+    Color cc = home ? gTheme.accent : gTheme.grid;
+    g.fillCircle(cx, cy, 2, cc);
     g.setTextDatum(textdatum_t::top_center);
-    g.setTextColor(gTheme.grid, gTheme.bg);
-    for (const auto& s : _wx.stations()) {
-      float dN = (float)(s.lat - clat) * 60.0f;             // nm north (1 deg lat = 60 nm)
-      float dE = (float)(s.lon - clon) * 60.0f * coslat;    // nm east
-      float d  = sqrtf(dN * dN + dE * dE);
-      if (d < 0.6f || d > maxR) continue;                   // skip the centre field itself + out-of-range
-      float brg = atan2f(dE, dN) * 57.2957795f;
-      float rr  = d / maxR * R;
-      int sx = cx + (int)round(rr * sinf(brg * D2R));
-      int sy = cy - (int)round(rr * cosf(brg * D2R));
-      g.drawCircle(sx, sy, 2, gTheme.grid);
-      g.drawString(s.icao, sx, sy + 3);
+    g.setTextColor(cc, gTheme.bg);
+    g.drawString(home ? String("HOME") : _centerIcao, cx, cy + 3);
+  }
+
+  // HOME (us) marked when the radar is centred on an airport, so you keep your bearing back home.
+  if (_centerIcao.length()) {
+    int px, py;
+    if (place(_loc.active().lat, _loc.active().lon, px, py)) {
+      g.fillCircle(px, py, 2, gTheme.accent);
+      g.drawCircle(px, py, 5, gTheme.accent);
+      g.setTextDatum(textdatum_t::top_center);
+      g.setTextColor(gTheme.accent, gTheme.bg);
+      g.drawString("HOME", px, py + 6);
     }
   }
 
