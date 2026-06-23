@@ -593,6 +593,8 @@ void PageAviation::drawTrends(App& app) {
   const auto& dewp = _wxo.dewpSeries();
   const auto& cloud = _wxo.cloudSeries();
   const auto& pres = _wxo.presSeries();
+  const auto& wind = _wxo.windSeries();
+  const auto& wdir = _wxo.windDirSeries();
   time_t base = _wxo.baseTime();
   if (base == 0 || temp.size() < 3 || pres.size() < 3) {
     g.setTextColor(gTheme.dim, gTheme.bg);
@@ -604,11 +606,12 @@ void PageAviation::drawTrends(App& app) {
   auto gD = [&](int i) { return (i >= 0 && i < (int)dewp.size())  ? (int)dewp[i]  : SENT; };
   auto gC = [&](int i) { return (i >= 0 && i < (int)cloud.size()) ? (int)cloud[i] : SENT; };
   auto gP = [&](int i) { return (i >= 0 && i < (int)pres.size())  ? (int)pres[i]  : SENT; };
+  auto gW = [&](int i) { return (i >= 0 && i < (int)wind.size())  ? (int)wind[i]  : SENT; };
 
   int now = (int)((time(nullptr) - base) / 3600); if (now < 0) now = 0;
   const int span = 24;
   const int gx = 62, gw = cw - gx - 6;
-  const int top = cy0 + 15, rowH = (ch - 15 - 15) / 4;
+  const int top = cy0 + 15, rowH = (ch - 15 - 15) / 5;
 
   auto sparkRow = [&](int r, const char* name, std::function<int(int)> get, const String& cur, const String& cur2, Color c) {
     int y0 = top + r * rowH;
@@ -641,6 +644,13 @@ void PageAviation::drawTrends(App& app) {
   sparkRow(2, "cloud", gC, cv, "", gTheme.fg);
   snprintf(cv, sizeof(cv), "%dhPa", pp); snprintf(cv2, sizeof(cv2), "%.2fin", pp * 0.02953f);
   sparkRow(3, "press", gP, cv, cv2, gTheme.ok);
+  int ws = gW(now) == SENT ? 0 : gW(now);
+  int wd = (now >= 0 && now < (int)wdir.size()) ? wdir[now] : -1;     // FROM direction (deg)
+  static const char* kCompass[8] = {"N", "NE", "E", "SE", "S", "SW", "W", "NW"};
+  snprintf(cv, sizeof(cv), "%dkt", ws);
+  if (wd >= 0) snprintf(cv2, sizeof(cv2), "%s %d\xF7", kCompass[((wd + 22) / 45) % 8], wd);
+  else cv2[0] = 0;
+  sparkRow(4, "wind", gW, cv, cv2, gTheme.accent);
 
   // Conclusion over the displayed window (now -> end), so it matches the graph.
   int Pe = SENT, Ce = SENT;

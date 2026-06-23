@@ -28,6 +28,8 @@ public:
   const std::vector<int8_t>&  dewpSeries()  const { return _dewp; }   // degC
   const std::vector<int16_t>& presSeries()  const { return _pres; }   // hPa
   const std::vector<int8_t>&  cloudSeries() const { return _cloud; }  // %
+  const std::vector<int8_t>&  windSeries()  const { return _wind; }   // kt
+  const std::vector<int16_t>& windDirSeries() const { return _windDir; } // deg (FROM)
   time_t baseTime() const { return _base; }
 
 private:
@@ -44,6 +46,8 @@ private:
   std::vector<int8_t> _precip;
   std::vector<int8_t> _temp, _dewp;      // degC (Aviation Trends)
   std::vector<int16_t> _pres;            // hPa
+  std::vector<int8_t> _wind;             // kt
+  std::vector<int16_t> _windDir;         // deg FROM
   ProviderStatus _status = ProviderStatus::Loading;
   uint32_t _lastFetched = 0;
   bool _inflight = false;

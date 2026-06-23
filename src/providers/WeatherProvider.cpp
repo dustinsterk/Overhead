@@ -40,8 +40,8 @@ void WeatherProvider::refresh(bool force) {
   char url[260];
   snprintf(url, sizeof(url),
     "https://api.open-meteo.com/v1/forecast?latitude=%.4f&longitude=%.4f"
-    "&hourly=cloud_cover,precipitation_probability,temperature_2m,dew_point_2m,surface_pressure"
-    "&forecast_days=2&timezone=GMT",
+    "&hourly=cloud_cover,precipitation_probability,temperature_2m,dew_point_2m,surface_pressure,wind_speed_10m,wind_direction_10m"
+    "&wind_speed_unit=kn&forecast_days=2&timezone=GMT",
     _loc->active().lat, _loc->active().lon);
   _inflight = true;
   _net->get(url, [this](int code, const String& body) {
@@ -66,6 +66,8 @@ bool WeatherProvider::parse(const String& body) {
   filter["hourly"]["temperature_2m"] = true;
   filter["hourly"]["dew_point_2m"] = true;
   filter["hourly"]["surface_pressure"] = true;
+  filter["hourly"]["wind_speed_10m"] = true;
+  filter["hourly"]["wind_direction_10m"] = true;
   JsonDocument doc;
   if (deserializeJson(doc, body, DeserializationOption::Filter(filter))) return false;
 
@@ -75,7 +77,7 @@ bool WeatherProvider::parse(const String& body) {
   if (t.isNull() || c.isNull() || t.size() < 2) return false;
 
   _base = isoToEpoch((const char*)(t[0] | ""));
-  _cloud.clear(); _precip.clear(); _temp.clear(); _dewp.clear(); _pres.clear();
+  _cloud.clear(); _precip.clear(); _temp.clear(); _dewp.clear(); _pres.clear(); _wind.clear(); _windDir.clear();
   for (JsonVariant v : c) _cloud.push_back((int8_t)(int)(v | -1));
   if (!p.isNull()) for (JsonVariant v : p) _precip.push_back((int8_t)(int)(v | -1));
   JsonArray tp = doc["hourly"]["temperature_2m"].as<JsonArray>();
@@ -84,6 +86,10 @@ bool WeatherProvider::parse(const String& body) {
   if (!tp.isNull()) for (JsonVariant v : tp) _temp.push_back((int8_t)lround(v | 0.0f));
   if (!dp.isNull()) for (JsonVariant v : dp) _dewp.push_back((int8_t)lround(v | 0.0f));
   if (!pr.isNull()) for (JsonVariant v : pr) _pres.push_back((int16_t)lround(v | 0.0f));
+  JsonArray ws = doc["hourly"]["wind_speed_10m"].as<JsonArray>();
+  JsonArray wd = doc["hourly"]["wind_direction_10m"].as<JsonArray>();
+  if (!ws.isNull()) for (JsonVariant v : ws) _wind.push_back((int8_t)lround(v | 0.0f));
+  if (!wd.isNull()) for (JsonVariant v : wd) _windDir.push_back((int16_t)lround(v | 0.0f));
   return !_cloud.empty() && _base > 0;
 }
 
