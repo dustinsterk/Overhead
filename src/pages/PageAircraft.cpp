@@ -32,6 +32,17 @@ static void drPos(const Aircraft& a, uint32_t lastDataMs, float& distNm, float& 
   brgDeg = atan2f(east, north) / D2R; if (brgDeg < 0) brgDeg += 360;
 }
 
+// Dead-reckon a contact's altitude forward from its last fix using its reported vertical rate, so
+// the altitude marker keeps tracking (e.g. a 700 fpm descent) between ADS-B updates — the vertical
+// analogue of drPos(). Grounded contacts return their reported altitude unchanged.
+static float drAlt(const Aircraft& a, uint32_t lastDataMs) {
+  if (a.onGround) return a.altFt;
+  float dt = a.seenS + (millis() - lastDataMs) / 1000.0f;   // seconds since the reported fix
+  if (dt < 0) dt = 0; else if (dt > 60) dt = 60;            // bounded like drPos (provider drops at 60s)
+  float alt = a.altFt + a.vsFpm * (dt / 60.0f);            // vsFpm = ft/min -> ft over dt seconds
+  return alt < 0 ? 0.0f : alt;
+}
+
 // Decode an emergency transponder code; nullptr if it's a routine squawk.
 static const char* squawkAlert(const String& sq) {
   if (sq == "7700") return "EMERGENCY";
@@ -88,7 +99,7 @@ PageAircraft::Activity PageAircraft::classify(const Aircraft& a, String& aptOut)
     float d = distNmLL(a.lat, a.lon, s.lat, s.lon);
     if (d < best) { best = d; bestId = s.icao; }
   }
-  if (bestId.length() && best < 12.0f && a.altFt < 11000.0f) {  // inside a field's terminal area, low
+  if (bestId.length() && best < 12.0f && drAlt(a, _lastDataMs) < 11000.0f) {  // inside a field's terminal area, low
     aptOut = bestId;
     if (a.vsFpm < -300) return ActArriving;
     if (a.vsFpm >  300) return ActDeparting;
@@ -355,7 +366,7 @@ void PageAircraft::drawActivity(App& app) {
     String apt; Activity act = classify(a, apt);
     char alt[6];
     if (a.onGround) strcpy(alt, "grd");
-    else snprintf(alt, sizeof(alt), "%3d", (int)(a.altFt / 100.0f + 0.5f));   // hundreds of ft (FL-style)
+    else snprintf(alt, sizeof(alt), "%3d", (int)(drAlt(a, _lastDataMs) / 100.0f + 0.5f));   // dead-reckoned hundreds of ft
     char vs = a.vsFpm > 300 ? '^' : (a.vsFpm < -300 ? 'v' : '-');
     String id = a.flight.length() ? a.flight : a.hex;
     char buf[80];
@@ -387,7 +398,7 @@ void PageAircraft::drawStats(App& app) {
     }
     switch (catClass(a.category)) { case 1: air++; break; case 2: ga++; break; case 3: heli++; break; case 4: mil++; break; }
     if (squawkAlert(a.squawk)) emerg++;
-    if (!a.onGround && a.altFt > maxAlt) { maxAlt = a.altFt; hi = idx; }
+    if (!a.onGround) { float al = drAlt(a, _lastDataMs); if (al > maxAlt) { maxAlt = al; hi = idx; } }
     if (a.distNm < minD) { minD = a.distNm; nr = idx; }
     if (a.gsKt > maxGs) { maxGs = a.gsKt; fast = idx; }
   }
@@ -408,7 +419,7 @@ void PageAircraft::drawStats(App& app) {
     line(String(lbl) + " " + id + "  " + extra, gTheme.fg);
   };
   pick("closest", nr,   nr   >= 0 ? String((int)(list[nr].distNm + 0.5f)) + " nm" : "");
-  pick("highest", hi,   hi   >= 0 ? String((int)(list[hi].altFt / 100.0f + 0.5f) * 100) + " ft" : "");
+  pick("highest", hi,   hi   >= 0 ? String((int)(maxAlt / 100.0f + 0.5f) * 100) + " ft" : "");
   pick("fastest", fast, fast >= 0 ? String((int)(list[fast].gsKt + 0.5f)) + " kt" : "");
   if (y < cy0 + ch) g.fillRect(0, y, cw, cy0 + ch - y, gTheme.bg);
 }
@@ -606,7 +617,7 @@ void PageAircraft::draw(App& app) {
     // (filled triangle up=climb / down=descent, dash=level). Lets you read traffic at a glance.
     if (!a.onGround && a.altFt > 0) {
       Color tc = sel ? gTheme.ok : gTheme.dim;
-      String fl = String((int)(a.altFt / 100.0f + 0.5f));    // e.g. 15000 ft -> "150"
+      String fl = String((int)(drAlt(a, _lastDataMs) / 100.0f + 0.5f));    // dead-reckoned, hundreds of ft
       g.setTextDatum(textdatum_t::middle_left);
       g.setTextColor(tc, gTheme.bg);
       g.drawString(fl, ax + 5, ay + 7);
@@ -650,7 +661,7 @@ void PageAircraft::draw(App& app) {
     line(String(_sel + 1) + "/" + _filt.size() + "  (tap edges)", gTheme.dim);
     if (a.type.length() || a.category.length())
       line(String("type ") + (a.type.length() ? a.type : a.category), gTheme.fg);
-    line(a.onGround ? String("on ground") : String("alt ") + (int)a.altFt + " ft", gTheme.fg);
+    line(a.onGround ? String("on ground") : String("alt ") + (int)drAlt(a, _lastDataMs) + " ft", gTheme.fg);
     if (!a.onGround) {
       bool lvl = fabsf(a.vsFpm) <= 256;
       line(lvl ? String("level flight")
@@ -662,7 +673,7 @@ void PageAircraft::draw(App& app) {
     // Look angle from the observer: az = bearing, el from altitude over ground range.
     if (!a.onGround) {
       double distFt = a.distNm * 6076.115;
-      double el = distFt > 1 ? atan2((double)a.altFt, distFt) / D2R : 90.0;
+      double el = distFt > 1 ? atan2((double)drAlt(a, _lastDataMs), distFt) / D2R : 90.0;
       line(String("look az ") + (int)round(a.bearingDeg) + "\xF7 el " + (int)round(el) + "\xF7", gTheme.accent);
     }
     if (a.squawk.length()) {
