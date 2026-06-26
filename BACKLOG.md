@@ -79,21 +79,26 @@ Borrow proven CYD ADS-B features (ref: https://github.com/iamneilroberts/adsb-cy
 already have: live radar + dead-reckoning, per-blip alt + climb/descent trend + callsign,
 breadcrumb trails, HOME/centre markers, airport rings, range 5–50 nm, alt/category filters,
 emergency-squawk (7500/7600/7700) detection, and an info column (type/alt/vs/gs/trk/dist/brg/
-look az-el/squawk). Candidates to add:
-- **Arrivals board** — a table view (not just the radar): callsign · type · alt · dist · brg ·
-  trend, sortable, paged; good for "what's around" at a glance on the big CrowPanel screen.
-- **Sort + richer filters** — sort the contact list by distance / altitude / closest-approach;
-  filters beyond alt/cat (e.g. airline/operator, mil-only, has-emergency, inbound-only).
-- **Stats dashboard** — aggregates: contacts now / peak today, by category, busiest bearing,
-  max alt seen, fastest, count by operator; a small at-a-glance panel.
-- **Flight log** — rolling log of contacts seen (first/last seen, closest dist, max/min alt),
-  bounded ring in RAM (and/or LittleFS); feeds the stats + a history view.
-- **Closest-approach record** — track + persist the all-time / per-session closest pass
-  (which aircraft, dist, alt, time) — a "personal best" line on the page.
-- **Mil + emergency alerts** — we flag emergency squawks; add **military** detection (ICAO hex
-  block / category / known mil callsign prefixes) as a cross-tab alert + a distinct blip colour.
-- **Detail view extras** — surface feed fields we don't show yet (registration, route/origin-
-  dest if available, operator, RSSI/seen, true vs baro alt) on a tap-through detail card.
+look az-el/squawk).
+
+**SHIPPED — Phase 1 (Jun 2026, commit b287dd3):** vertical-swipe sub-views — Radar / **Activity**
+(classified contact list) / **Stats**. Activity classifies each contact DEP/ARR/local <field> /
+transit / on-ground from altitude + vertical rate + nearest METAR field; Stats totals activity +
+category + closest/highest/fastest. Covers the arrivals board, stats dashboard, and the
+"classify what they're doing" ask. Remaining candidates:
+- **Arrivals board** — DONE (Activity view). Could add sort modes + paging beyond one screen.
+- **Sort + richer filters** — sort the Activity list by distance / altitude / closest-approach;
+  filters beyond alt/cat (airline/operator, mil-only, has-emergency, inbound-only).
+- **Stats dashboard** — DONE (Stats view: activity + category + closest/highest/fastest). Could add
+  peak-today, busiest bearing, count by operator (needs the log).
+- **Flight log** (Phase 2) — rolling log of contacts seen (first/last seen, closest dist, max/min
+  alt), bounded ring in RAM + LittleFS; feeds peak-today + a history view.
+- **Closest-approach record** (Phase 2) — track + persist the all-time / per-session closest pass
+  (which aircraft, dist, alt, time). Stats already shows the *current* closest, not a persisted record.
+- **Mil + emergency alerts** — emergency squawk + mil category already surface (Stats "mil" count).
+  TODO: a cross-tab **military** alert (ICAO hex block / known mil callsign prefixes) + distinct blip.
+- **Detail view extras** — surface feed fields we don't show yet (registration, route/origin-dest,
+  operator, RSSI/seen, true vs baro alt) on a tap-through detail card.
 
 ## UX shell — desk-clock (SHIPPED via overlay, Jun 2026)
 Built as a device-wide **clock-mode overlay** (tap the time in the status strip)
