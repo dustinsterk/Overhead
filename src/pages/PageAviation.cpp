@@ -339,10 +339,11 @@ void PageAviation::drawMetar(App& app) {
   // the visible edge unless it's the real end of the list.
   String labels[12]; int nl = (int)list.size(); if (nl > 12) nl = 12;
   for (int i = 0; i < nl; ++i) labels[i] = list[i].icao;
+  const int u = app.ui();
   auto lastFit = [&](int start) {                                  // last chip index drawn from `start`
-    int x = 2, last = start;                                       // (bounded by width AND the kMChips cap,
+    int x = 2 * u, last = start;                                   // (bounded by width AND the kMChips cap,
     for (int i = start; i < nl && i < start + kMChips; ++i) {       // matching App::drawChipRow exactly)
-      int w = (int)labels[i].length() * 6 + 8; if (x + w > cw - 2) break; last = i; x += w + 3;
+      int w = (int)labels[i].length() * 6 * u + 8 * u; if (x + w > cw - 2 * u) break; last = i; x += w + 3 * u;
     }
     return last;
   };
@@ -352,11 +353,11 @@ void PageAviation::drawMetar(App& app) {
   else if (_sel == _mChipScroll && _mChipScroll > 0)  _mChipScroll--;            // reveal prev neighbour
   if (_mChipScroll < 0) _mChipScroll = 0;
   int first = _mChipScroll;
-  _mChipN = app.drawChipRow(2, cy0 + 2, 13, labels + first, nl - first, _sel - first, _mChipX, _mChipW, kMChips);
+  _mChipN = app.drawChipRow(2 * u, cy0 + 2 * u, 13 * u, labels + first, nl - first, _sel - first, _mChipX, _mChipW, kMChips);
 
   const Metar& m = list[_sel];
   const int maxc = (cw - 10) / 6;
-  int x0 = 6, y = cy0 + 19;                                    // below the chip row
+  int x0 = 6, y = cy0 + 19 * u;                                // below the chip row (METAR text scaled later)
 
   g.setTextDatum(textdatum_t::top_left);
   g.setTextColor(gTheme.accent, gTheme.bg);

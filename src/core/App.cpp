@@ -97,19 +97,20 @@ void App::repaintActive() {                                  // clean full repai
 int App::drawChipRow(int x0, int top, int h, const String* labels, int n, int sel,
                      int* hitX, int* hitW, int maxN) {
   auto& g = _display.gfx();
-  g.setTextSize(1);
+  const int u = ui();                          // text/width/gap scale; callers pass a scaled height h
+  g.setTextSize(u);
   g.setTextDatum(textdatum_t::middle_left);
   const int cw = contentW();
   int x = x0, cnt = 0;
   for (int i = 0; i < n && cnt < maxN; ++i) {
-    int w = (int)labels[i].length() * 6 + 8;
-    if (x + w > cw - 2) break;
+    int w = (int)labels[i].length() * 6 * u + 8 * u;
+    if (x + w > cw - 2 * u) break;
     bool s = (i == sel);
     g.fillRect(x, top, w, h, s ? gTheme.accent : gTheme.grid);
     g.setTextColor(s ? gTheme.bg : gTheme.fg, s ? gTheme.accent : gTheme.grid);
-    g.drawString(labels[i], x + 4, top + h / 2);
+    g.drawString(labels[i], x + 4 * u, top + h / 2);
     hitX[cnt] = x; hitW[cnt] = w; cnt++;
-    x += w + 3;
+    x += w + 3 * u;
   }
   return cnt;
 }
@@ -119,11 +120,12 @@ int App::drawChipRow(int x0, int top, int h, const String* labels, int n, int se
 void App::drawViewDots(int count, int index) {
   if (count < 2) return;
   auto& g = _display.gfx();
-  const int gap = 8, x = contentW() - 5;
+  const int u = ui();
+  const int gap = 8 * u, x = contentW() - 5 * u;
   int y0 = contentY() + (contentH() - (count - 1) * gap) / 2;
   for (int i = 0; i < count; ++i) {
-    if (i == index) g.fillCircle(x, y0 + i * gap, 2, gTheme.accent);
-    else            g.drawCircle(x, y0 + i * gap, 2, gTheme.dim);
+    if (i == index) g.fillCircle(x, y0 + i * gap, 2 * u, gTheme.accent);
+    else            g.drawCircle(x, y0 + i * gap, 2 * u, gTheme.dim);
   }
 }
 

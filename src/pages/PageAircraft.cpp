@@ -444,13 +444,14 @@ int PageAircraft::drawChips(App& app) {
     if (_centerIcao == s.icao) sel = n;
     labels[n++] = s.icao;
   }
-  _chipCount = app.drawChipRow(2, app.contentY() + 3, 13, labels, n, sel, _chipX, _chipW, kMaxChips);
+  const int u = app.ui();
+  _chipCount = app.drawChipRow(2 * u, app.contentY() + 3 * u, 13 * u, labels, n, sel, _chipX, _chipW, kMaxChips);
   for (int j = 0; j < _chipCount; ++j) _chipIcao[j] = (j == 0) ? String("") : labels[j];   // chip 0 = HOME
-  return 13 + 5;                             // 3 top gap + chip + 1 bottom
+  return (13 + 5) * u;                        // 3 top gap + chip + 1 bottom
 }
 
 bool PageAircraft::handleChipTap(App& app, int x, int yRel) {
-  if (yRel >= 14) return false;                    // chip row is the top band
+  if (yRel >= 14 * app.ui()) return false;         // chip row is the top band
   for (int i = 0; i < _chipCount; ++i)
     if (x >= _chipX[i] && x < _chipX[i] + _chipW[i]) {
       _centerIcao = _chipIcao[i];

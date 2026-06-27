@@ -167,7 +167,8 @@ void PageSatellites::onTouch(App& app, int x, int y) {
 
 bool PageSatellites::handleMinElTap(App& app, int x, int yRel) {
   // Bottom-left badge cycles the min-elevation filter (0/10/20/30/40).
-  if (x > 80 || yRel < app.contentH() - 20) return false;
+  const int u = app.ui();
+  if (x > 80 * u || yRel < app.contentH() - 20 * u) return false;
   int v = minEl();
   int next = (v >= 40) ? 0 : v + 10;
   _settings.set("satMinEl", (long)next);
@@ -243,8 +244,8 @@ void PageSatellites::draw(App& app) {
   else                      drawGroundView(app, o);
   drawMinElBadge(app);
   g.setTextDatum(textdatum_t::bottom_right);       // consistent control hint across views
-  g.setTextColor(gTheme.dim, gTheme.bg); g.setTextSize(1);
-  g.drawString("[side tap: sat  mid: view]", app.contentW() - 4, app.contentY() + app.contentH() - 1);
+  g.setTextColor(gTheme.dim, gTheme.bg); g.setTextSize(app.ui());
+  g.drawString("[side tap: sat  mid: view]", app.contentW() - 4 * app.ui(), app.contentY() + app.contentH() - 1 * app.ui());
 }
 
 // Tracked-satellite selector chips along the top (same shared chip row the Aircraft
@@ -264,8 +265,9 @@ void PageSatellites::drawChips(App& app) {
     if (i == _orderPos) sel = m;
     labels[m++] = nm;
   }
-  _chipN = app.drawChipRow(2, app.contentY() + 3, 13, labels, m, sel, _chipX, _chipW, kMaxChips);
-  _chipBandH = 18;
+  const int u = app.ui();
+  _chipN = app.drawChipRow(2 * u, app.contentY() + 3 * u, 13 * u, labels, m, sel, _chipX, _chipW, kMaxChips);
+  _chipBandH = 18 * u;
 }
 
 bool PageSatellites::handleChipTap(App& app, int x, int yRel) {
@@ -277,12 +279,13 @@ bool PageSatellites::handleChipTap(App& app, int x, int yRel) {
 
 void PageSatellites::drawMinElBadge(App& app) {
   auto& g = app.display().gfx();
-  int y = app.contentY() + app.contentH() - 16;
-  g.fillRect(4, y, 72, 14, gTheme.grid);
+  const int u = app.ui();
+  int y = app.contentY() + app.contentH() - 16 * u;
+  g.fillRect(4 * u, y, 72 * u, 14 * u, gTheme.grid);
   g.setTextDatum(textdatum_t::middle_left);
   g.setTextColor(gTheme.fg, gTheme.grid);
-  g.setTextSize(1);
-  g.drawString(String("minEl ") + minEl(), 8, y + 7);
+  g.setTextSize(u);
+  g.drawString(String("minEl ") + minEl(), 8 * u, y + 7 * u);
 }
 
 void PageSatellites::drawInfoColumn(App& app, int ix, int iy, const astro::SatObservation& o) {
@@ -290,12 +293,13 @@ void PageSatellites::drawInfoColumn(App& app, int ix, int iy, const astro::SatOb
   time_t now = time(nullptr);
   const auto& sat = _tle.sats()[_sel];
 
+  const int u = app.ui();
   g.setTextDatum(textdatum_t::top_left);
   g.setTextColor(gTheme.accent, gTheme.bg);
-  g.setTextSize(2); g.drawString(sat.name.substring(0, 13), ix, iy); iy += 20;
-  g.setTextSize(1);
+  g.setTextSize(2 * u); g.drawString(sat.name.substring(0, 13), ix, iy); iy += 20 * u;
+  g.setTextSize(u);
   // padRight so shorter values overwrite longer ones in place (no clear/flicker).
-  auto line = [&](const String& s, Color c) { g.setTextColor(c, gTheme.bg); g.drawString(padRight(s, 22), ix, iy); iy += 14; };
+  auto line = [&](const String& s, Color c) { g.setTextColor(c, gTheme.bg); g.drawString(padRight(s, 22), ix, iy); iy += 14 * u; };
 
   line(String(_orderPos + 1) + "/" + _order.size() +
        (_settings.getBool("satWatchlistOnly", true) ? "  watchlist" : "  all"), gTheme.dim);
@@ -335,13 +339,14 @@ void PageSatellites::drawInfoColumn(App& app, int ix, int iy, const astro::SatOb
 
 void PageSatellites::drawPolarView(App& app, const astro::SatObservation& o) {
   auto& g = app.display().gfx();
+  const int u = app.ui();
   const int cw = app.contentW(), ch = app.contentH() - _chipBandH, cy0 = app.contentY() + _chipBandH;
 
   int size = min(ch - 8, cw / 2 - 8);
-  int R = size / 2 - 12;
+  int R = size / 2 - 12;                                   // dome radius fills the left half (native)
   int cx = 8 + R + 8, cy = cy0 + ch / 2;
 
-  if (_pdx >= 0) g.fillCircle(_pdx, _pdy, 4, gTheme.bg);   // erase old blip first
+  if (_pdx >= 0) g.fillCircle(_pdx, _pdy, 4 * u, gTheme.bg);   // erase old blip first
 
   // Static grid (redrawn in place each tick = stable, also restores any erase).
   g.drawCircle(cx, cy, R, gTheme.grid);
@@ -351,8 +356,9 @@ void PageSatellites::drawPolarView(App& app, const astro::SatObservation& o) {
   g.drawFastVLine(cx, cy - R, 2 * R, gTheme.grid);
   g.setTextColor(gTheme.dim, gTheme.bg);
   g.setTextDatum(textdatum_t::middle_center);
-  g.drawString("N", cx, cy - R - 6); g.drawString("S", cx, cy + R + 6);
-  g.drawString("E", cx + R + 6, cy); g.drawString("W", cx - R - 6, cy);
+  g.setTextSize(u);
+  g.drawString("N", cx, cy - R - 6 * u); g.drawString("S", cx, cy + R + 6 * u);
+  g.drawString("E", cx + R + 6 * u, cy); g.drawString("W", cx - R - 6 * u, cy);
 
   // Predicted pass arc: the az/el trajectory the satellite traces from AOS to LOS.
   auto polar = [&](float az, float el, int& sx, int& sy) {
@@ -376,33 +382,34 @@ void PageSatellites::drawPolarView(App& app, const astro::SatObservation& o) {
     }
     g.setTextDatum(textdatum_t::middle_left);
     g.setTextColor(gTheme.dim, gTheme.bg);
-    if (aosIdx >= 0) { int sx, sy; polar(_passAz[aosIdx], _graphEl[aosIdx], sx, sy); g.fillCircle(sx, sy, 2, gTheme.ok); g.drawString("AOS", sx + 4, sy); }
-    if (losIdx >= 0) { int sx, sy; polar(_passAz[losIdx], _graphEl[losIdx], sx, sy); g.fillCircle(sx, sy, 2, gTheme.ok); g.drawString("LOS", sx + 4, sy); }
+    if (aosIdx >= 0) { int sx, sy; polar(_passAz[aosIdx], _graphEl[aosIdx], sx, sy); g.fillCircle(sx, sy, 2 * u, gTheme.ok); g.drawString("AOS", sx + 4 * u, sy); }
+    if (losIdx >= 0) { int sx, sy; polar(_passAz[losIdx], _graphEl[losIdx], sx, sy); g.fillCircle(sx, sy, 2 * u, gTheme.ok); g.drawString("LOS", sx + 4 * u, sy); }
   }
 
   if (o.elDeg > 0) {
     double rr = R * (90.0 - o.elDeg) / 90.0;
     int sx = cx + (int)round(rr * sin(o.azDeg * D2R));
     int sy = cy - (int)round(rr * cos(o.azDeg * D2R));
-    g.fillCircle(sx, sy, 4, o.sunlit ? gTheme.warn : gTheme.accent);
+    g.fillCircle(sx, sy, 4 * u, o.sunlit ? gTheme.warn : gTheme.accent);
     _pdx = sx; _pdy = sy;
   } else {
     _pdx = -1;
   }
 
-  drawInfoColumn(app, cw / 2 + 8, cy0 + 6, o);
+  drawInfoColumn(app, cw / 2 + 8 * u, cy0 + 6 * u, o);
 }
 
 void PageSatellites::drawGroundView(App& app, const astro::SatObservation& o) {
   auto& g = app.display().gfx();
+  const int u = app.ui();
   const int cw = app.contentW(), cy0 = app.contentY() + _chipBandH, ch = app.contentH() - _chipBandH;
-  const int topH = 28;
+  const int topH = 28 * u;                                 // info band scales; map fills below (native)
   const int mx = 0, my = cy0 + topH, mw = cw, mh = ch - topH;
 
   auto px = [&](double lon) { return mx + (int)round((lon + 180.0) / 360.0 * mw); };
   auto py = [&](double lat) { return my + (int)round((90.0 - lat) / 180.0 * mh); };
 
-  if (_pdx >= 0) g.fillCircle(_pdx, _pdy, 3, gTheme.bg);   // erase old sat point
+  if (_pdx >= 0) g.fillCircle(_pdx, _pdy, 3 * u, gTheme.bg);   // erase old sat point
 
   // Map frame + 30-degree graticule (redrawn in place = stable).
   g.drawRect(mx, my, mw, mh, gTheme.grid);
@@ -429,18 +436,18 @@ void PageSatellites::drawGroundView(App& app, const astro::SatObservation& o) {
   // Observer + current sub-satellite point.
   const auto& loc = _loc.active();
   int oxv = px(loc.lon), oyv = py(loc.lat);
-  g.fillCircle(oxv, oyv, 4, gTheme.ok);          // observer: green circle + black centre dot
-  g.fillCircle(oxv, oyv, 1, 0x0000);
+  g.fillCircle(oxv, oyv, 4 * u, gTheme.ok);      // observer: green circle + black centre dot
+  g.fillCircle(oxv, oyv, 1 * u, 0x0000);
   int spx = px(o.subLonDeg), spy = py(o.subLatDeg);
-  g.fillCircle(spx, spy, 3, o.sunlit ? gTheme.warn : gTheme.fg);
+  g.fillCircle(spx, spy, 3 * u, o.sunlit ? gTheme.warn : gTheme.fg);
   _pdx = spx; _pdy = spy;
 
   // Compact info line on top.
   const auto& sat = _tle.sats()[_sel];
   g.setTextDatum(textdatum_t::top_left);
-  g.setTextSize(1);
+  g.setTextSize(u);
   g.setTextColor(gTheme.accent, gTheme.bg);
-  g.drawString(sat.name.substring(0, 16), 4, cy0 + 3);
+  g.drawString(sat.name.substring(0, 16), 4 * u, cy0 + 3 * u);
   if (_pass.valid) {                               // next AOS / max-el / LOS under the name
     auto hm2 = [](time_t t){ struct tm tm; localtime_r(&t,&tm); char b[8]; snprintf(b,sizeof(b),"%02d:%02d",tm.tm_hour,tm.tm_min); return String(b); };
     long dt = (long)_pass.aos - (long)time(nullptr);
@@ -448,13 +455,13 @@ void PageSatellites::drawGroundView(App& app, const astro::SatObservation& o) {
     if (dt > 0) snprintf(pl, sizeof(pl), "AOS %s  max %d\xF7  LOS %s", hm2(_pass.aos).c_str(), (int)round(_pass.maxElDeg), hm2(_pass.los).c_str());
     else        snprintf(pl, sizeof(pl), "NOW  max %d\xF7  LOS %s", (int)round(_pass.maxElDeg), hm2(_pass.los).c_str());
     g.setTextDatum(textdatum_t::top_left); g.setTextColor(gTheme.dim, gTheme.bg);
-    g.drawString(pl, 4, cy0 + 15);
+    g.drawString(pl, 4 * u, cy0 + 15 * u);
   }
   g.setTextDatum(textdatum_t::top_right);
   g.setTextColor(o.elDeg > 0 ? gTheme.ok : gTheme.dim, gTheme.bg);
   char b[40];
   snprintf(b, sizeof(b), "el %d  %s", (int)round(o.elDeg), o.sunlit ? "sun" : "ecl");
   g.setTextDatum(textdatum_t::top_right);
-  g.drawString(b, cw - 4, cy0 + 3);
+  g.drawString(b, cw - 4 * u, cy0 + 3 * u);
 }
 
