@@ -100,6 +100,13 @@ category + closest/highest/fastest. Covers the arrivals board, stats dashboard, 
 - **Detail view extras** — surface feed fields we don't show yet (registration, route/origin-dest,
   operator, RSSI/seen, true vs baro alt) on a tap-through detail card.
 
+## Aviation Wx feature ideas
+- **Wind vectors on the area-trends wind line** — overlay little direction arrows along the wind-speed
+  trend line so you read speed (line height) *and* direction (arrow heading) together at a glance,
+  instead of just the scalar speed. Sample wind direction at each plotted point and draw a short
+  rotated tick/arrow on the line; could encode gust via arrow length/colour. (Speed+direction are
+  already on the trends page — this makes the direction spatial.)
+
 ## UX shell — desk-clock (SHIPPED via overlay, Jun 2026)
 Built as a device-wide **clock-mode overlay** (tap the time in the status strip)
 rather than a separate home page: a big clock stamped on top of the live page —
