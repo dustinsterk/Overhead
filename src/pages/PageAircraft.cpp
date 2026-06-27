@@ -226,7 +226,7 @@ void PageAircraft::onTouch(App& app, int x, int y) {
   // Tap on (near) a radar blip selects it.
   if (_rR > 0 && x < app.contentW() / 2) {
     int ty = y + app.contentY();                    // onTouch y is content-relative
-    int best = -1, bestd2 = 15 * 15;
+    int best = -1, bestd2 = (15 * app.ui()) * (15 * app.ui());
     for (int k = 0; k < n; ++k) {
       const Aircraft& a = list[_filt[k]];
       float aDist, aBrg; drPos(a, _lastDataMs, aDist, aBrg);
@@ -245,31 +245,35 @@ void PageAircraft::onTouch(App& app, int x, int y) {
 }
 
 bool PageAircraft::handleAltTap(App& app, int x, int yRel) {
-  if (x < 134 || x >= 215 || yRel < app.contentH() - 20) return false;
+  const int u = app.ui();
+  if (x < 134 * u || x >= 215 * u || yRel < app.contentH() - 20 * u) return false;
   _altF = (_altF + 1) % 4; _sel = 0; _dirty = _needClear = true; return true;
 }
 
 bool PageAircraft::handleCatTap(App& app, int x, int yRel) {
-  if (x < 215 || yRel < app.contentH() - 20) return false;
+  const int u = app.ui();
+  if (x < 215 * u || yRel < app.contentH() - 20 * u) return false;
   _catF = (_catF + 1) % 5; _sel = 0; _dirty = _needClear = true; return true;
 }
 
 void PageAircraft::drawFilterBadges(App& app) {
   auto& g = app.display().gfx();
   const int cw = app.contentW();
-  int y = app.contentY() + app.contentH() - 16;
-  g.setTextSize(1);
+  const int u = app.ui();
+  int y = app.contentY() + app.contentH() - 16 * u;
+  g.setTextSize(u);
   g.setTextDatum(textdatum_t::middle_left);
-  g.fillRect(134, y, 79, 14, gTheme.grid);
+  g.fillRect(134 * u, y, 79 * u, 14 * u, gTheme.grid);
   g.setTextColor(_altF ? gTheme.ok : gTheme.fg, gTheme.grid);
-  g.drawString(kAltLabel[_altF], 138, y + 7);
-  g.fillRect(215, y, cw - 215 - 2, 14, gTheme.grid);
+  g.drawString(kAltLabel[_altF], 138 * u, y + 7 * u);
+  g.fillRect(215 * u, y, cw - 215 * u - 2 * u, 14 * u, gTheme.grid);
   g.setTextColor(_catF ? gTheme.ok : gTheme.fg, gTheme.grid);
-  g.drawString(kCatLabel[_catF], 219, y + 7);
+  g.drawString(kCatLabel[_catF], 219 * u, y + 7 * u);
 }
 
 bool PageAircraft::handleRadiusTap(App& app, int x, int yRel) {
-  if (x > 64 || yRel < app.contentH() - 20) return false;
+  const int u = app.ui();
+  if (x > 64 * u || yRel < app.contentH() - 20 * u) return false;
   int r = (int)_settings.getInt("adsbRadiusNm", 50);
   int next = (r <= 5) ? 10 : (r <= 10) ? 15 : (r <= 15) ? 25 : (r <= 25) ? 50 : 5;   // 5/10/15/25/50
   _settings.set("adsbRadiusNm", (long)next);
@@ -280,7 +284,8 @@ bool PageAircraft::handleRadiusTap(App& app, int x, int yRel) {
 }
 
 bool PageAircraft::handleGroundTap(App& app, int x, int yRel) {
-  if (x < 68 || x > 132 || yRel < app.contentH() - 20) return false;
+  const int u = app.ui();
+  if (x < 68 * u || x > 132 * u || yRel < app.contentH() - 20 * u) return false;
   bool hide = _settings.getInt("adsbHideGround", 0) != 0;
   _settings.set("adsbHideGround", (long)(hide ? 0 : 1));
   _settings.save();
@@ -291,23 +296,25 @@ bool PageAircraft::handleGroundTap(App& app, int x, int yRel) {
 
 void PageAircraft::drawRadiusBadge(App& app) {
   auto& g = app.display().gfx();
-  int y = app.contentY() + app.contentH() - 16;
-  g.fillRect(4, y, 56, 14, gTheme.grid);
+  const int u = app.ui();
+  int y = app.contentY() + app.contentH() - 16 * u;
+  g.fillRect(4 * u, y, 56 * u, 14 * u, gTheme.grid);
   g.setTextDatum(textdatum_t::middle_left);
   g.setTextColor(gTheme.fg, gTheme.grid);
-  g.setTextSize(1);
-  g.drawString(String((int)_ap.radiusNm()) + " nm", 8, y + 7);
+  g.setTextSize(u);
+  g.drawString(String((int)_ap.radiusNm()) + " nm", 8 * u, y + 7 * u);
 }
 
 void PageAircraft::drawGroundBadge(App& app) {
   auto& g = app.display().gfx();
-  int y = app.contentY() + app.contentH() - 16;
+  const int u = app.ui();
+  int y = app.contentY() + app.contentH() - 16 * u;
   bool hide = _ap.hideGround();
-  g.fillRect(64, y, 64, 14, gTheme.grid);
+  g.fillRect(64 * u, y, 64 * u, 14 * u, gTheme.grid);
   g.setTextDatum(textdatum_t::middle_left);
   g.setTextColor(hide ? gTheme.dim : gTheme.fg, gTheme.grid);   // dim when filtered out
-  g.setTextSize(1);
-  g.drawString(hide ? "gnd: off" : "gnd: on", 68, y + 7);
+  g.setTextSize(u);
+  g.drawString(hide ? "gnd: off" : "gnd: on", 68 * u, y + 7 * u);
 }
 
 void PageAircraft::tick(App& app, uint32_t nowMs) {
@@ -352,14 +359,15 @@ void PageAircraft::drawActivity(App& app) {
                                   : "no aircraft match filters", cy0);
     return;
   }
-  int x0 = 4, y = cy0 + 2;
-  g.setTextDatum(textdatum_t::top_left); g.setTextSize(1);
+  const int u = app.ui();
+  int x0 = 4 * u, y = cy0 + 2 * u;
+  g.setTextDatum(textdatum_t::top_left); g.setTextSize(u);
   char hdr[80];
   snprintf(hdr, sizeof(hdr), "%-8.8s %-4.4s %3s%c %4s %s (%d)", "flight", "type", "alt", 'v', "rng", "activity", (int)_filt.size());
   g.setTextColor(gTheme.accent, gTheme.bg);
-  g.drawString(padRight(String(hdr), 56), x0, y); y += 13;
+  g.drawString(padRight(String(hdr), 56), x0, y); y += 13 * u;
 
-  const int rowH = 12, bottom = cy0 + ch - 2;
+  const int rowH = 12 * u, bottom = cy0 + ch - 2 * u;
   for (int idx : _filt) {
     if (y + rowH > bottom) break;                              // fill the screen; Stats view totals the rest
     const Aircraft& a = list[idx];
@@ -402,17 +410,18 @@ void PageAircraft::drawStats(App& app) {
     if (a.distNm < minD) { minD = a.distNm; nr = idx; }
     if (a.gsKt > maxGs) { maxGs = a.gsKt; fast = idx; }
   }
-  int x0 = 6, y = cy0 + 4;
+  const int u = app.ui();
+  int x0 = 6 * u, y = cy0 + 4 * u;
   g.setTextDatum(textdatum_t::top_left);
-  g.setTextSize(2); g.setTextColor(gTheme.accent, gTheme.bg);
-  g.drawString(padRight(String(_filt.size()) + " contacts", 24), x0, y); y += 22;
-  g.setTextSize(1);
-  auto line = [&](const String& s, Color c) { g.setTextColor(c, gTheme.bg); g.drawString(padRight(s, 56), x0, y); y += 13; };
+  g.setTextSize(2 * u); g.setTextColor(gTheme.accent, gTheme.bg);
+  g.drawString(padRight(String(_filt.size()) + " contacts", 24), x0, y); y += 22 * u;
+  g.setTextSize(u);
+  auto line = [&](const String& s, Color c) { g.setTextColor(c, gTheme.bg); g.drawString(padRight(s, 56), x0, y); y += 13 * u; };
   line(String("departing ") + dep + "   arriving " + arr + "   transit " + trn, gTheme.fg);
   line(String("local ") + lcl + "   on ground " + gnd, gTheme.dim);
   line(String("airliner ") + air + "  GA " + ga + "  heli " + heli + "  mil " + mil, gTheme.dim);
   if (emerg) line(String("EMERGENCY squawks: ") + emerg, gTheme.warn);
-  y += 4;
+  y += 4 * u;
   auto pick = [&](const char* lbl, int idx, const String& extra) {
     if (idx < 0) { line(String(lbl) + " -", gTheme.dim); return; }
     String id = list[idx].flight.length() ? list[idx].flight : list[idx].hex;
@@ -465,6 +474,7 @@ bool PageAircraft::handleChipTap(App& app, int x, int yRel) {
 void PageAircraft::draw(App& app) {
   auto& g = app.display().gfx();
   const int cw = app.contentW(), ch = app.contentH(), cy0 = app.contentY();
+  const int u = app.ui();
   if (!_loc.active().valid) { drawMessage(app, "no location", cy0); return; }
   if (_needClear) { g.fillRect(0, cy0, cw, ch, gTheme.bg); _needClear = false; }
 
@@ -502,43 +512,44 @@ void PageAircraft::draw(App& app) {
   if (emIdx >= 0) {
     const Aircraft& e = list[emIdx];
     int ay0 = cy0 + chipH;
-    g.fillRect(0, ay0, cw, 14, gTheme.warn);
+    g.fillRect(0, ay0, cw, 14 * u, gTheme.warn);
     g.setTextDatum(textdatum_t::middle_left);
     g.setTextColor(gTheme.bg, gTheme.warn);
-    g.setTextSize(1);
+    g.setTextSize(u);
     g.drawString(String("! ") + e.squawk + " " + squawkAlert(e.squawk) + ": " +
                  (e.flight.length() ? e.flight : e.hex) + "  " + (int)round(e.distNm) + "nm",
-                 4, ay0 + 7);
-    alertH = 15;
+                 4 * u, ay0 + 7 * u);
+    alertH = 15 * u;
   }
   top += alertH;
 
   // Radar on the left. Clear just the circle's bbox each tick (blips move);
   // the info column on the right redraws in place (padded) so it stays stable.
-  const int MARQ = 16;                              // reserve a ticker band at the bottom
-  int size = min(ch - 8 - chipH - alertH - MARQ, cw / 2 - 8);
-  int R = size / 2 - 12;
-  int cx = 8 + R + 8, cy = top + (ch - chipH - alertH - MARQ) / 2;
+  const int MARQ = 16 * u;                           // reserve a ticker band at the bottom
+  int size = min(ch - 8 * u - chipH - alertH - MARQ, cw / 2 - 8 * u);
+  int R = size / 2 - 12 * u;                          // radar radius fills the left half (native)
+  int cx = 8 * u + R + 8 * u, cy = top + (ch - chipH - alertH - MARQ) / 2;
   float maxR = _ap.radiusNm();
   _rCx = cx; _rCy = cy; _rR = R; _rMaxR = maxR;     // remember for tap-on-blip
-  g.fillRect(cx - R - 4, cy - R - 10, 2 * R + 8, 2 * R + 20, gTheme.bg);
+  g.fillRect(cx - R - 4 * u, cy - R - 10 * u, 2 * R + 8 * u, 2 * R + 20 * u, gTheme.bg);
 
   g.drawCircle(cx, cy, R, gTheme.grid);              // outer ring = selected range
   // Fixed-distance reference rings (5 / 10 nm) when they fit inside the range, so
   // close-in traffic has a scale even at the 25/50 nm settings.
   g.setTextDatum(textdatum_t::middle_center);
+  g.setTextSize(u);
   for (int nm : {5, 10}) {
     if (nm >= (int)maxR) continue;
     int rr = (int)(nm / maxR * R);
     g.drawCircle(cx, cy, rr, gTheme.dim);
     g.setTextColor(gTheme.dim, gTheme.bg);
-    g.drawString(String(nm), cx, cy - rr - 4);
+    g.drawString(String(nm), cx, cy - rr - 4 * u);
   }
   g.drawFastHLine(cx - R, cy, 2 * R, gTheme.grid);
   g.drawFastVLine(cx, cy - R, 2 * R, gTheme.grid);
   g.setTextColor(gTheme.dim, gTheme.bg);
-  g.drawString("N", cx, cy - R - 6);
-  g.drawString(String((int)maxR) + "nm", cx + R - 8, cy - 6);
+  g.drawString("N", cx, cy - R - 6 * u);
+  g.drawString(String((int)maxR) + "nm", cx + R - 8 * u, cy - 6 * u);
 
   // Shared radar centre (recentred airport, else the observer) for trails / airports / home marker.
   double clat = _loc.active().lat, clon = _loc.active().lon;
@@ -562,18 +573,19 @@ void PageAircraft::draw(App& app) {
       int px, py;
       for (int j = 0; j < tr.n; ++j) {
         int idx = (tr.head - tr.n + j + 2 * Trail::K) % Trail::K;
-        if (place(tr.lat[idx], tr.lon[idx], px, py)) g.fillCircle(px, py, 1, gTheme.dim);
+        if (place(tr.lat[idx], tr.lon[idx], px, py)) g.fillCircle(px, py, 1 * u, gTheme.dim);
       }
     }
 
   // Nearby airports at their true radar position, marked + labelled in the ring colour.
   g.setTextDatum(textdatum_t::top_center);
+  g.setTextSize(u);
   g.setTextColor(gTheme.grid, gTheme.bg);
   for (const auto& s : _wx.stations()) {
     int px, py;
     if (s.icao == _centerIcao || !place(s.lat, s.lon, px, py)) continue;   // centre field is the origin
-    g.drawCircle(px, py, 2, gTheme.grid);
-    g.drawString(s.icao, px, py + 3);
+    g.drawCircle(px, py, 2 * u, gTheme.grid);
+    g.drawString(s.icao, px, py + 3 * u);
   }
 
   // Centre designator: what the radar is centred on (airport ICAO, or HOME), marked in the middle
@@ -581,21 +593,21 @@ void PageAircraft::draw(App& app) {
   {
     bool home = !_centerIcao.length();
     Color cc = home ? gTheme.accent : gTheme.grid;
-    g.fillCircle(cx, cy, 2, cc);
+    g.fillCircle(cx, cy, 2 * u, cc);
     g.setTextDatum(textdatum_t::top_center);
     g.setTextColor(cc, gTheme.bg);
-    g.drawString(home ? String("HOME") : _centerIcao, cx, cy + 3);
+    g.drawString(home ? String("HOME") : _centerIcao, cx, cy + 3 * u);
   }
 
   // HOME (us) marked when the radar is centred on an airport, so you keep your bearing back home.
   if (_centerIcao.length()) {
     int px, py;
     if (place(_loc.active().lat, _loc.active().lon, px, py)) {
-      g.fillCircle(px, py, 2, gTheme.accent);
-      g.drawCircle(px, py, 5, gTheme.accent);
+      g.fillCircle(px, py, 2 * u, gTheme.accent);
+      g.drawCircle(px, py, 5 * u, gTheme.accent);
       g.setTextDatum(textdatum_t::top_center);
       g.setTextColor(gTheme.accent, gTheme.bg);
-      g.drawString("HOME", px, py + 6);
+      g.drawString("HOME", px, py + 6 * u);
     }
   }
 
@@ -609,40 +621,42 @@ void PageAircraft::draw(App& app) {
     bool emerg = squawkAlert(a.squawk) != nullptr;
     Color c = emerg ? gTheme.warn : sel ? gTheme.ok : (a.onGround ? gTheme.dim : gTheme.accent);
     // Heading tick in the track direction.
-    int tx = ax + (int)round(7 * sin(a.trackDeg * D2R));
-    int ty = ay - (int)round(7 * cos(a.trackDeg * D2R));
+    int tx = ax + (int)round(7 * u * sin(a.trackDeg * D2R));
+    int ty = ay - (int)round(7 * u * cos(a.trackDeg * D2R));
     g.drawLine(ax, ay, tx, ty, c);
-    g.fillCircle(ax, ay, sel ? 3 : 2, c);
-    if (emerg) g.drawCircle(ax, ay, 6, gTheme.warn);  // ring an emergency contact
+    g.fillCircle(ax, ay, (sel ? 3 : 2) * u, c);
+    if (emerg) g.drawCircle(ax, ay, 6 * u, gTheme.warn);  // ring an emergency contact
     // ForeFlight-style data tag: altitude in hundreds of ft + a vertical-trend arrow
     // (filled triangle up=climb / down=descent, dash=level). Lets you read traffic at a glance.
     if (!a.onGround && a.altFt > 0) {
       Color tc = sel ? gTheme.ok : gTheme.dim;
       String fl = String((int)(drAlt(a, _lastDataMs) / 100.0f + 0.5f));    // dead-reckoned, hundreds of ft
       g.setTextDatum(textdatum_t::middle_left);
+      g.setTextSize(u);
       g.setTextColor(tc, gTheme.bg);
-      g.drawString(fl, ax + 5, ay + 7);
-      int hx = ax + 7 + g.textWidth(fl), hy = ay + 7;        // trend arrow after the number
-      if (a.vsFpm > 256)       g.fillTriangle(hx, hy - 3, hx - 3, hy + 2, hx + 3, hy + 2, tc);
-      else if (a.vsFpm < -256) g.fillTriangle(hx, hy + 3, hx - 3, hy - 2, hx + 3, hy - 2, tc);
-      else                     g.drawFastHLine(hx - 3, hy, 6, tc);
+      g.drawString(fl, ax + 5 * u, ay + 7 * u);
+      int hx = ax + 7 * u + g.textWidth(fl), hy = ay + 7 * u;        // trend arrow after the number
+      if (a.vsFpm > 256)       g.fillTriangle(hx, hy - 3 * u, hx - 3 * u, hy + 2 * u, hx + 3 * u, hy + 2 * u, tc);
+      else if (a.vsFpm < -256) g.fillTriangle(hx, hy + 3 * u, hx - 3 * u, hy - 2 * u, hx + 3 * u, hy - 2 * u, tc);
+      else                     g.drawFastHLine(hx - 3 * u, hy, 6 * u, tc);
     }
     {                                                 // flight number on every target: grey, selected green
       String cs = a.flight.length() ? a.flight : a.hex;
       g.setTextDatum(textdatum_t::bottom_left);
+      g.setTextSize(u);
       g.setTextColor(sel ? gTheme.ok : gTheme.dim, gTheme.bg);
-      g.drawString(cs, ax + 4, ay - 2);
+      g.drawString(cs, ax + 4 * u, ay - 2 * u);
     }
   }
 
   // Info column.
-  int ix = cw / 2 + 8, iy = top + 6;
+  int ix = cw / 2 + 8 * u, iy = top + 6 * u;
   g.setTextDatum(textdatum_t::top_left);
-  g.setTextSize(1);
-  auto line = [&](const String& s, Color col) { g.setTextColor(col, gTheme.bg); g.drawString(padRight(s, 20), ix, iy); iy += 14; };
+  g.setTextSize(u);
+  auto line = [&](const String& s, Color col) { g.setTextColor(col, gTheme.bg); g.drawString(padRight(s, 20), ix, iy); iy += 14 * u; };
   g.setTextColor(gTheme.fg, gTheme.bg);
-  g.setTextSize(2); g.drawString("Aircraft", ix, iy); iy += 20;
-  g.setTextSize(1);
+  g.setTextSize(2 * u); g.drawString("Aircraft", ix, iy); iy += 20 * u;
+  g.setTextSize(u);
   line(String(_filt.size()) + "/" + list.size() + " @" + (_centerIcao.length() ? _centerIcao : String("HOME"))
        + "  " + (_ap.local() ? "local" : "cloud"), gTheme.dim);
   bool shownStale = false;                                              // own line (was overflowing)
@@ -650,15 +664,15 @@ void PageAircraft::draw(App& app) {
     int age = (int)(time(nullptr) - _ap.lastFetched());
     if (age > 0) { line("stale " + String(age) + "s", gTheme.warn); shownStale = true; }
   }
-  if (!shownStale) iy += 14;        // reserve the slot so the panel below doesn't reflow
+  if (!shownStale) iy += 14 * u;    // reserve the slot so the panel below doesn't reflow
 
   if (_sel >= 0 && _sel < (int)_filt.size()) {
     const Aircraft& a = list[_filt[_sel]];
-    iy += 4;
+    iy += 4 * u;
     g.setTextColor(gTheme.ok, gTheme.bg);
-    g.setTextSize(2);
-    g.drawString(a.flight.length() ? a.flight : a.hex, ix, iy); iy += 20;
-    g.setTextSize(1);
+    g.setTextSize(2 * u);
+    g.drawString(a.flight.length() ? a.flight : a.hex, ix, iy); iy += 20 * u;
+    g.setTextSize(u);
     line(String(_sel + 1) + "/" + _filt.size() + "  (tap edges)", gTheme.dim);
     if (a.type.length() || a.category.length())
       line(String("type ") + (a.type.length() ? a.type : a.category), gTheme.fg);
@@ -697,8 +711,9 @@ void PageAircraft::draw(App& app) {
 void PageAircraft::drawAirportMarquee(App& app) {
   auto& g = app.display().gfx();
   const int cw = app.contentW(), ch = app.contentH(), cy0 = app.contentY();
-  int my = cy0 + ch - 29;
-  g.fillRect(0, my, cw, 12, gTheme.bg);              // clear the ticker band
+  const int u = app.ui();
+  int my = cy0 + ch - 29 * u;
+  g.fillRect(0, my, cw, 12 * u, gTheme.bg);          // clear the ticker band
   if (!_loc.active().valid || !_adb.ready()) return;
   double oLat = _loc.active().lat, oLon = _loc.active().lon;
   // HOME -> closest field to the observer; a centred airport -> that field's freqs.
@@ -707,7 +722,7 @@ void PageAircraft::drawAirportMarquee(App& app) {
   if (!a.valid) {
     if (_centerIcao.length()) {                      // selected field not in the dataset
       g.setTextColor(gTheme.dim); g.setTextDatum(textdatum_t::top_left);
-      g.drawString(_centerIcao + "  no freq data", 4, my + 1);
+      g.drawString(_centerIcao + "  no freq data", 4 * u, my + 1 * u);
     }
     return;
   }
@@ -719,10 +734,10 @@ void PageAircraft::drawAirportMarquee(App& app) {
     snprintf(seg, sizeof(seg), "%s %.2f    ", AirportDB::label(a.type[i]), a.f40[i] / 40.0f);
     m += seg;
   }
-  g.setTextSize(1); g.setTextDatum(textdatum_t::top_left);
+  g.setTextSize(u); g.setTextDatum(textdatum_t::top_left);
   int textW = g.textWidth(m);
   if (textW < 1) return;
   int off = (int)((millis() / 27) % (uint32_t)textW);   // ~37 px/s leftward scroll (75% speed)
   g.setTextColor(gTheme.accent);                        // transparent bg: copies coexist
-  for (int x = 2 - off; x < cw; x += textW) g.drawString(m, x, my + 1);
+  for (int x = 2 * u - off; x < cw; x += textW) g.drawString(m, x, my + 1 * u);
 }
