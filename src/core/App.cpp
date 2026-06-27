@@ -21,6 +21,7 @@ App::App(Display& display, Touch& touch, EventBus& bus, Scheduler& sched)
   : _display(display), _touch(touch), _bus(bus), _sched(sched) {}
 
 int App::contentH() const { return _display.height() - kStatusH; }
+int App::ui() const { return _display.width() >= 640 ? 2 : 1; }   // CYD=1, CrowPanel 800x480=2
 int App::contentW() const { return _display.width(); }
 
 void App::begin() {

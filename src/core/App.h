@@ -57,6 +57,11 @@ public:
   int contentH() const;
   int contentW() const;
 
+  // UI scale tier for resolution-relative layout: 1 on a CYD-class screen (<640 px wide), 2 on the
+  // 800x480 CrowPanel. Pages multiply layout literals (text size, row step, margins) by ui() so they
+  // render natively/crisply at each size (ui()==1 leaves the CYD layout byte-for-byte unchanged).
+  int ui() const;
+
   void openGrid();                       // show the 3x3 quick-jump grid (page taps open it)
   void setPin(bool on) { _pinned = on; _statusDirty = true; }   // pages can pin (clock rests)
 

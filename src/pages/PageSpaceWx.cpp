@@ -43,9 +43,12 @@ void PageSpaceWx::tick(App& app, uint32_t nowMs) {
 void PageSpaceWx::draw(App& app) {
   auto& g = app.display().gfx();
   const int cw = app.contentW(), cy0 = app.contentY(), ch = app.contentH();
+  const int u = app.ui();                                 // 1 = CYD, 2 = CrowPanel
+  auto X  = [&](int bx){ return cw * bx / 320; };         // x: scale to fill the width (CYD: identity)
+  auto SY = [&](int bs){ return bs * ch / 220; };         // y-step: scale to fill the height (CYD: identity)
   g.fillRect(0, cy0, cw, ch, gTheme.bg);
   g.setTextDatum(textdatum_t::top_left);
-  g.setTextSize(1);
+  g.setTextSize(u);
 
   float kp = _wx.kp();
   int   sfi = _wx.sfi();
@@ -57,17 +60,17 @@ void PageSpaceWx::draw(App& app) {
     return;
   }
 
-  int y = cy0 + 6;
+  int y = cy0 + SY(6);
   // Kp gauge.
   Color kc = kp >= 5 ? gTheme.warn : kp >= 4 ? gTheme.accent : gTheme.ok;
   const char* kl = kp >= 5 ? "STORM" : kp >= 4 ? "Active" : kp >= 3 ? "Unsettled" : "Quiet";
   g.setTextColor(gTheme.fg, gTheme.bg);
-  g.setTextSize(2); g.drawString(String("Kp ") + (kp < 0 ? String("?") : String(kp, 1)), 6, y);
-  g.setTextSize(1); g.setTextColor(kc, gTheme.bg); g.drawString(kl, 120, y + 6);
+  g.setTextSize(2 * u); g.drawString(String("Kp ") + (kp < 0 ? String("?") : String(kp, 1)), X(6), y);
+  g.setTextSize(u); g.setTextColor(kc, gTheme.bg); g.drawString(kl, X(120), y + 6 * u);
   // Kp history sparkline (3-hourly, ~3 days) as mini bars, top-right.
   int kn = _wx.kpHistN(); const float* kh = _wx.kpHist();
   if (kn >= 2) {
-    int sx = 188, sw = cw - sx - 6, sh = 16, sy = y;
+    int sx = X(188), sw = cw - sx - X(6), sh = 16 * u, sy = y;
     g.drawRect(sx, sy, sw, sh, gTheme.grid);
     int bin = (sw - 2) / kn; if (bin < 1) bin = 1;
     for (int i = 0; i < kn; ++i) {
@@ -77,31 +80,31 @@ void PageSpaceWx::draw(App& app) {
       g.fillRect(bx, sy + sh - 1 - bh, bin > 1 ? bin - 1 : 1, bh, bc);
     }
   }
-  y += 22;
-  int barW = cw - 12;
-  g.drawRect(6, y, barW, 8, gTheme.grid);
-  if (kp >= 0) g.fillRect(6, y, (int)(barW * (kp / 9.0)), 8, kc);
-  y += 16;
+  y += SY(22);
+  int barW = cw - X(12);
+  g.drawRect(X(6), y, barW, 8 * u, gTheme.grid);
+  if (kp >= 0) g.fillRect(X(6), y, (int)(barW * (kp / 9.0)), 8 * u, kc);
+  y += SY(16);
 
   // SFI.
   const char* sl = sfi >= 150 ? "High" : sfi >= 100 ? "Moderate" : "Low";
   g.setTextColor(gTheme.fg, gTheme.bg);
-  g.setTextSize(2); g.drawString(String("SFI ") + (sfi < 0 ? String("?") : String(sfi)), 6, y);
-  g.setTextSize(1); g.setTextColor(gTheme.accent, gTheme.bg); g.drawString(sl, 150, y + 6);
-  y += 24;
+  g.setTextSize(2 * u); g.drawString(String("SFI ") + (sfi < 0 ? String("?") : String(sfi)), X(6), y);
+  g.setTextSize(u); g.setTextColor(gTheme.accent, gTheme.bg); g.drawString(sl, X(150), y + 6 * u);
+  y += SY(24);
 
   // Flare class + solar wind (speed / IMF Bz).
-  g.setTextColor(gTheme.dim, gTheme.bg); g.drawString("flare", 6, y);
+  g.setTextColor(gTheme.dim, gTheme.bg); g.drawString("flare", X(6), y);
   String fl = _wx.flareClass();
   Color flc = !fl.length() ? gTheme.dim : fl[0] == 'X' ? gTheme.warn : fl[0] == 'M' ? gTheme.accent : gTheme.ok;
-  g.setTextColor(flc, gTheme.bg); g.drawString(fl.length() ? fl : String("?"), 44, y);
-  g.setTextColor(gTheme.dim, gTheme.bg); g.drawString("wind", 104, y);
+  g.setTextColor(flc, gTheme.bg); g.drawString(fl.length() ? fl : String("?"), X(44), y);
+  g.setTextColor(gTheme.dim, gTheme.bg); g.drawString("wind", X(104), y);
   g.setTextColor(gTheme.fg, gTheme.bg);
-  g.drawString(_wx.windSpeed() >= 0 ? String(_wx.windSpeed()) + "km/s" : String("?"), 134, y);
-  g.setTextColor(gTheme.dim, gTheme.bg); g.drawString("Bz", 210, y);
-  if (_wx.bz() > -900) { g.setTextColor(_wx.bz() <= -5 ? gTheme.warn : gTheme.fg, gTheme.bg); g.drawString(String(_wx.bz()) + "nT", 230, y); }
-  else { g.setTextColor(gTheme.dim, gTheme.bg); g.drawString("?", 230, y); }
-  y += 14;
+  g.drawString(_wx.windSpeed() >= 0 ? String(_wx.windSpeed()) + "km/s" : String("?"), X(134), y);
+  g.setTextColor(gTheme.dim, gTheme.bg); g.drawString("Bz", X(210), y);
+  if (_wx.bz() > -900) { g.setTextColor(_wx.bz() <= -5 ? gTheme.warn : gTheme.fg, gTheme.bg); g.drawString(String(_wx.bz()) + "nT", X(230), y); }
+  else { g.setTextColor(gTheme.dim, gTheme.bg); g.drawString("?", X(230), y); }
+  y += SY(14);
 
   // Aurora chance (from Kp vs the observer's geomagnetic latitude).
   if (_loc.active().valid && kp >= 0) {
@@ -110,30 +113,31 @@ void PageSpaceWx::draw(App& app) {
     double diff = gm - boundary;
     const char* v = diff >= 0 ? "overhead possible" : diff >= -4 ? "low on N horizon" : "unlikely";
     Color ac = diff >= 0 ? gTheme.ok : diff >= -4 ? gTheme.accent : gTheme.dim;
-    g.setTextColor(gTheme.dim, gTheme.bg); g.drawString("aurora", 6, y);
-    g.setTextColor(ac, gTheme.bg); g.drawString(v, 50, y);
+    g.setTextColor(gTheme.dim, gTheme.bg); g.drawString("aurora", X(6), y);
+    g.setTextColor(ac, gTheme.bg); g.drawString(v, X(50), y);
     g.setTextColor(gTheme.dim, gTheme.bg);
-    g.drawString(String("(gm ") + (int)round(gm) + "\xF7 need " + (int)round(boundary) + "\xF7)", 168, y);
-    y += 15;
+    g.drawString(String("(gm ") + (int)round(gm) + "\xF7 need " + (int)round(boundary) + "\xF7)", X(168), y);
+    y += SY(15);
   }
 
   // Band table.
   bool day = true;
   if (_time.synced() && _loc.active().valid)
     day = astro::sunAltitudeDeg(_time.julianDate(), _loc.active().lat, _loc.active().lon) > -6;
+  (void)day;
   g.setTextColor(gTheme.dim, gTheme.bg);
-  g.drawString("band", 6, y); g.drawString("day", 120, y); g.drawString("night", 200, y);
-  y += 14;
+  g.drawString("band", X(6), y); g.drawString("day", X(120), y); g.drawString("night", X(200), y);
+  y += SY(14);
   const int bands[] = {80, 40, 20, 15, 10};
   const char* names[] = {"Good", "Fair", "Poor"};
   Color cols[] = {gTheme.ok, gTheme.accent, gTheme.dim};
   for (int b : bands) {
     g.setTextColor(gTheme.fg, gTheme.bg);
-    g.drawString(String(b) + "m", 6, y);
+    g.drawString(String(b) + "m", X(6), y);
     int cd = bandCond(b, true, kp, sfi), cn = bandCond(b, false, kp, sfi);
-    g.setTextColor(cols[2 - cd], gTheme.bg); g.drawString(names[2 - cd], 120, y);
-    g.setTextColor(cols[2 - cn], gTheme.bg); g.drawString(names[2 - cn], 200, y);
-    y += 13;
+    g.setTextColor(cols[2 - cd], gTheme.bg); g.drawString(names[2 - cd], X(120), y);
+    g.setTextColor(cols[2 - cn], gTheme.bg); g.drawString(names[2 - cn], X(200), y);
+    y += SY(13);
   }
 
   // Updated age.
@@ -141,7 +145,7 @@ void PageSpaceWx::draw(App& app) {
     long age = (long)time(nullptr) - (long)_wx.lastFetched();
     g.setTextColor(_wx.status() == ProviderStatus::Stale ? gTheme.warn : gTheme.dim, gTheme.bg);
     g.setTextDatum(textdatum_t::bottom_left);
-    g.drawString(String("updated ") + (age / 60) + "m ago", 6, cy0 + ch - 2);
+    g.drawString(String("updated ") + (age / 60) + "m ago", X(6), cy0 + ch - SY(2));
     g.setTextDatum(textdatum_t::top_left);
   }
 }
