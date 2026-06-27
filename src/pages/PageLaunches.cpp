@@ -142,10 +142,11 @@ void PageLaunches::onData(App& app, ProviderId id) {
 
 void PageLaunches::onTouch(App& app, int x, int y) {
   const int cw = app.contentW(), ch = app.contentH();
-  if (y >= ch - 18) {                                  // bottom filter chips
-    int xs = 120, ws = (cw - xs - 2) / 2;
-    if      (x < 38)       _winIdx  = (_winIdx + 1) % 4;       // time window
-    else if (x < 80)       _hideTbd = !_hideTbd;               // TBD show/hide
+  const int u = app.ui();
+  if (y >= ch - 18 * u) {                              // bottom filter chips
+    int xs = 120 * u, ws = (cw - xs - 2 * u) / 2;
+    if      (x < 38 * u)   _winIdx  = (_winIdx + 1) % 4;       // time window
+    else if (x < 80 * u)   _hideTbd = !_hideTbd;               // TBD show/hide
     else if (x < xs)       _visOnly = !_visOnly;               // only-visible filter
     else if (x < xs + ws)  _siteVal = cycleVal(_sites, _siteVal);
     else                   _orgVal  = cycleVal(_orgs,  _orgVal);
@@ -217,27 +218,28 @@ void PageLaunches::drawCard(App& app) {
 
   auto& g = app.display().gfx();
   const int cw = app.contentW(), cy0 = app.contentY(), ch = app.contentH();
+  const int u = app.ui();
   if (_needClear) { g.fillRect(0, cy0, cw, ch, gTheme.bg); _needClear = false; }
   time_t now = time(nullptr);
 
   // Status pill (top-right).
   g.setTextDatum(textdatum_t::top_right);
-  g.setTextSize(1);
+  g.setTextSize(u);
   g.setTextColor(statusColor(l.statusAbbrev), gTheme.bg);
-  g.drawString(l.statusName.length() ? l.statusName : l.statusAbbrev, cw - 6, cy0 + 4);
+  g.drawString(l.statusName.length() ? l.statusName : l.statusAbbrev, cw - 6 * u, cy0 + 4 * u);
   if (_lp.status() == ProviderStatus::Stale) {
     g.setTextColor(gTheme.warn, gTheme.bg);
-    g.drawString("stale", cw - 6, cy0 + 16);
+    g.drawString("stale", cw - 6 * u, cy0 + 16 * u);
   }
 
-  int x0 = 6, y = cy0 + 4;
+  int x0 = 6 * u, y = cy0 + 4 * u;
   g.setTextDatum(textdatum_t::top_left);
   g.setTextColor(gTheme.accent, gTheme.bg);
-  g.setTextSize(2);
-  g.drawString(l.name.substring(0, 16), x0, y); y += 22;
+  g.setTextSize(2 * u);
+  g.drawString(l.name.substring(0, 16), x0, y); y += 22 * u;
 
-  g.setTextSize(1);
-  auto line = [&](const String& s, Color c) { if (s.length()) { g.setTextColor(c, gTheme.bg); g.drawString(s, x0, y); y += 13; } };
+  g.setTextSize(u);
+  auto line = [&](const String& s, Color c) { if (s.length()) { g.setTextColor(c, gTheme.bg); g.drawString(s, x0, y); y += 13 * u; } };
   // Where it's launching from — surfaced prominently (accent), with country.
   String ctry = launchSiteCountry(l.location);
   line(String("@ ") + l.location, gTheme.accent);
@@ -247,7 +249,7 @@ void PageLaunches::drawCard(App& app) {
 
   // T-minus right under the index line (left-aligned); the list fills the rest.
   g.setTextDatum(textdatum_t::top_left);
-  y += 2;
+  y += 2 * u;
   if (precise(l.netPrecision)) {
     long s = (long)l.net - (long)now;
     bool past = s < 0; if (past) s = -s;
@@ -256,22 +258,22 @@ void PageLaunches::drawCard(App& app) {
     if (d > 0) snprintf(b, sizeof(b), "%s%ldd %02ld:%02ld", past ? "T+" : "T-", d, h, m);
     else       snprintf(b, sizeof(b), "%s%02ld:%02ld:%02ld", past ? "T+" : "T-", h, m, sec);
     g.setTextColor(past ? gTheme.warn : gTheme.fg, gTheme.bg);
-    g.setTextSize(3); g.drawString(padRight(b, 12), x0, y);
+    g.setTextSize(3 * u); g.drawString(padRight(b, 12), x0, y);
     { struct tm tm; time_t t = l.net; localtime_r(&t, &tm);   // local launch day + time (small)
       char d1[16], d2[16];
       strftime(d1, sizeof(d1), "%a %b %d", &tm); strftime(d2, sizeof(d2), "%H:%M", &tm);
-      g.setTextSize(1); g.setTextColor(gTheme.dim, gTheme.bg); g.setTextDatum(textdatum_t::top_right);
-      g.drawString(d1, cw - 6, y + 3); g.drawString(String(d2) + " local", cw - 6, y + 15);
+      g.setTextSize(u); g.setTextColor(gTheme.dim, gTheme.bg); g.setTextDatum(textdatum_t::top_right);
+      g.drawString(d1, cw - 6 * u, y + 3 * u); g.drawString(String(d2) + " local", cw - 6 * u, y + 15 * u);
       g.setTextDatum(textdatum_t::top_left);
     }
-    y += 28;
+    y += 28 * u;
   } else {
     struct tm tm; time_t t = l.net; localtime_r(&t, &tm);
     char b[24]; strftime(b, sizeof(b), "~ %b %d", &tm);
-    g.setTextColor(gTheme.fg, gTheme.bg); g.setTextSize(2);
-    g.drawString(b, x0, y); y += 20;
-    g.setTextSize(1); g.setTextColor(gTheme.dim, gTheme.bg);
-    g.drawString(String("precision: ") + l.netPrecision, x0, y); y += 14;
+    g.setTextColor(gTheme.fg, gTheme.bg); g.setTextSize(2 * u);
+    g.drawString(b, x0, y); y += 20 * u;
+    g.setTextSize(u); g.setTextColor(gTheme.dim, gTheme.bg);
+    g.drawString(String("precision: ") + l.netPrecision, x0, y); y += 14 * u;
   }
 
   // "Can I see it from here?" — distance/direction + twilight-plume likelihood.
@@ -279,36 +281,36 @@ void PageLaunches::drawCard(App& app) {
     LaunchVis vis = launchVis(_loc.active().lat, _loc.active().lon, l.location, l.net, _wx.cloudCoverAt(l.net));
     if (vis.level >= 0) {
       Color vc = vis.level == 2 ? gTheme.ok : vis.level == 1 ? gTheme.warn : gTheme.dim;
-      g.setTextDatum(textdatum_t::top_left); g.setTextSize(1);
+      g.setTextDatum(textdatum_t::top_left); g.setTextSize(u);
       g.setTextColor(vc, gTheme.bg);
-      g.drawString(("see: " + vis.text).substring(0, (cw - 2 * x0) / 6), x0, y); y += 13;
+      g.drawString(("see: " + vis.text).substring(0, (cw - 2 * x0) / (6 * u)), x0, y); y += 13 * u;
     }
   }
 
   // Upcoming list fills the remaining space (above the chip row).
-  g.drawFastHLine(x0, y, cw - 2 * x0, gTheme.grid); y += 4;
-  g.setTextSize(1);
-  for (int fi = 0; fi < (int)_filtered.size() && y < cy0 + ch - 17; ++fi) {  // fill down to the chips
+  g.drawFastHLine(x0, y, cw - 2 * x0, gTheme.grid); y += 4 * u;
+  g.setTextSize(u);
+  for (int fi = 0; fi < (int)_filtered.size() && y < cy0 + ch - 17 * u; ++fi) {  // fill down to the chips
     if (fi == _sel) continue;
-    const Launch& u = list[_filtered[fi]];
-    long s = (long)u.net - (long)now; if (s < 0) s = 0;
+    const Launch& up = list[_filtered[fi]];
+    long s = (long)up.net - (long)now; if (s < 0) s = 0;
     char tm[12];
     if (s >= 86400) snprintf(tm, sizeof(tm), "%ldd", s / 86400);
     else snprintf(tm, sizeof(tm), "%02ld:%02ld", s / 3600, (s % 3600) / 60);
     int nx = x0;                                      // mark a potentially-visible launch
     if (_loc.active().valid) {
-      LaunchVis uv = launchVis(_loc.active().lat, _loc.active().lon, u.location, u.net, _wx.cloudCoverAt(u.net));
-      if (uv.level >= 1) { g.fillCircle(x0 + 2, y + 5, 2, uv.level == 2 ? gTheme.ok : gTheme.warn); nx = x0 + 8; }
+      LaunchVis uv = launchVis(_loc.active().lat, _loc.active().lon, up.location, up.net, _wx.cloudCoverAt(up.net));
+      if (uv.level >= 1) { g.fillCircle(x0 + 2 * u, y + 5 * u, 2 * u, uv.level == 2 ? gTheme.ok : gTheme.warn); nx = x0 + 8 * u; }
     }
     g.setTextDatum(textdatum_t::top_left);
     g.setTextColor(gTheme.fg, gTheme.bg);
-    int nameMax = (cw - nx - 48 - x0) / 6;            // fill up to the time cell
-    g.drawString(u.name.substring(0, nameMax), nx, y);
-    g.fillRect(cw - x0 - 44, y, 44, 12, gTheme.bg);   // clear time cell (right-aligned, shrinks)
+    int nameMax = (cw - nx - 48 * u - x0) / (6 * u);  // fill up to the time cell
+    g.drawString(up.name.substring(0, nameMax), nx, y);
+    g.fillRect(cw - x0 - 44 * u, y, 44 * u, 12 * u, gTheme.bg);   // clear time cell (right-aligned, shrinks)
     g.setTextDatum(textdatum_t::top_right);
     g.setTextColor(gTheme.dim, gTheme.bg);
     g.drawString(tm, cw - x0, y);
-    y += 13;
+    y += 13 * u;
   }
 }
 
@@ -317,6 +319,7 @@ void PageLaunches::drawCard(App& app) {
 void PageLaunches::drawMap(App& app) {
   auto& g = app.display().gfx();
   const int cw = app.contentW(), cy0 = app.contentY(), ch = app.contentH();
+  const int u = app.ui();
   g.fillRect(0, cy0, cw, ch, gTheme.bg);            // map repaints fully each time
   _needClear = false;
 
@@ -326,23 +329,24 @@ void PageLaunches::drawMap(App& app) {
 
   // Header: selected launch (name + provider/country + T-minus + index).
   g.setTextDatum(textdatum_t::top_left);
-  g.setTextSize(1);
+  g.setTextSize(u);
   g.setTextColor(gTheme.accent, gTheme.bg);
-  g.drawString(sel.name.substring(0, 32), 4, cy0 + 2);
+  g.drawString(sel.name.substring(0, 32), 4 * u, cy0 + 2 * u);
   String ctry = launchSiteCountry(sel.location);
   g.setTextColor(gTheme.dim, gTheme.bg);
-  g.drawString(shortSite(sel.location) + (ctry.length() ? ", " + ctry : String()), 4, cy0 + 14);
+  g.drawString(shortSite(sel.location) + (ctry.length() ? ", " + ctry : String()), 4 * u, cy0 + 14 * u);
   g.setTextDatum(textdatum_t::top_right);
   g.setTextColor(gTheme.fg, gTheme.bg);
-  g.drawString(tMinus(sel.net, now) + "  " + String(_sel + 1) + "/" + _filtered.size(), cw - 4, cy0 + 2);
+  g.drawString(tMinus(sel.net, now) + "  " + String(_sel + 1) + "/" + _filtered.size(), cw - 4 * u, cy0 + 2 * u);
   if (sel.net) {                                   // launch time in the user's local zone
     struct tm tm; time_t t = sel.net; localtime_r(&t, &tm);
     char lt[16]; strftime(lt, sizeof(lt), "%a %H:%M", &tm);
     g.setTextColor(gTheme.dim, gTheme.bg);
-    g.drawString(lt, cw - 4, cy0 + 14);
+    g.drawString(lt, cw - 4 * u, cy0 + 14 * u);
   }
 
-  const int my = cy0 + 26, mh = ch - 26 - 18, mx = 0, mw = cw;
+  // Label bands scale (26 top / 18 bottom); the map fills the middle at native resolution.
+  const int my = cy0 + 26 * u, mh = ch - 26 * u - 18 * u, mx = 0, mw = cw;
   auto px = [&](float lon) { return mx + (int)round((lon + 180.0f) / 360.0f * mw); };
   auto py = [&](float lat) { return my + (int)round((90.0f - lat) / 180.0f * mh); };
 
@@ -361,8 +365,8 @@ void PageLaunches::drawMap(App& app) {
   // Observer location: green circle + black centre dot (matches the Satellites map).
   if (_loc.active().valid) {
     int ox = px(_loc.active().lon), oy = py(_loc.active().lat);
-    g.fillCircle(ox, oy, 4, gTheme.ok);
-    g.fillCircle(ox, oy, 1, 0x0000);
+    g.fillCircle(ox, oy, 4 * u, gTheme.ok);
+    g.fillCircle(ox, oy, 1 * u, 0x0000);
   }
 
   // Markers for every filtered launch's site; selected one ringed + labelled last.
@@ -373,38 +377,38 @@ void PageLaunches::drawMap(App& app) {
     if (!launchSiteLatLon(l.location, lat, lon, c)) continue;   // unknown site -> skip dot
     int sx = px(lon), sy = py(lat);
     if (fi == _sel) { selX = sx; selY = sy; selKnown = true; continue; }   // draw selected on top
-    g.fillCircle(sx, sy, 2, gTheme.warn);
+    g.fillCircle(sx, sy, 2 * u, gTheme.warn);
   }
   if (selKnown) {
     // Approx launch-corridor arrow from the pad (per-site azimuth; see launchSiteAz).
     int az = launchSiteAz(sel.location);
     if (az != 0) {
       float th = az * 3.14159265f / 180.0f, dx = sinf(th), dy = -cosf(th);   // N=up, E=right
-      int ex = selX + (int)round(28 * dx), ey = selY + (int)round(28 * dy);
+      int ex = selX + (int)round(28 * u * dx), ey = selY + (int)round(28 * u * dy);
       g.drawLine(selX, selY, ex, ey, gTheme.accent);
       float px2 = -dx, py2 = -dy, qx = dy, qy = -dx;                         // back + perpendicular
-      g.drawLine(ex, ey, ex + (int)round(7 * px2 + 4 * qx), ey + (int)round(7 * py2 + 4 * qy), gTheme.accent);
-      g.drawLine(ex, ey, ex + (int)round(7 * px2 - 4 * qx), ey + (int)round(7 * py2 - 4 * qy), gTheme.accent);
+      g.drawLine(ex, ey, ex + (int)round((7 * px2 + 4 * qx) * u), ey + (int)round((7 * py2 + 4 * qy) * u), gTheme.accent);
+      g.drawLine(ex, ey, ex + (int)round((7 * px2 - 4 * qx) * u), ey + (int)round((7 * py2 - 4 * qy) * u), gTheme.accent);
       g.setTextDatum(textdatum_t::bottom_left);
       g.setTextColor(gTheme.dim, gTheme.bg);
-      g.drawString("-> approx launch corridor", mx + 4, my + mh - 2);
+      g.drawString("-> approx launch corridor", mx + 4 * u, my + mh - 2 * u);
     }
-    g.fillCircle(selX, selY, 4, gTheme.ok);
-    g.drawCircle(selX, selY, 7, gTheme.ok);
+    g.fillCircle(selX, selY, 4 * u, gTheme.ok);
+    g.drawCircle(selX, selY, 7 * u, gTheme.ok);
     g.setTextColor(gTheme.ok, gTheme.bg);
     String lbl = shortSite(sel.location);
-    int maxRight = (cw - (selX + 9)) / 6, maxLeft = (selX - 9) / 6;   // chars that fit each side
+    int maxRight = (cw - (selX + 9 * u)) / (6 * u), maxLeft = (selX - 9 * u) / (6 * u);   // chars that fit each side
     if (maxRight >= maxLeft) {
       g.setTextDatum(textdatum_t::bottom_left);
-      g.drawString(lbl.substring(0, maxRight), selX + 9, selY - 1);
+      g.drawString(lbl.substring(0, maxRight), selX + 9 * u, selY - 1 * u);
     } else {
       g.setTextDatum(textdatum_t::bottom_right);
-      g.drawString(lbl.substring(0, maxLeft), selX - 9, selY - 1);
+      g.drawString(lbl.substring(0, maxLeft), selX - 9 * u, selY - 1 * u);
     }
   } else {
     g.setTextColor(gTheme.warn, gTheme.bg);
     g.setTextDatum(textdatum_t::bottom_left);
-    g.drawString("site not mapped", mx + 4, my + mh - 2);
+    g.drawString("site not mapped", mx + 4 * u, my + mh - 2 * u);
   }
 
   // Observer marker + sight line to the selected pad, coloured by visibility.
@@ -416,32 +420,33 @@ void PageLaunches::drawMap(App& app) {
         Color vc = v.level == 2 ? gTheme.ok : v.level == 1 ? gTheme.warn : gTheme.dim;
         g.drawLine(ox, oy, selX, selY, vc);
         g.setTextDatum(textdatum_t::bottom_right); g.setTextColor(vc, gTheme.bg);
-        g.drawString(String("visible: ") + (v.level == 2 ? "likely" : v.level == 1 ? "faint" : "unlikely"), cw - 4, my + mh - 2);
+        g.drawString(String("visible: ") + (v.level == 2 ? "likely" : v.level == 1 ? "faint" : "unlikely"), cw - 4 * u, my + mh - 2 * u);
       }
     }
-    g.drawFastHLine(ox - 3, oy, 7, gTheme.accent);   // observer crosshair = "you"
-    g.drawFastVLine(ox, oy - 3, 7, gTheme.accent);
+    g.drawFastHLine(ox - 3 * u, oy, 7 * u, gTheme.accent);   // observer crosshair = "you"
+    g.drawFastVLine(ox, oy - 3 * u, 7 * u, gTheme.accent);
     g.setTextDatum(textdatum_t::top_left); g.setTextColor(gTheme.accent, gTheme.bg);
-    g.drawString("you", ox + 4, oy - 4);
+    g.drawString("you", ox + 4 * u, oy - 4 * u);
   }
 }
 
 void PageLaunches::drawChips(App& app) {
   auto& g = app.display().gfx();
   const int cw = app.contentW();
-  int y = app.contentY() + app.contentH() - 16;
-  g.setTextSize(1);
+  const int u = app.ui();
+  int y = app.contentY() + app.contentH() - 16 * u;
+  g.setTextSize(u);
   g.setTextDatum(textdatum_t::middle_left);
   auto chip = [&](int x0, int w, const String& label, Color fg) {
-    g.fillRect(x0, y, w - 2, 14, gTheme.grid);
+    g.fillRect(x0, y, w - 2 * u, 14 * u, gTheme.grid);
     g.setTextColor(fg, gTheme.grid);
-    g.drawString(label.substring(0, (w - 8) / 6), x0 + 4, y + 7);
+    g.drawString(label.substring(0, (w - 8 * u) / (6 * u)), x0 + 4 * u, y + 7 * u);
   };
   static const char* kWinL[4] = { "24h", "7d", "30d", "all" };
-  int xs = 120, ws = (cw - xs - 2) / 2;
-  chip(2,  36, kWinL[_winIdx], _winIdx == 3 ? gTheme.fg : gTheme.ok);   // time window
-  chip(40, 40, _hideTbd ? "-TBD" : "+TBD", _hideTbd ? gTheme.fg : gTheme.warn);
-  chip(82, 36, "vis", _visOnly ? gTheme.ok : gTheme.fg);               // only-visible filter
+  int xs = 120 * u, ws = (cw - xs - 2 * u) / 2;
+  chip(2 * u,  36 * u, kWinL[_winIdx], _winIdx == 3 ? gTheme.fg : gTheme.ok);   // time window
+  chip(40 * u, 40 * u, _hideTbd ? "-TBD" : "+TBD", _hideTbd ? gTheme.fg : gTheme.warn);
+  chip(82 * u, 36 * u, "vis", _visOnly ? gTheme.ok : gTheme.fg);               // only-visible filter
   String s = _siteVal.length() ? shortSite(_siteVal) : String("all");
   String o = _orgVal.length()  ? _orgVal             : String("all");
   chip(xs, ws, String("site:") + s, _siteVal.length() ? gTheme.ok : gTheme.fg);
