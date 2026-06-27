@@ -20,8 +20,9 @@ Theme gTheme = themes::dark;
 App::App(Display& display, Touch& touch, EventBus& bus, Scheduler& sched)
   : _display(display), _touch(touch), _bus(bus), _sched(sched) {}
 
-int App::contentH() const { return _display.height() - kStatusH; }
+int App::contentH() const { return _display.height() - statusH(); }
 int App::ui() const { return _display.width() >= 640 ? 2 : 1; }   // CYD=1, CrowPanel 800x480=2
+int App::statusH() const { return kStatusH * ui(); }              // 20 (CYD) / 40 (CrowPanel)
 int App::contentW() const { return _display.width(); }
 
 void App::begin() {
@@ -190,8 +191,8 @@ int App::gridCell(int x, int yRel) const {
 bool App::dotsHit(int x) const {
   int n = (int)_pages.size();
   if (n <= 1) return false;
-  const int x0 = 52, gap = 8;                                // mirrors drawStatus()
-  return x >= x0 - 4 && x <= x0 + (n - 1) * gap + 4;
+  const int x0 = 52 * ui(), gap = 8 * ui();                  // mirrors drawStatus()
+  return x >= x0 - 4 * ui() && x <= x0 + (n - 1) * gap + 4 * ui();
 }
 
 void App::tapAt(int x, int y) {
@@ -231,17 +232,17 @@ void App::tapAt(int x, int y) {
     return;
   }
   if (y < contentY()) {                                      // status strip
-    if (x < 48 && _clock) { _clock->toggle(*this); return; } // tap the clock -> clock mode on/off
+    if (x < 48 * ui() && _clock) { _clock->toggle(*this); return; } // tap the clock -> clock mode on/off
     if (dotsHit(x)) { openGrid(); return; }                  // tap the page "oooo" dots -> grid (even mid-alert)
     if (_alert.length() && _alertTarget >= 0) {              // tap the orange alert bar -> the page it's about
       _mode = Mode::Manual; setPage(_alertTarget); _statusDirty = true; return;
     }
     const int W = _display.width();
-    if (x >= W - 15) {                                       // WiFi bars -> Device Health
+    if (x >= W - 15 * ui()) {                                // WiFi bars -> Device Health
       int h = healthPageIndex();
       if (h >= 0) { _mode = Mode::Manual; setPage(h); _statusDirty = true; return; }
     }
-    if (x >= W - 46 && x < W - 30 && openLocPicker()) return; // crosshair -> saved-locations picker
+    if (x >= W - 46 * ui() && x < W - 30 * ui() && openLocPicker()) return; // crosshair -> saved-locations picker
     if (titleHit(x) && openViewMenu()) return;               // page title -> views menu
     if (_pinned) _pinned = false;                            // (mode-glyph zone + rest) -> toggle mode
     else _mode = (_mode == Mode::Auto) ? Mode::Manual : Mode::Auto;
@@ -326,7 +327,7 @@ void App::tick(uint32_t nowMs) {
       int th = _display.tileRows();
       if (th > 0 && pg->tiled()) {                             // CrowPanel: render this page off-PSRAM, band by band
         if (pg->needsDraw()) {
-          for (int by = kStatusH; by < _display.height(); by += th) {
+          for (int by = statusH(); by < _display.height(); by += th) {
             int bh = (_display.height() - by < th) ? (_display.height() - by) : th;
             _display.beginTile(by, bh);
             pg->render(*this);                                 // full redraw, clipped to this band -> SRAM
@@ -351,14 +352,22 @@ void App::tick(uint32_t nowMs) {
   if (_statusDirty || nowMs - _lastStatusMs >= 1000) {
     _lastStatusMs = nowMs;
     _statusDirty = false;
-    _display.beginTile(0, kStatusH);   // CrowPanel: render the status strip off-PSRAM into SRAM...
-    drawStatus();
-    _display.endTile(0, kStatusH);     // ...then push the SRAM tile to the panel (no-op on other boards)
+    // The status strip can be taller than one SRAM tile band (40px > kTileRows=20 on the CrowPanel),
+    // so render it band-by-band like the content tiling. On the CYD (no tiling) this is one pass.
+    int sh = statusH(), th = _display.tileRows();
+    if (th <= 0) th = sh;
+    for (int by = 0; by < sh; by += th) {
+      int bh = (sh - by < th) ? (sh - by) : th;
+      _display.beginTile(by, bh);      // CrowPanel: render the status strip off-PSRAM into SRAM...
+      drawStatus();
+      _display.endTile(by, bh);        // ...then push the SRAM tile to the panel (no-op on other boards)
+    }
   }
 }
 
 void App::drawStatus() {
   auto& g = _display.gfx();
+  const int u = ui(), sh = statusH();     // 1/20 (CYD) or 2/40 (CrowPanel) — strip scales with the UI
 
   // Clock (local; TimeService configures TZ so localtime is correct).
   time_t now = time(nullptr);
@@ -371,13 +380,13 @@ void App::drawStatus() {
   // Auto-switch banner: announce an ambient/Director page change for ~2.5s (the
   // interrupt case already shows _alert above; this covers the silent tour jumps).
   if (_switchBannerMs && millis() - _switchBannerMs < 4000) {
-    g.fillRect(0, 0, _display.width(), kStatusH, gTheme.accent);
-    g.setTextSize(1);
+    g.fillRect(0, 0, _display.width(), sh, gTheme.accent);
+    g.setTextSize(u);
     g.setTextDatum(textdatum_t::middle_left);
     g.setTextColor(gTheme.bg, gTheme.accent);
-    g.drawString(clk, 6, kStatusH / 2);
+    g.drawString(clk, 6 * u, sh / 2);
     g.setTextDatum(textdatum_t::middle_right);
-    g.drawString(String("\x10 ") + _switchBanner, _display.width() - 6, kStatusH / 2);
+    g.drawString(String("\x10 ") + _switchBanner, _display.width() - 6 * u, sh / 2);
     return;
   }
 
@@ -385,72 +394,72 @@ void App::drawStatus() {
   // clock and the page "oooo" dots uncovered so you can still read the time and open
   // the quick-jump while an alert is up. Tap the bar (off the clock/dots) -> its page.
   if (_alert.length()) {
-    g.fillRect(0, 0, _display.width(), kStatusH, gTheme.warn);
-    g.setTextSize(1);
+    g.fillRect(0, 0, _display.width(), sh, gTheme.warn);
+    g.setTextSize(u);
     g.setTextColor(gTheme.bg, gTheme.warn);
     g.setTextDatum(textdatum_t::middle_right);
-    g.drawString(String("\xC2 ") + _alert, _display.width() - 6, kStatusH / 2);
+    g.drawString(String("\xC2 ") + _alert, _display.width() - 6 * u, sh / 2);
     g.setTextDatum(textdatum_t::middle_left);
-    g.drawString(clk, 6, kStatusH / 2);                          // time stays readable
+    g.drawString(clk, 6 * u, sh / 2);                            // time stays readable
     int na = (int)_pages.size();                                 // dots stay (drawn last, on top)
     if (na > 1) for (int i = 0; i < na; ++i) {
-      int x = 52 + i * 8, cyd = kStatusH / 2;
-      if (i == _active) g.fillCircle(x, cyd, 2, gTheme.bg);
-      else              g.drawCircle(x, cyd, 2, gTheme.bg);
+      int x = 52 * u + i * 8 * u, cyd = sh / 2;
+      if (i == _active) g.fillCircle(x, cyd, 2 * u, gTheme.bg);
+      else              g.drawCircle(x, cyd, 2 * u, gTheme.bg);
     }
     return;
   }
 
-  g.fillRect(0, 0, _display.width(), kStatusH, gTheme.grid);
+  g.fillRect(0, 0, _display.width(), sh, gTheme.grid);
   g.setTextDatum(textdatum_t::middle_left);
   g.setTextColor(gTheme.fg, gTheme.grid);
-  g.setTextSize(1);
-  g.drawString(clk, 6, kStatusH / 2);
+  g.setTextSize(u);
+  g.drawString(clk, 6 * u, sh / 2);
 
   // Right cluster (left->right): page title, location crosshair, mode glyph, WiFi bars.
   // Spaced so the three glyphs read as distinct tap targets.
-  const int cy = kStatusH / 2, barsRight = _display.width() - 4;
-  drawSignalBars(barsRight, cy);                  // tap -> Device Health
-  const int modeRight = barsRight - 17;
-  drawModeIcon(modeRight, cy);                     // AUTO / MAN / PIN
-  const int locCx = modeRight - 17;
-  if (_pickSettings) drawLocIcon(locCx, cy);       // tap -> saved-locations picker
+  const int cy = sh / 2, barsRight = _display.width() - 4 * u;
+  drawSignalBars(barsRight, cy, u);               // tap -> Device Health
+  const int modeRight = barsRight - 17 * u;
+  drawModeIcon(modeRight, cy, u);                  // AUTO / MAN / PIN
+  const int locCx = modeRight - 17 * u;
+  if (_pickSettings) drawLocIcon(locCx, cy, u);    // tap -> saved-locations picker
   if (_active >= 0) {
     g.setTextDatum(textdatum_t::middle_right);
     g.setTextColor(gTheme.fg, gTheme.grid);
-    g.drawString(_pages[_active]->title(), locCx - 11, cy);
+    g.drawString(_pages[_active]->title(), locCx - 11 * u, cy);
   }
 
   // Page-indicator dots just right of the clock. A badged page (Director has a
   // suppressed interrupt for it) shows a warn-coloured dot (spec §7.4).
   int n = (int)_pages.size();
   if (n > 1) {
-    int gap = 8, x0 = 52, cy = kStatusH / 2;
+    int gap = 8 * u, x0 = 52 * u, cy = sh / 2;
     for (int i = 0; i < n; ++i) {
       bool badged = (i < (int)_badge.size() && _badge[i]);
-      if (i == _active)   g.fillCircle(x0 + i * gap, cy, 2, gTheme.accent);
-      else if (badged)    g.fillCircle(x0 + i * gap, cy, 2, gTheme.warn);
-      else                g.drawCircle(x0 + i * gap, cy, 2, gTheme.dim);
+      if (i == _active)   g.fillCircle(x0 + i * gap, cy, 2 * u, gTheme.accent);
+      else if (badged)    g.fillCircle(x0 + i * gap, cy, 2 * u, gTheme.warn);
+      else                g.drawCircle(x0 + i * gap, cy, 2 * u, gTheme.dim);
     }
   }
 }
 
 // WiFi signal-strength glyph: four bars filled by RSSI; a disconnected radio shows
 // an empty outline with a warn slash. Right edge of the bars is at xRight.
-void App::drawSignalBars(int xRight, int cy) {
+void App::drawSignalBars(int xRight, int cy, int s) {
   auto& g = _display.gfx();
   bool up = (WiFi.status() == WL_CONNECTED);
   int rssi = up ? WiFi.RSSI() : -127;
   int lvl = !up ? 0 : rssi >= -55 ? 4 : rssi >= -65 ? 3 : rssi >= -75 ? 2 : 1;   // 0..4 bars
-  const int bw = 2, gap = 1, nb = 4;
+  const int bw = 2 * s, gap = 1 * s, nb = 4;
   int x0 = xRight - (nb * (bw + gap) - gap);   // leftmost bar
-  int baseY = cy + 6;                          // shared bar bottom
+  int baseY = cy + 6 * s;                       // shared bar bottom
   for (int i = 0; i < nb; ++i) {
-    int h = 3 + i * 3, bx = x0 + i * (bw + gap), by = baseY - h;
+    int h = (3 + i * 3) * s, bx = x0 + i * (bw + gap), by = baseY - h;
     if (i < lvl) g.fillRect(bx, by, bw, h, gTheme.fg);
     else         g.drawRect(bx, by, bw, h, gTheme.dim);
   }
-  if (!up) g.drawLine(x0, baseY - 12, xRight, baseY, gTheme.warn);   // disconnected: slash
+  if (!up) g.drawLine(x0, baseY - 12 * s, xRight, baseY, gTheme.warn);   // disconnected: slash
 }
 
 int App::healthPageIndex() const {
@@ -460,26 +469,26 @@ int App::healthPageIndex() const {
 }
 
 // Mode glyph: AUTO = play (touring), MAN = pause (stopped on a page), PIN = padlock.
-void App::drawModeIcon(int xr, int cy) {
+void App::drawModeIcon(int xr, int cy, int s) {
   auto& g = _display.gfx();
   if (_pinned) {                                  // padlock
-    g.drawRect(xr - 5, cy - 5, 4, 3, gTheme.warn); // shackle
-    g.fillRect(xr - 6, cy - 2, 6, 6, gTheme.warn); // body
+    g.drawRect(xr - 5 * s, cy - 5 * s, 4 * s, 3 * s, gTheme.warn); // shackle
+    g.fillRect(xr - 6 * s, cy - 2 * s, 6 * s, 6 * s, gTheme.warn); // body
   } else if (_mode == Mode::Auto) {               // play triangle
-    g.fillTriangle(xr - 7, cy - 4, xr - 7, cy + 4, xr, cy, gTheme.ok);
+    g.fillTriangle(xr - 7 * s, cy - 4 * s, xr - 7 * s, cy + 4 * s, xr, cy, gTheme.ok);
   } else {                                        // pause bars
-    g.fillRect(xr - 6, cy - 4, 2, 8, gTheme.fg);
-    g.fillRect(xr - 2, cy - 4, 2, 8, gTheme.fg);
+    g.fillRect(xr - 6 * s, cy - 4 * s, 2 * s, 8 * s, gTheme.fg);
+    g.fillRect(xr - 2 * s, cy - 4 * s, 2 * s, 8 * s, gTheme.fg);
   }
 }
 
 // Location crosshair (GPS-style): a ring with four ticks. Opens the saved-locations picker.
-void App::drawLocIcon(int cx, int cy) {
+void App::drawLocIcon(int cx, int cy, int s) {
   auto& g = _display.gfx();
   Color c = gTheme.accent;
-  g.drawCircle(cx, cy, 3, c);
-  g.drawFastVLine(cx, cy - 5, 2, c); g.drawFastVLine(cx, cy + 4, 2, c);
-  g.drawFastHLine(cx - 5, cy, 2, c); g.drawFastHLine(cx + 4, cy, 2, c);
+  g.drawCircle(cx, cy, 3 * s, c);
+  g.drawFastVLine(cx, cy - 5 * s, 2 * s, c); g.drawFastVLine(cx, cy + 4 * s, 2 * s, c);
+  g.drawFastHLine(cx - 5 * s, cy, 2 * s, c); g.drawFastHLine(cx + 4 * s, cy, 2 * s, c);
 }
 
 bool App::openLocPicker() {
@@ -558,9 +567,9 @@ int App::locPickerRow(int x, int yRel) const {
 // to jump straight to it (vs. centre-tap/swipe stepping). Only opens when >1 view.
 bool App::titleHit(int x) const {
   if (_active < 0) return false;
-  int tw = (int)strlen(_pages[_active]->title()) * 6;
-  int right = _display.width() - 49;            // title right edge (left of crosshair/mode/bars)
-  return x <= right + 2 && x >= right - tw - 2;
+  int tw = (int)strlen(_pages[_active]->title()) * 6 * ui();
+  int right = _display.width() - 49 * ui();     // title right edge (left of crosshair/mode/bars)
+  return x <= right + 2 * ui() && x >= right - tw - 2 * ui();
 }
 
 bool App::openViewMenu() {

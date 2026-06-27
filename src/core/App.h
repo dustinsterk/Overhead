@@ -53,7 +53,8 @@ public:
   Display& display() { return _display; }
 
   // Content rect available to pages (below the status strip).
-  int contentY() const { return kStatusH; }
+  int contentY() const { return statusH(); }
+  int statusH()  const;                  // status-strip height, scaled: kStatusH * ui()
   int contentH() const;
   int contentW() const;
 
@@ -83,9 +84,9 @@ private:
   void tapAt(int x, int y);              // route a tap (grid / dots / status / page)
   int  gridCell(int x, int yRel) const;  // page index under a grid tap, or -1
   bool dotsHit(int x) const;             // x falls on the status-strip page dots
-  void drawSignalBars(int xRight, int cy);  // WiFi signal-strength bars glyph (status strip, far right)
-  void drawModeIcon(int xRight, int cy);    // AUTO(play) / MAN(pause) / PIN(lock) glyph
-  void drawLocIcon(int cx, int cy);         // location crosshair glyph (opens the saved-locations picker)
+  void drawSignalBars(int xRight, int cy, int s);  // WiFi signal-strength bars glyph (s = UI scale)
+  void drawModeIcon(int xRight, int cy, int s);    // AUTO(play) / MAN(pause) / PIN(lock) glyph
+  void drawLocIcon(int cx, int cy, int s);         // location crosshair glyph (saved-locations picker)
   int  healthPageIndex() const;          // index of the Device Health page (-1 if absent)
   bool openLocPicker();                  // saved-locations modal: true if it opened (has entries)
   void closeLocPicker();
