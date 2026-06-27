@@ -65,7 +65,8 @@ static int briIndex(Settings& s) {
 }
 
 void PageHealth::onTouch(App& app, int x, int y) {
-  if (y >= app.contentH() - 44 && y < app.contentH() - 26) {   // display / brightness / shots / web row
+  const int u = app.ui();
+  if (y >= app.contentH() - 44 * u && y < app.contentH() - 26 * u) {   // display / brightness / shots / web row
     int col = x / (app.contentW() / 6);
     if (col == 0) {                                            // cycle palette
       setThemeMode(_settings, (themeModeIndex(_settings) + 1) % 4);
@@ -103,7 +104,7 @@ void PageHealth::onTouch(App& app, int x, int y) {
     _dirty = _needClear = true;
     return;
   }
-  if (y < app.contentH() - 24) return;           // only the bottom button row
+  if (y < app.contentH() - 24 * u) return;       // only the bottom button row
   int col = x / (app.contentW() / 3);
   if (col == 0) {                                 // Refresh all
     _tle.refresh(true); _launch.refresh(true); _air.poll();
@@ -143,14 +144,15 @@ void PageHealth::draw(App& app) {
   const int cw = app.contentW(), cy0 = app.contentY(), ch = app.contentH();
   if (_needClear) { g.fillRect(0, cy0, cw, ch, gTheme.bg); _needClear = false; }
 
-  int x0 = 6, y = cy0 + 4;
+  const int u = app.ui();
+  int x0 = 6 * u, y = cy0 + 4 * u;
   g.setTextDatum(textdatum_t::top_left);
-  g.setTextSize(1);
-  auto line = [&](const String& s, Color c) { g.setTextColor(c, gTheme.bg); g.drawString(padRight(s, 40), x0, y); y += 12; };
+  g.setTextSize(u);
+  auto line = [&](const String& s, Color c) { g.setTextColor(c, gTheme.bg); g.drawString(padRight(s, 40), x0, y); y += 12 * u; };
 
   g.setTextColor(gTheme.accent, gTheme.bg);
-  g.setTextSize(2); g.drawString("Health", x0, y); y += 20;
-  g.setTextSize(1);
+  g.setTextSize(2 * u); g.drawString("Health", x0, y); y += 20 * u;
+  g.setTextSize(u);
 
   // System.
   if (WiFi.status() == WL_CONNECTED)
@@ -166,15 +168,15 @@ void PageHealth::draw(App& app) {
   const auto& loc = _loc.active();
   if (loc.valid) { char b[48]; snprintf(b, sizeof(b), "loc %s  %.3f,%.3f", loc.name.c_str(), loc.lat, loc.lon); line(b, gTheme.dim); }
 
-  y += 2;
-  g.setTextColor(gTheme.fg, gTheme.bg); g.drawString("provider        status   age", x0, y); y += 12;
+  y += 2 * u;
+  g.setTextColor(gTheme.fg, gTheme.bg); g.drawString("provider        status   age", x0, y); y += 12 * u;
   uint32_t now = (uint32_t)time(nullptr);
   auto prow = [&](const char* name, ProviderStatus st, uint32_t fetched) {
     Color c = st == ProviderStatus::Ready ? gTheme.ok : st == ProviderStatus::Error ? gTheme.warn : gTheme.dim;
     char age[12] = "-";
     if (fetched > 1600000000UL && now > fetched) fmtDur(now - fetched, age, sizeof(age));  // ignore pre-NTP stamps
     char b[48]; snprintf(b, sizeof(b), "%-14s  %-7s  %s", name, statusStr(st), age);
-    g.setTextColor(c, gTheme.bg); g.drawString(padRight(b, 40), x0, y); y += 12;
+    g.setTextColor(c, gTheme.bg); g.drawString(padRight(b, 40), x0, y); y += 12 * u;
   };
   prow("TLE",      _tle.status(),    _tle.lastFetched());
   prow("Launch",   _launch.status(), _launch.lastFetched());
@@ -185,39 +187,39 @@ void PageHealth::draw(App& app) {
   if (millis() - _refreshMs < 2500) {             // brief "refreshing" toast
     g.setTextDatum(textdatum_t::middle_center);
     g.setTextColor(gTheme.ok, gTheme.bg);
-    g.drawString("refreshing providers...", cw / 2, cy0 + ch - 52);
+    g.drawString("refreshing providers...", cw / 2, cy0 + ch - 52 * u);
   }
 
   // Display / brightness / screenshots / web / mirror / invert buttons (tap to cycle/toggle).
-  int ty = cy0 + ch - 44, tw = cw / 6;
+  int ty = cy0 + ch - 44 * u, tw = cw / 6, bh = 18 * u;
   g.setTextDatum(textdatum_t::middle_center);
   g.setTextColor(gTheme.accent, gTheme.bg);
-  g.drawRect(2, ty, tw - 3, 18, gTheme.grid);
-  g.drawString(String("Disp:") + kThemeNames[themeModeIndex(_settings)], tw / 2, ty + 9);
-  g.drawRect(tw + 2, ty, tw - 3, 18, gTheme.grid);
-  g.drawString(String("Bri:") + kBriName[briIndex(_settings)], tw + tw / 2, ty + 9);
-  g.drawRect(2 * tw + 2, ty, tw - 3, 18, gTheme.grid);
-  g.drawString(String("Shot:") + (app.display().shotsEnabled() ? "on" : "off"), 2 * tw + tw / 2, ty + 9);
-  g.drawRect(3 * tw + 2, ty, tw - 3, 18, gTheme.grid);     // web server on/off (frees heap for feeds)
+  g.drawRect(2 * u, ty, tw - 3 * u, bh, gTheme.grid);
+  g.drawString(String("Disp:") + kThemeNames[themeModeIndex(_settings)], tw / 2, ty + 9 * u);
+  g.drawRect(tw + 2 * u, ty, tw - 3 * u, bh, gTheme.grid);
+  g.drawString(String("Bri:") + kBriName[briIndex(_settings)], tw + tw / 2, ty + 9 * u);
+  g.drawRect(2 * tw + 2 * u, ty, tw - 3 * u, bh, gTheme.grid);
+  g.drawString(String("Shot:") + (app.display().shotsEnabled() ? "on" : "off"), 2 * tw + tw / 2, ty + 9 * u);
+  g.drawRect(3 * tw + 2 * u, ty, tw - 3 * u, bh, gTheme.grid);     // web server on/off (frees heap for feeds)
   bool webOn = !_web || _web->running();
   g.setTextColor(webOn ? gTheme.accent : gTheme.warn, gTheme.bg);
-  g.drawString(String("Web:") + (webOn ? "on" : "off"), 3 * tw + tw / 2, ty + 9);
-  g.drawRect(4 * tw + 2, ty, tw - 3, 18, gTheme.grid);     // rotation (cycle landscape) / invert
+  g.drawString(String("Web:") + (webOn ? "on" : "off"), 3 * tw + tw / 2, ty + 9 * u);
+  g.drawRect(4 * tw + 2 * u, ty, tw - 3 * u, bh, gTheme.grid);     // rotation (cycle landscape) / invert
   g.setTextColor(gTheme.accent, gTheme.bg);
-  g.drawString(String("Rot:") + app.display().rotation(), 4 * tw + tw / 2, ty + 9);
-  g.drawRect(5 * tw + 2, ty, tw - 4, 18, gTheme.grid);
+  g.drawString(String("Rot:") + app.display().rotation(), 4 * tw + tw / 2, ty + 9 * u);
+  g.drawRect(5 * tw + 2 * u, ty, tw - 4 * u, bh, gTheme.grid);
   g.setTextColor(_settings.getBool("dispInvert") ? gTheme.accent : gTheme.dim, gTheme.bg);
-  g.drawString("Invert", 5 * tw + tw / 2, ty + 9);
+  g.drawString("Invert", 5 * tw + tw / 2, ty + 9 * u);
   g.setTextColor(gTheme.accent, gTheme.bg);
 
   // Button row.
-  int by = cy0 + ch - 22, bw = cw / 3;
+  int by = cy0 + ch - 22 * u, bw = cw / 3;
   bool arm = _rebootArm && millis() - _rebootArmMs < 4000;
   const char* labels[] = {"Refresh", "Calibrate", arm ? "Reboot?" : "Reboot"};
   for (int i = 0; i < 3; ++i) {
-    g.drawRect(i * bw + 2, by, bw - 4, 18, gTheme.grid);
+    g.drawRect(i * bw + 2 * u, by, bw - 4 * u, 18 * u, gTheme.grid);
     g.setTextDatum(textdatum_t::middle_center);
     g.setTextColor(i == 2 && arm ? gTheme.warn : gTheme.accent, gTheme.bg);
-    g.drawString(labels[i], i * bw + bw / 2, by + 9);
+    g.drawString(labels[i], i * bw + bw / 2, by + 9 * u);
   }
 }
