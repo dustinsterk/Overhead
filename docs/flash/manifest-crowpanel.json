@@ -1,0 +1,13 @@
+{
+  "name": "Overhead — Crowpanel Advance 5in v1.2",
+  "version": "1.2",
+  "new_install_prompt_erase": true,
+  "builds": [
+    {
+      "chipFamily": "ESP32-S3",
+      "parts": [
+        { "path": "crowpanel/firmware.factory.bin", "offset": 0 }
+      ]
+    }
+  ]
+}
