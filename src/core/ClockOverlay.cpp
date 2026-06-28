@@ -21,9 +21,10 @@ void ClockOverlay::begin() {
 void ClockOverlay::layoutBox(App& app) {
   static const float kSc[3] = {0.78f, 1.0f, 1.34f};   // small / medium / large
   float s = kSc[_scale < 0 || _scale > 2 ? 1 : _scale];
-  if (_ball) { _bw = (int)(88 * s);  _gh = (int)(84 * s); }   // analog disc
-  else       { _bw = (int)(128 * s); _gh = (int)(42 * s); }   // time + date
-  _bh = _gh + 2 * kStripH;                  // two chip rows (format/style, auto/size)
+  _u = app.ui();                            // CrowPanel: 2x the whole clock (box + digits + chips)
+  if (_ball) { _bw = (int)(88 * s) * _u;  _gh = (int)(84 * s) * _u; }   // analog disc
+  else       { _bw = (int)(128 * s) * _u; _gh = (int)(42 * s) * _u; }   // time + date
+  _bh = _gh + 2 * kStripH * _u;             // two chip rows (format/style, auto/size)
   if (_bw > app.contentW()) _bw = app.contentW();
   if (_bh > app.contentH()) _bh = app.contentH();
 }
@@ -94,11 +95,12 @@ void ClockOverlay::stamp(App& app) {
     gfx.startWrite(); drawClock(gfx, bx, by); drawChips(gfx, bx, by); gfx.endWrite();
   }
 
-  const int sy = (by + _gh) - app.contentY(), sy2 = sy + kStripH, hw = _bw / 2;  // chip rects (content-rel)
-  _fmtX = bx;      _fmtY = sy;  _fmtW = hw - 1;   _fmtH = kStripH;
-  _styX = bx + hw; _styY = sy;  _styW = _bw - hw; _styH = kStripH;
-  _autX = bx;      _autY = sy2; _autW = hw - 1;   _autH = kStripH;
-  _sclX = bx + hw; _sclY = sy2; _sclW = _bw - hw; _sclH = kStripH;
+  const int sh = kStripH * _u;
+  const int sy = (by + _gh) - app.contentY(), sy2 = sy + sh, hw = _bw / 2;  // chip rects (content-rel)
+  _fmtX = bx;      _fmtY = sy;  _fmtW = hw - 1;   _fmtH = sh;
+  _styX = bx + hw; _styY = sy;  _styW = _bw - hw; _styH = sh;
+  _autX = bx;      _autY = sy2; _autW = hw - 1;   _autH = sh;
+  _sclX = bx + hw; _sclY = sy2; _sclW = _bw - hw; _sclH = sh;
 }
 
 // --- drawing (into a sprite at 0,0, or straight to the panel at x,y) --------
@@ -118,54 +120,55 @@ void ClockOverlay::drawDigits(lgfx::LovyanGFX& g, int x, int y) {
   }
   char date[16]; strftime(date, sizeof(date), "%a %b %d", &tm);
 
-  g.fillRoundRect(x, y, _bw, _bh, 6, gTheme.bg);     // opaque card -> legible over anything
-  g.drawRoundRect(x, y, _bw, _bh, 6, gTheme.grid);
+  g.fillRoundRect(x, y, _bw, _bh, 6 * _u, gTheme.bg);     // opaque card -> legible over anything
+  g.drawRoundRect(x, y, _bw, _bh, 6 * _u, gTheme.grid);
 
   g.setTextDatum(textdatum_t::middle_center);
   g.setTextColor(gTheme.fg, gTheme.bg);
-  g.setTextSize(_scale == 0 ? 3 : _scale == 2 ? 5 : 4);   // scale the time with the box
+  g.setTextSize((_scale == 0 ? 3 : _scale == 2 ? 5 : 4) * _u);   // scale the time with the box
   g.drawString(hm, x + _bw / 2, y + _gh * 2 / 5);
 
   char line2[24];
   if (_use24) snprintf(line2, sizeof(line2), "%s", date);
   else        snprintf(line2, sizeof(line2), "%s  %s", ampm, date);
-  g.setTextSize(1);
+  g.setTextSize(_u);
   g.setTextColor(gTheme.dim, gTheme.bg);
-  g.drawString(line2, x + _bw / 2, y + _gh - 7);
+  g.drawString(line2, x + _bw / 2, y + _gh - 7 * _u);
 }
 
 void ClockOverlay::drawAnalog(lgfx::LovyanGFX& g, int x, int y) {
   time_t now = time(nullptr); struct tm tm; localtime_r(&now, &tm);
-  int cx = x + _bw / 2, cy = y + _gh / 2, r = _gh / 2 - 4;
+  int cx = x + _bw / 2, cy = y + _gh / 2, r = _gh / 2 - 4 * _u;
 
   g.fillCircle(cx, cy, r, gTheme.bg);           // solid face -> legible "clock ball"
   g.drawCircle(cx, cy, r, gTheme.accent);
-  g.drawCircle(cx, cy, r - 1, gTheme.accent);   // 2px rim
+  g.drawCircle(cx, cy, r - _u, gTheme.accent);  // 2px rim
   for (int t = 0; t < 12; ++t) {                // hour ticks (bigger dots on the quarters)
     float a = t * (float)M_PI / 6.0f;
-    int x0 = cx + (int)lroundf((r - 3) * sinf(a)), y0 = cy - (int)lroundf((r - 3) * cosf(a));
-    g.fillCircle(x0, y0, (t % 3 == 0) ? 2 : 1, gTheme.dim);
+    int x0 = cx + (int)lroundf((r - 3 * _u) * sinf(a)), y0 = cy - (int)lroundf((r - 3 * _u) * cosf(a));
+    g.fillCircle(x0, y0, (t % 3 == 0) ? 2 * _u : 1 * _u, gTheme.dim);
   }
   char date[12]; strftime(date, sizeof(date), "%b %d", &tm);        // date complication on the face
   g.setTextDatum(textdatum_t::middle_center);
-  g.setTextSize(1);
+  g.setTextSize(_u);
   g.setTextColor(gTheme.dim, gTheme.bg);
   g.drawString(date, cx, cy + r / 2);
   float ma = tm.tm_min * (float)M_PI / 30.0f;                       // minute hand
   float ha = (tm.tm_hour % 12 + tm.tm_min / 60.0f) * (float)M_PI / 6.0f;  // hour hand
-  g.drawWideLine(cx, cy, cx + (int)lroundf(r * 0.86f * sinf(ma)), cy - (int)lroundf(r * 0.86f * cosf(ma)), 3, gTheme.fg);
-  g.drawWideLine(cx, cy, cx + (int)lroundf(r * 0.55f * sinf(ha)), cy - (int)lroundf(r * 0.55f * cosf(ha)), 4, gTheme.fg);
-  g.fillCircle(cx, cy, 3, gTheme.accent);
+  g.drawWideLine(cx, cy, cx + (int)lroundf(r * 0.86f * sinf(ma)), cy - (int)lroundf(r * 0.86f * cosf(ma)), 3 * _u, gTheme.fg);
+  g.drawWideLine(cx, cy, cx + (int)lroundf(r * 0.55f * sinf(ha)), cy - (int)lroundf(r * 0.55f * cosf(ha)), 4 * _u, gTheme.fg);
+  g.fillCircle(cx, cy, 3 * _u, gTheme.accent);
 }
 
 void ClockOverlay::drawChips(lgfx::LovyanGFX& g, int x, int y) {
-  const int hw = _bw / 2, r1 = y + _gh, r2 = y + _gh + kStripH;   // two chip rows
+  const int sh = kStripH * _u;
+  const int hw = _bw / 2, r1 = y + _gh, r2 = y + _gh + sh;   // two chip rows
   g.setTextDatum(textdatum_t::middle_center);
-  g.setTextSize(1);
+  g.setTextSize(_u);
   auto chip = [&](int cx, int cy, int cw, const char* label, Color fg) {
-    g.fillRect(cx, cy, cw, kStripH, gTheme.grid);
+    g.fillRect(cx, cy, cw, sh, gTheme.grid);
     g.setTextColor(fg, gTheme.grid);
-    g.drawString(label, cx + cw / 2, cy + kStripH / 2);
+    g.drawString(label, cx + cw / 2, cy + sh / 2);
   };
   static const char* kSz[3] = {"sm", "md", "lg"};
   chip(x,      r1, hw - 1,   _use24 ? "24h" : "AMPM", gTheme.fg);            // format

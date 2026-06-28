@@ -147,25 +147,26 @@ void App::closeGrid() {
 void App::drawGrid() {
   auto& g = _display.gfx();
   const int cw = contentW(), ch = contentH(), y0 = contentY();
+  const int u = ui();
   g.fillRect(0, y0, cw, ch, gTheme.bg);
-  const int cwc = cw / 3, chc = ch / 3, n = (int)_pages.size();
-  g.setTextSize(1);
+  const int cwc = cw / 3, chc = ch / 3, n = (int)_pages.size();   // cells fill the screen (3x3)
+  g.setTextSize(u);
   g.setTextDatum(textdatum_t::middle_center);
   for (int i = 0; i < 9 && i < n; ++i) {
     int col = i % 3, row = i / 3, x = col * cwc, yy = y0 + row * chc;
     bool act = (i == _active);
-    g.drawRect(x + 2, yy + 2, cwc - 4, chc - 4, act ? gTheme.accent : gTheme.grid);
-    if (i < (int)_badge.size() && _badge[i]) g.fillCircle(x + cwc - 9, yy + 9, 2, gTheme.warn);
+    g.drawRect(x + 2 * u, yy + 2 * u, cwc - 4 * u, chc - 4 * u, act ? gTheme.accent : gTheme.grid);
+    if (i < (int)_badge.size() && _badge[i]) g.fillCircle(x + cwc - 9 * u, yy + 9 * u, 2 * u, gTheme.warn);
     g.setTextColor(act ? gTheme.accent : gTheme.fg, gTheme.bg);
     String t = _pages[i]->title();
     String st = _pages[i]->gridStatus();             // live token surfaced from the page
-    const int cx = x + cwc / 2, maxChars = (cwc - 6) / 6 < 4 ? 4 : (cwc - 6) / 6;
+    const int cx = x + cwc / 2, maxChars = (cwc - 6 * u) / (6 * u) < 4 ? 4 : (cwc - 6 * u) / (6 * u);
     if (!st.length()) { g.drawString(t.substring(0, maxChars), cx, yy + chc / 2); continue; }
-    g.drawString(t.substring(0, maxChars), cx, yy + 16);
+    g.drawString(t.substring(0, maxChars), cx, yy + 16 * u);
     g.setTextColor(gTheme.dim, gTheme.bg);           // word-wrap the status into the tile
-    int ly = yy + 30, maxLines = (chc - 30) / 9; if (maxLines > 3) maxLines = 3;
+    int ly = yy + 30 * u, maxLines = (chc - 30 * u) / (9 * u); if (maxLines > 3) maxLines = 3;
     int start = 0, line = 0; String cur;
-    auto flush = [&]() { if (cur.length() && line < maxLines) { g.drawString(cur, cx, ly); ly += 9; line++; } cur = ""; };
+    auto flush = [&]() { if (cur.length() && line < maxLines) { g.drawString(cur, cx, ly); ly += 9 * u; line++; } cur = ""; };
     while (start <= (int)st.length() && line < maxLines) {
       int sp = st.indexOf(' ', start), nlp = st.indexOf('\n', start);   // '\n' = forced line break
       bool nlFirst = (nlp >= 0 && (sp < 0 || nlp < sp));

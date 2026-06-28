@@ -58,6 +58,7 @@ private:
   bool  _autoUp = false;              // auto-appear when idle in AUTO mode
   int   _bw = 0, _bh = 0;             // clock box size (graphic + chip strip)
   int   _gh = 0;                      // graphic height (box height minus the chip strip)
+  int   _u = 1;                       // UI scale tier (1 CYD / 2 CrowPanel), set in layoutBox()
 
   int   _corner = 3;                  // 0 TL, 1 TR, 3 BR (2 BL avoided: chip row)
   uint32_t _cornerMs = 0;             // last hop time (calm pages)
