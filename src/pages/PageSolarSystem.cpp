@@ -290,6 +290,7 @@ void PageSolarSystem::tick(App& app, uint32_t nowMs) {
 void PageSolarSystem::draw(App& app) {
   auto& g = app.display().gfx();
   const int cw = app.contentW(), ch = app.contentH(), cy0 = app.contentY();
+  const int u = app.ui();
   g.fillRect(0, cy0, cw, ch, gTheme.bg);   // slow cadence -> full clear is fine
 
   if (!_time.synced() || !_loc.active().valid) {
@@ -312,6 +313,7 @@ void PageSolarSystem::draw(App& app) {
   const int horY = cy0 + domeH;
   g.drawFastHLine(0, horY, cw, gTheme.grid);
   g.setTextColor(gTheme.dim, gTheme.bg);
+  g.setTextSize(1);                          // the dome (N/E/S/W + planet dots/labels + stars) stays native/dense
   g.setTextDatum(textdatum_t::bottom_center);
   g.drawString("N", 1, horY - 1);
   g.drawString("E", cw / 4, horY - 1);
@@ -365,9 +367,9 @@ void PageSolarSystem::draw(App& app) {
   }
 
   // --- List (below the horizon) ---
-  int ly = horY + 4;
-  g.setTextSize(1);
-  for (int i = 0; i < kN && ly < cy0 + ch - 44; ++i) {
+  int ly = horY + 4 * u;
+  g.setTextSize(u);
+  for (int i = 0; i < kN && ly < cy0 + ch - 44 * u; ++i) {
     if (!visible(i)) continue;
     Color rc = gTheme.fg; const char* nw = nakedEye(i, _st, rc);   // naked-eye likelihood
     Color c = (i == _sel) ? gTheme.ok : rc;
@@ -376,14 +378,14 @@ void PageSolarSystem::draw(App& app) {
     String row = String(astro::planetName((Planet)i));
     if (i == 1) row += String("  ") + (int)astro::moonIlluminationPct(_time.julianDate()) + "% " + moonPhaseName(astro::moonPhaseDeg(_time.julianDate()));
     else if (i >= 2 && nw[0]) row += String("  ") + nw;
-    g.drawString(row, 6, ly);
+    g.drawString(row, 6 * u, ly);
     g.setTextDatum(textdatum_t::top_right);
     g.setTextColor(_st[i].above ? gTheme.fg : gTheme.dim, gTheme.bg);
     char b[28];
     if (_st[i].above) snprintf(b, sizeof(b), "el %d  az %d", (int)round(_st[i].elDeg), (int)round(_st[i].azDeg));
     else              snprintf(b, sizeof(b), "below");
-    g.drawString(b, cw - 6, ly);
-    ly += 13;
+    g.drawString(b, cw - 6 * u, ly);
+    ly += 13 * u;
   }
 
   // Closest conjunction among Moon + planets (geocentric separation). Highlighted
@@ -401,7 +403,7 @@ void PageSolarSystem::draw(App& app) {
       char b[48];
       snprintf(b, sizeof(b), "%s%s-%s %.1f%c apart", close ? "CONJ " : "closest ",
                astro::planetName((Planet)bi), astro::planetName((Planet)bj), best, (char)247);
-      g.drawString(b, 6, cy0 + ch - 42);
+      g.drawString(b, 6 * u, cy0 + ch - 42 * u);
     }
   }
 
@@ -417,35 +419,37 @@ void PageSolarSystem::draw(App& app) {
     }
     g.setTextDatum(textdatum_t::top_left);
     g.setTextColor(gTheme.accent, gTheme.bg);
-    g.drawString(String(astro::planetName((Planet)_sel)) + ": " + r, 6, cy0 + ch - 29);
+    g.drawString(String(astro::planetName((Planet)_sel)) + ": " + r, 6 * u, cy0 + ch - 29 * u);
   }
 
   // Filter badge (bottom-left) + orbit-view hint (bottom-right).
   const char* fl = _filter == 0 ? "all" : _filter == 1 ? "up" : "eye";
-  int by = cy0 + ch - 16;
-  g.fillRect(4, by, 72, 14, gTheme.grid);
+  int by = cy0 + ch - 16 * u;
+  g.fillRect(4 * u, by, 72 * u, 14 * u, gTheme.grid);
   g.setTextDatum(textdatum_t::middle_left);
   g.setTextColor(gTheme.fg, gTheme.grid);
-  g.drawString(String("show ") + fl, 8, by + 7);
+  g.drawString(String("show ") + fl, 8 * u, by + 7 * u);
   // Bottom-right: star/constellation overlay toggle.
-  g.fillRect(cw - 56, by, 52, 14, gTheme.grid);
+  g.fillRect(cw - 56 * u, by, 52 * u, 14 * u, gTheme.grid);
   g.setTextDatum(textdatum_t::middle_center);
   g.setTextColor(_stars ? gTheme.ok : gTheme.dim, gTheme.grid);
-  g.drawString(_stars ? "stars on" : "stars off", cw - 30, by + 7);
+  g.drawString(_stars ? "stars on" : "stars off", cw - 30 * u, by + 7 * u);
 }
 
 // Top-down orrery: Sun at centre, sqrt-scaled orbit rings (so the inner planets
 // aren't crushed by Pluto's 39 AU), each body at its live heliocentric longitude.
 // Big body-name title (size 2, left) + a dim nav hint (right), matching Moon/Mars.
-static void bigTitle(lgfx::LovyanGFX& g, int cw, int cy0, const char* name, const char* hint) {
+static void bigTitle(lgfx::LovyanGFX& g, int cw, int cy0, const char* name, const char* hint, int u) {
   g.setTextDatum(textdatum_t::top_left);
   g.setTextColor(gTheme.fg, gTheme.bg);
-  g.setTextSize(2); g.drawString(name, 4, cy0 + 1); g.setTextSize(1);
+  g.setTextSize(2 * u); g.drawString(name, 4 * u, cy0 + 1 * u);
+  g.setTextSize(u);
   g.setTextColor(gTheme.dim, gTheme.bg);
   g.setTextDatum(textdatum_t::top_right);
-  g.drawString(hint, cw - 4, cy0 + 3);
+  g.drawString(hint, cw - 4 * u, cy0 + 3 * u);
   g.setTextDatum(textdatum_t::top_left);
   g.setTextColor(gTheme.fg, gTheme.bg);
+  g.setTextSize(1);   // header scales; the orrery/disk canvas + its in-place readouts stay native/dense
 }
 
 void PageSolarSystem::drawOrbit(App& app) {
@@ -454,7 +458,7 @@ void PageSolarSystem::drawOrbit(App& app) {
   const double D2R = 3.14159265358979323846 / 180.0;
   double jd = _time.julianDate();
 
-  bigTitle(g, cw, cy0, "Orbits", "[mid: Moon]");
+  bigTitle(g, cw, cy0, "Orbits", "[mid: Moon]", app.ui());
 
   int cx = cw / 2, cy = cy0 + (ch - 14) / 2 + 12;
   int maxR = min(cw / 2, (ch - 26) / 2) - 8;
@@ -538,7 +542,7 @@ void PageSolarSystem::drawJupiter(App& app) {
   double q = parallacticDeg(_st[5], _loc.active().lat, lstR) * D2R;   // sky tilt
   double cq = cos(q), sq = sin(q);
 
-  bigTitle(g, cw, cy0, "Jupiter", "[mid: Saturn]");
+  bigTitle(g, cw, cy0, "Jupiter", "[mid: Saturn]", app.ui());
   g.setTextColor(gTheme.dim, gTheme.bg);
   g.drawString(String(_st[5].above ? "up" : "below horizon") + "   el " + (int)round(_st[5].elDeg)
                + "\xF7  az " + (int)round(_st[5].azDeg) + "\xF7", 4, cy0 + 20);
@@ -587,7 +591,7 @@ void PageSolarSystem::drawSaturn(App& app) {
   double q = parallacticDeg(_st[6], _loc.active().lat, lstR) * D2R;   // sky tilt
   double B = astro::saturnRingTiltDeg(jd);
 
-  bigTitle(g, cw, cy0, "Saturn", "[mid: Deep Space]");
+  bigTitle(g, cw, cy0, "Saturn", "[mid: Deep Space]", app.ui());
   g.setTextColor(gTheme.dim, gTheme.bg);
   g.drawString(String(_st[6].above ? "up" : "below horizon") + "   el " + (int)round(_st[6].elDeg)
                + "\xF7  az " + (int)round(_st[6].azDeg) + "\xF7", 4, cy0 + 20);

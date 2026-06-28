@@ -209,6 +209,7 @@ void PageStarMap::tick(App& app, uint32_t nowMs) {
 void PageStarMap::draw(App& app) {
   auto& g = app.display().gfx();
   const int cw = app.contentW(), cy0 = app.contentY(), ch = app.contentH();
+  const int u = app.ui();
   g.startWrite();                       // batch the whole frame in one SPI transaction
   g.fillRect(0, cy0, cw, ch, gTheme.bg);  // (composes fast -> far less tour strobe)
 
@@ -247,9 +248,11 @@ void PageStarMap::draw(App& app) {
     g.drawCircle(cx, cy, R, gTheme.grid);
     g.setTextColor(gTheme.dim, gTheme.bg);
     g.setTextDatum(textdatum_t::middle_center);
-    g.drawString("N", cx, cy - R - 5); g.drawString("S", cx, cy + R + 5);
-    g.drawString("E", cx + R + 5, cy); g.drawString("W", cx - R - 5, cy);
+    g.setTextSize(u);
+    g.drawString("N", cx, cy - R - 5 * u); g.drawString("S", cx, cy + R + 5 * u);
+    g.drawString("E", cx + R + 5 * u, cy); g.drawString("W", cx - R - 5 * u, cy);
   }
+  g.setTextSize(1);   // in-chart star/constellation/planet labels stay native/dense
 
   // Constellation figures: polylines of RA/Dec vertices (kSkyBreak = pen-up). Draw a
   // segment only when both consecutive vertices are above the horizon.
@@ -367,7 +370,8 @@ void PageStarMap::draw(App& app) {
   if (_zoom && _zoomT > 0.5f) {
     g.setTextDatum(textdatum_t::top_left);
     g.setTextColor(gTheme.dim, gTheme.bg);
-    g.drawString("zoom \xB7 tap to exit", 4, cy0 + 2);
+    g.setTextSize(u);
+    g.drawString("zoom \xB7 tap to exit", 4 * u, cy0 + 2 * u);
   }
 
   // Centre az/el readout while zoomed (the focus F maps to the screen centre).
@@ -379,16 +383,16 @@ void PageStarMap::draw(App& app) {
     char b[28]; snprintf(b, sizeof(b), "ctr az%d\xF7 el%d\xF7", (int)lroundf(az), (int)lroundf(alt));
     g.setTextDatum(textdatum_t::top_right);
     g.setTextColor(gTheme.accent, gTheme.bg);
-    g.setTextSize(1);
-    g.drawString(b, cw - 4, cy0 + 2);
+    g.setTextSize(u);
+    g.drawString(b, cw - 4 * u, cy0 + 2 * u);
   }
 
   // Constellation name banner while touring.
   if (_tour && _tourCon >= 0 && t > 0.25f) {
     g.setTextDatum(textdatum_t::top_center);
     g.setTextColor(gTheme.accent, gTheme.bg);
-    g.setTextSize(2);
-    g.drawString(kCons[_tourCon].name, cw / 2, cy0 + 3);
+    g.setTextSize(2 * u);
+    g.drawString(kCons[_tourCon].name, cw / 2, cy0 + 3 * u);
     g.setTextSize(1);
   }
 
@@ -403,42 +407,42 @@ void PageStarMap::draw(App& app) {
     char db[40]; strftime(db, sizeof(db), "%b %e, %Y  %H:%MZ", &tmv);
     char ll[28]; snprintf(ll, sizeof(ll), "%.2f\xF7%c %.2f\xF7%c",
                           fabs(latDeg), latDeg >= 0 ? 'N' : 'S', fabs(lonDeg), lonDeg >= 0 ? 'E' : 'W');
-    g.setTextSize(1);
+    g.setTextSize(u);
     g.setTextDatum(textdatum_t::top_left);                 // title + place name
     g.setTextColor(gTheme.accent, gTheme.bg);
-    g.drawString(title, 4, cy0 + 2);
-    if (place[0]) { g.setTextColor(gTheme.dim, gTheme.bg); g.drawString(place, 4, cy0 + 13); }
+    g.drawString(title, 4 * u, cy0 + 2 * u);
+    if (place[0]) { g.setTextColor(gTheme.dim, gTheme.bg); g.drawString(place, 4 * u, cy0 + 13 * u); }
     g.setTextDatum(textdatum_t::top_right);                // date/time + observer lat/lon
     g.setTextColor(gTheme.dim, gTheme.bg);
-    g.drawString(db, cw - 4, cy0 + 2);
-    g.drawString(ll, cw - 4, cy0 + 13);
+    g.drawString(db, cw - 4 * u, cy0 + 2 * u);
+    g.drawString(ll, cw - 4 * u, cy0 + 13 * u);
   }
 
   // Badge: magnitude limit.
-  int by = cy0 + ch - 16;
-  g.fillRect(4, by, 78, 14, gTheme.grid);
+  int by = cy0 + ch - 16 * u;
+  g.fillRect(4 * u, by, 78 * u, 14 * u, gTheme.grid);
   g.setTextDatum(textdatum_t::middle_left);
   g.setTextColor(gTheme.fg, gTheme.grid);
-  g.setTextSize(1);
-  g.drawString(String("mag<=") + String(_magLimit, 0) + (_labels ? " +lbl" : ""), 8, by + 7);
+  g.setTextSize(u);
+  g.drawString(String("mag<=") + String(_magLimit, 0) + (_labels ? " +lbl" : ""), 8 * u, by + 7 * u);
   // Bottom-centre badges: live sky shows "tour"; a memory sky shows tour + chart.
   g.setTextDatum(textdatum_t::middle_center);
   auto chip = [&](int cx, const char* label, bool act) {
-    g.fillRect(cx - 24, by, 48, 14, gTheme.grid);
+    g.fillRect(cx - 24 * u, by, 48 * u, 14 * u, gTheme.grid);
     g.setTextColor(act ? gTheme.ok : gTheme.dim, gTheme.grid);
-    g.drawString(label, cx, by + 7);
+    g.drawString(label, cx, by + 7 * u);
   };
   if (_view >= 1) {
-    chip(cw / 2 - 28, _tour ? "tour*" : "tour", _tour);
-    chip(cw / 2 + 28, _chart ? "chart*" : "chart", _chart);
+    chip(cw / 2 - 28 * u, _tour ? "tour*" : "tour", _tour);
+    chip(cw / 2 + 28 * u, _chart ? "chart*" : "chart", _chart);
   } else {
     chip(cw / 2, _tour ? "tour*" : "tour", _tour);
   }
   // Badge: solar-system overlay toggle (bottom-right) — text centred in the chip.
-  g.fillRect(cw - 46, by, 42, 14, gTheme.grid);
+  g.fillRect(cw - 46 * u, by, 42 * u, 14 * u, gTheme.grid);
   g.setTextDatum(textdatum_t::middle_center);
   g.setTextColor(_showSS ? gTheme.ok : gTheme.dim, gTheme.grid);
-  g.drawString(_showSS ? "SS on" : "SS off", cw - 25, by + 7);
+  g.drawString(_showSS ? "SS on" : "SS off", cw - 25 * u, by + 7 * u);
 
   if (_view >= 1 && _chart) drawChart(app, jd, latDeg, lonDeg);   // natal-chart readout over the sky
   g.endWrite();
@@ -450,6 +454,7 @@ void PageStarMap::draw(App& app) {
 void PageStarMap::drawChart(App& app, double jd, double latDeg, double lonDeg) {
   auto& g = app.display().gfx();
   const int cw = app.contentW(), cy0 = app.contentY(), ch = app.contentH();
+  const int u = app.ui();
   static const char* kSign[12] = {"Aries","Taurus","Gemini","Cancer","Leo","Virgo",
                                    "Libra","Scorpio","Sagit","Capri","Aquar","Pisces"};
   static const char* kAbbr[12] = {"Ari","Tau","Gem","Can","Leo","Vir","Lib","Sco","Sag","Cap","Aqr","Psc"};
@@ -469,22 +474,22 @@ void PageStarMap::drawChart(App& app, double jd, double latDeg, double lonDeg) {
   double ascL = fmod(asc * R2D + 360.0, 360.0);
   const double kAyan = 24.1;                                 // ~2024 ayanamsa: tropical->sidereal offset
 
-  int panelH = 46, py = cy0 + ch - 16 - panelH;              // sit above the badge row
-  g.fillRect(2, py, cw - 4, panelH, gTheme.bg);
-  g.drawRect(2, py, cw - 4, panelH, gTheme.grid);
-  g.setTextDatum(textdatum_t::top_left); g.setTextSize(1);
+  int panelH = 46 * u, py = cy0 + ch - 16 * u - panelH;       // sit above the badge row
+  g.fillRect(2 * u, py, cw - 4 * u, panelH, gTheme.bg);
+  g.drawRect(2 * u, py, cw - 4 * u, panelH, gTheme.grid);
+  g.setTextDatum(textdatum_t::top_left); g.setTextSize(u);
   g.setTextColor(gTheme.accent, gTheme.bg);
-  g.drawString("Natal chart (tropical)", 6, py + 2);
+  g.drawString("Natal chart (tropical)", 6 * u, py + 2 * u);
   char l[48];
   g.setTextColor(gTheme.fg, gTheme.bg);
   snprintf(l, sizeof(l), "Sun %s  Moon %s  Asc %s", kSign[signOf(sunL)], kSign[signOf(moonL)], kSign[signOf(ascL)]);
-  g.drawString(l, 6, py + 13);
+  g.drawString(l, 6 * u, py + 13 * u);
   snprintf(l, sizeof(l), "Me%s Ve%s Ma%s Ju%s Sa%s",
            kAbbr[signOf(eclLon(astro::Planet::Mercury))], kAbbr[signOf(eclLon(astro::Planet::Venus))],
            kAbbr[signOf(eclLon(astro::Planet::Mars))], kAbbr[signOf(eclLon(astro::Planet::Jupiter))],
            kAbbr[signOf(eclLon(astro::Planet::Saturn))]);
-  g.drawString(l, 6, py + 24);
+  g.drawString(l, 6 * u, py + 24 * u);
   g.setTextColor(gTheme.dim, gTheme.bg);                     // the actual sky (precession): Sun's true constellation
   snprintf(l, sizeof(l), "Sun's stars now: %s (precession)", kSign[signOf(sunL - kAyan)]);
-  g.drawString(l, 6, py + 35);
+  g.drawString(l, 6 * u, py + 35 * u);
 }
