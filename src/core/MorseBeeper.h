@@ -35,6 +35,8 @@ private:
   uint32_t _segEnd = 0;
   bool     _playing = false;
   bool     _attached = false;
+  String   _lastWord;                       // de-dup: last call sign beeped (skip per-minute re-beeps)
+  bool     _lastWasNow = false;             // de-dup: already chimed the "NOW" edge for this subject
 
   Settings*        _s = nullptr;
   ThemeController* _theme = nullptr;

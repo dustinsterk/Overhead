@@ -71,7 +71,7 @@ void App::setAlert(const String& s, int targetPage) {
   _alertTarget = s.length() ? targetPage : -1;
   if (_alert != s) {                       // only on a NEW alert (Director re-asserts each tick)
     _alert = s; _statusDirty = true;
-    if (_beeper && s.length()) _beeper->onAlert(s);   // beep the call sign in Morse
+    if (_beeper) _beeper->onAlert(s);      // beep the call sign (forwards clears too -> resets de-dup)
   }
 }
 

@@ -119,12 +119,20 @@ void MorseBeeper::buildSegments(const String& word) {
 }
 
 void MorseBeeper::onAlert(const String& title) {
+  String t = title; t.trim();
+  if (!t.length()) { _lastWord = ""; _lastWasNow = false; return; }   // alert cleared -> reset de-dup
   if (!_s || !_s->getBool("audioEnabled", false)) return;
   if (_theme && _theme->isNight() && !_s->getBool("audioBeepAtNight", false)) return;   // quiet at night
-  String t = title; t.trim();
   int sp = t.indexOf(' ');
   String w = (sp > 0) ? t.substring(0, sp) : t; w.trim();   // first word = the call sign (ISS, FALCON...)
-  if (w.length()) play(w);
+  if (!w.length()) return;
+  // De-dup: the Director re-asserts the alert each minute as its countdown ticks ("in 4m" ->
+  // "in 3m"), which would re-beep the same call sign. Only chime on a NEW call sign, plus once
+  // when it flips to "NOW".
+  bool isNow = (t.indexOf(" NOW") >= 0) || t.endsWith("NOW");
+  bool fire  = (w != _lastWord) || (isNow && !_lastWasNow);
+  _lastWord = w; _lastWasNow = isNow;
+  if (fire) play(w);
 }
 
 void MorseBeeper::play(const String& word) {

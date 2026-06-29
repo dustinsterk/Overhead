@@ -158,7 +158,9 @@ void Director::tick(uint32_t nowMs) {
   if (launchNow && aLaunch) {
     _lastTourMs = nowMs;
     long dt = (long)(lnet - now);
-    _app->setAlert(String("Launch ") + (dt > 0 ? "in " + String(dt / 60 + 1) + "m" : "NOW"), lchIdx);
+    const Launch& L = _launch->launches()[0];          // the imminent launch (lnet came from it)
+    String who = L.vehicle.length() ? L.vehicle : String("Launch");   // rocket name -> beep e.g. "Falcon"
+    _app->setAlert(who + " " + (dt > 0 ? "in " + String(dt / 60 + 1) + "m" : "NOW"), lchIdx);
     if (!_app->autoFocus(lchIdx) && _app->activeIndex() != lchIdx) _app->setBadge(lchIdx, true);
     return;
   }
