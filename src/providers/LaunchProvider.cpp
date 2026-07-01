@@ -51,6 +51,7 @@ void LaunchProvider::fetchLL2() {
   if (_launches.empty()) _status = ProviderStatus::Loading;
   const char* url = "https://ll.thespacedevs.com/2.2.0/launch/upcoming/?limit=8&mode=list";
   _inflight = _net->get(url, [this](int code, const String& body) {
+    _lastLL2 = code;
     if (code == 200 && parseLL2(body)) {
       _cache->put(kCacheKey, body, code, (uint32_t)time(nullptr));
       _lastFetched = (uint32_t)time(nullptr);
@@ -71,6 +72,7 @@ void LaunchProvider::fetchLL2() {
 void LaunchProvider::fetchFallback() {
   const char* url = "https://fdo.rocketlaunch.live/json/launches/next/5";
   _inflight = _net->get(url, [this](int code, const String& body) {
+    _lastRLL = code;
     if (code == 200 && parseRLL(body)) {
       _lastFetched = (uint32_t)time(nullptr);
       _fallback = true;

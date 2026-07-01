@@ -35,6 +35,9 @@ public:
   uint32_t       lastFetched() const { return _lastFetched; }
   bool           usingFallback() const { return _fallback; }
   bool           fetching() const { return _inflight; }   // a network fetch is queued/in-flight
+  int            count() const { return (int)_launches.size(); }
+  int            lastLL2Code() const { return _lastLL2; }   // diag: last primary (thespacedevs) HTTP code
+  int            lastRLLCode() const { return _lastRLL; }   // diag: last fallback (rocketlaunch.live) HTTP code
 
 private:
   void fetchLL2();
@@ -55,4 +58,5 @@ private:
   uint32_t       _lastFetched = 0;
   bool           _fallback = false;
   bool           _inflight = false;    // true while LL2/fallback request is queued or awaiting its callback
+  int            _lastLL2 = 0, _lastRLL = 0;   // diag: last HTTP code from each source (0 = not tried yet)
 };

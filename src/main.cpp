@@ -235,6 +235,11 @@ static void fillStatusJson(JsonDocument& d) {
   d["adsb"]     = (int)aircraftProv.status();
   d["adsbN"]    = (int)aircraftProv.aircraft().size();
   d["tle"]      = (int)tleProv.status();
+  d["launch"]   = (int)launchProv.status();           // launch diag: status/count + last HTTP codes
+  d["launchN"]  = launchProv.count();
+  d["lLL2"]     = launchProv.lastLL2Code();            // primary (thespacedevs); 429 = rate-limited
+  d["lRLL"]     = launchProv.lastRLLCode();            // fallback (rocketlaunch.live); 0 = not reached
+  d["lFb"]      = launchProv.usingFallback();
   d["avwxN"]    = (int)avwxProv.stations().size();
   d["pmap"]     = (int)pmapProv.points().size();   // pressure-map stations loaded
   d["marsSol"]  = marsProv.perseverance().maxSol;  // -1 if rover feed not loaded

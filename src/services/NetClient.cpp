@@ -5,8 +5,13 @@
 #include <esp_heap_caps.h>
 
 bool NetClient::begin(uint32_t stackWords, BaseType_t core) {
-  _reqQ  = xQueueCreate(8, sizeof(Job*));
-  _respQ = xQueueCreate(8, sizeof(Job*));
+  // Depth must cover the boot fan-out (~16 providers refresh at once: TLE x3, SpaceWx x5,
+  // launch, aircraft, weather, aviation, pmap, sounding, hazards, mars). An 8-deep queue
+  // overflowed and get() dropped the losers with no retry, so a feed that lost the boot race
+  // (often launch) stayed stale for hours. Jobs run sequentially on the NetTask regardless of
+  // depth, so this only buffers pending requests -- it doesn't raise the concurrent-TLS peak.
+  _reqQ  = xQueueCreate(24, sizeof(Job*));
+  _respQ = xQueueCreate(24, sizeof(Job*));
   if (!_reqQ || !_respQ) return false;
   BaseType_t ok = xTaskCreatePinnedToCore(
       taskEntry, "NetTask", stackWords, this, 1, nullptr, core);
