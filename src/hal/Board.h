@@ -163,13 +163,71 @@
 // Pins from ../cyd-radio/crowpanel-5in.md (silkscreen + V1.0 factory source —
 // authoritative; the Elecrow public wiki lists a DIFFERENT, wrong pinout).
 
-  #define BOARD_NAME            "CrowPanel Advance 5.0-HMI (ESP32-S3)"
-
+  // ---- Shared by both 800x480 ESP32-S3 RGB variants (Advance + HMI5) ----
   #define TFT_PANEL_WIDTH      800    // native landscape
   #define TFT_PANEL_HEIGHT     480
   #define DISPLAY_DEFAULT_ROTATION 0  // already landscape
+  #define I2C_FREQ_HZ          400000
+  #define I2C_ADDR_GT911       0x5D
+  #define PIN_TOUCH_INT        -1     // GT911 reset/INT: no direct GPIO on either
+  #define PIN_TOUCH_RST        -1
+  #define CAP_HAS_PSRAM          1    // 8 MB octal/OPI (both)
+  #define CAP_HAS_GPS            0
+  #define CAP_TOUCH_NEEDS_CAL    0    // capacitive
 
-  // RGB parallel data pins, RGB565 order d0..d15 = B0..B4, G0..G5, R0..R4.
+#ifdef BOARD_CROWPANEL_HMI5
+  // ===== Elecrow CrowPanel ESP32 HMI 5.0 (p/n 502727) =====
+  // ESP32-S3-WROOM-1-N4R8 (4 MB flash, 8 MB PSRAM), 800x480 RGB (ILI6122/ILI5960),
+  // GT911 touch on I2C IO19/20, DIRECT-GPIO backlight (IO2, no expander). Pins from
+  // the Elecrow 502727 wiki. UNVERIFIED first pass -- the RGB data-bit order + timing
+  // polarity are best guesses and almost certainly need on-hardware bring-up.
+  #define BOARD_NAME            "CrowPanel HMI 5.0 (ESP32-S3, 502727)"
+  // RGB data, RGB565 order d0..d15 = B0..B4, G0..G5, R0..R4 (wiki lists B/G/R groups).
+  #define PIN_RGB_D0    8  // B0
+  #define PIN_RGB_D1    3  // B1
+  #define PIN_RGB_D2   46  // B2
+  #define PIN_RGB_D3    9  // B3
+  #define PIN_RGB_D4    1  // B4
+  #define PIN_RGB_D5    5  // G0
+  #define PIN_RGB_D6    6  // G1
+  #define PIN_RGB_D7    7  // G2
+  #define PIN_RGB_D8   15  // G3
+  #define PIN_RGB_D9   16  // G4
+  #define PIN_RGB_D10   4  // G5
+  #define PIN_RGB_D11  45  // R0
+  #define PIN_RGB_D12  48  // R1
+  #define PIN_RGB_D13  47  // R2
+  #define PIN_RGB_D14  21  // R3
+  #define PIN_RGB_D15  14  // R4
+  #define PIN_RGB_PCLK   0
+  #define PIN_RGB_HSYNC 39
+  #define PIN_RGB_VSYNC 41
+  #define PIN_RGB_DE    40  // HENABLE
+  #define RGB_PCLK_HZ        16000000   // guess -- tune on hardware
+  #define RGB_HSYNC_FRONT    8
+  #define RGB_HSYNC_PULSE    4
+  #define RGB_HSYNC_BACK     8
+  #define RGB_VSYNC_FRONT    8
+  #define RGB_VSYNC_PULSE    4
+  #define RGB_VSYNC_BACK     8
+  #define RGB_PCLK_ACTIVE_NEG 1         // guesses -- flip these if the panel stays black
+  #define RGB_DE_IDLE_HIGH    0
+  #define RGB_PCLK_IDLE_HIGH  0
+  #define PIN_I2C_SDA          19       // GT911 touch I2C
+  #define PIN_I2C_SCL          20
+  #define BACKLIGHT_VIA_EXPANDER 0      // direct GPIO PWM (no STC8 expander on this board)
+  #define PIN_TFT_BL             2
+  #define BACKLIGHT_ACTIVE_HIGH  1
+  #define BACKLIGHT_PWM_FREQ  5000
+  #define CAP_HAS_RTC            0       // not documented on the 502727
+  // Audio is an I2S amp+speaker (not a simple keyed buzzer) -> Morse beeper is silent here
+  // for now (no BUZZER_* defined). A future I2S tone path could drive it.
+#else
+  // ===== Elecrow CrowPanel Advance 5.0-HMI =====
+  // ESP32-S3-WROOM-1-N16R8 (16 MB flash, 8 MB PSRAM), ST7262 RGB, GT911 touch, backlight
+  // behind an I2C I/O expander. Pins from ../cyd-radio/crowpanel-5in.md (authoritative --
+  // the Elecrow public wiki lists a DIFFERENT, wrong pinout).
+  #define BOARD_NAME            "CrowPanel Advance 5.0-HMI (ESP32-S3)"
   #define PIN_RGB_D0   21  // B0
   #define PIN_RGB_D1   47  // B1
   #define PIN_RGB_D2   48  // B2
@@ -190,11 +248,8 @@
   #define PIN_RGB_HSYNC 40
   #define PIN_RGB_VSYNC 41
   #define PIN_RGB_DE    42
-  // Pixel clock: 12 MHz is the doc's documented-stable value (factory uses
-  // Values from the Elecrow V1.2 factory LovyanGFX driver (which works on THIS board):
-  // 21 MHz pclk + pclk_idle_high=1. (cyd-radio's V1.1 ran 12 MHz / pclk_active_neg, but
-  // the V1.2 ST7262 needs the factory 21 MHz + idle-high or the panel never latches —
-  // stays black though the framebuffer is correct.) Porches 8/4/8 both axes.
+  // V1.2 factory LovyanGFX driver: 21 MHz pclk + pclk_idle_high=1 (the V1.2 ST7262 needs
+  // the factory 21 MHz + idle-high or the panel never latches). Porches 8/4/8 both axes.
   #define RGB_PCLK_HZ        21000000
   #define RGB_HSYNC_FRONT    8
   #define RGB_HSYNC_PULSE    4
@@ -202,41 +257,26 @@
   #define RGB_VSYNC_FRONT    8
   #define RGB_VSYNC_PULSE    4
   #define RGB_VSYNC_BACK     8
-
-  // Shared I2C bus (400 kHz): GT911 touch, RTC, I/O expander
-  #define PIN_I2C_SDA          15
+  #define RGB_PCLK_ACTIVE_NEG 0
+  #define RGB_DE_IDLE_HIGH    0
+  #define RGB_PCLK_IDLE_HIGH  1
+  #define PIN_I2C_SDA          15       // shared I2C: GT911 touch, RTC, I/O expander
   #define PIN_I2C_SCL          16
-  #define I2C_FREQ_HZ          400000
-  #define I2C_ADDR_GT911       0x5D
-  #define I2C_ADDR_RTC         0x51   // PCF8563 / BM8563
-  #define I2C_ADDR_EXP_STC8    0x30   // V1.1+ µC (single-byte commands)
-  #define I2C_ADDR_EXP_TCA9534 0x18   // V1.0 expander
-  // STC8 single-byte commands (crowpanel-5in.md §7)
+  #define I2C_ADDR_RTC         0x51     // PCF8563 / BM8563
+  #define I2C_ADDR_EXP_STC8    0x30     // V1.1+ µC (single-byte commands)
+  #define I2C_ADDR_EXP_TCA9534 0x18     // V1.0 expander
   #define STC8_CMD_BL_OFF      0x05
-  #define STC8_CMD_BL_MAX      0x10   // must precede any dim byte (0x06..0x09)
+  #define STC8_CMD_BL_MAX      0x10
   #define STC8_CMD_AMP_MUTE    0x18
-
-  // Touch GT911 reset/INT are handled by the expander; no direct GPIO.
-  #define PIN_TOUCH_INT        -1
-  #define PIN_TOUCH_RST        -1
-
   #define BACKLIGHT_VIA_EXPANDER 1
-
-  // Capabilities — confirmed by the reference doc (spec §3.1).
-  #define CAP_HAS_PSRAM          1   // 8 MB octal/OPI
-  #define CAP_HAS_RTC            1   // PCF8563 onboard
-  #define CAP_HAS_GPS            0
-  #define CAP_TOUCH_NEEDS_CAL    0   // capacitive
-
-  // V1.2 buzzer + speaker are NOT raw GPIOs -- they're driven by the STC8 expander (0x30),
-  // the same single-command-byte channel as the backlight (crowpanel-5in.md): 246=buzzer on,
-  // 247=buzzer off, 248=speaker on, 249=speaker off. The Morse beeper keys the (active) buzzer
-  // on/off with these. (V1.1 used 0x15/0x16; this board is V1.2.)
+  #define CAP_HAS_RTC            1       // PCF8563 onboard
+  // V1.2 buzzer/speaker via the STC8 expander (0x30): 246=buzzer on, 247=off, 248/249=speaker.
   #define BUZZER_VIA_EXPANDER    1
   #define STC8_CMD_BUZZER_ON     246
   #define STC8_CMD_BUZZER_OFF    247
   #define STC8_CMD_SPEAKER_ON    248
   #define STC8_CMD_SPEAKER_OFF   249
+#endif
 
 // ===========================================================================
 #else

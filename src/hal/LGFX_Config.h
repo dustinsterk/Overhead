@@ -237,9 +237,9 @@ public:
       cfg.vsync_front_porch = RGB_VSYNC_FRONT;
       cfg.vsync_pulse_width = RGB_VSYNC_PULSE;
       cfg.vsync_back_porch  = RGB_VSYNC_BACK;
-      cfg.pclk_active_neg   = 0;            // V1.2 factory: idle-high, not active-neg
-      cfg.de_idle_high      = 0;
-      cfg.pclk_idle_high    = 1;            // ST7262 V1.2 latches with pclk idling high
+      cfg.pclk_active_neg   = RGB_PCLK_ACTIVE_NEG;   // per-variant (Board.h): Advance ST7262 vs 502727 ILI6122
+      cfg.de_idle_high      = RGB_DE_IDLE_HIGH;
+      cfg.pclk_idle_high    = RGB_PCLK_IDLE_HIGH;
       _bus.config(cfg);
       _panel.setBus(&_bus);
     }

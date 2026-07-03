@@ -191,9 +191,13 @@ bool Display::begin(bool enableShots) {
 #if !BACKLIGHT_VIA_EXPANDER
   // Drive the backlight PWM ourselves (LovyanGFX's Light_PWM didn't actually vary
   // brightness on the cyd28 unit — stuck dim). Same channel as the LGFX config;
-  // re-attaching after init() hands control to us. Core 2.x ledc API (the CYDs).
-  ledcSetup(kBlChannel, BACKLIGHT_PWM_FREQ, 8);
-  ledcAttachPin(PIN_TFT_BL, kBlChannel);
+  // re-attaching after init() hands control to us.
+  #if ESP_ARDUINO_VERSION_MAJOR >= 3
+    ledcAttach(PIN_TFT_BL, BACKLIGHT_PWM_FREQ, 8);     // core 3.x (S3 HMI5): pin-based LEDC
+  #else
+    ledcSetup(kBlChannel, BACKLIGHT_PWM_FREQ, 8);      // core 2.x (the CYDs)
+    ledcAttachPin(PIN_TFT_BL, kBlChannel);
+  #endif
 #endif
   setBacklight(255);
 #if defined(BOARD_CROWPANEL_S3_5HMI)
@@ -313,7 +317,11 @@ void Display::setBacklight(uint8_t level) {
     Wire.endTransmission();
   }
 #else
-  ledcWrite(kBlChannel, BACKLIGHT_ACTIVE_HIGH ? level : 255 - level);
+  #if ESP_ARDUINO_VERSION_MAJOR >= 3
+    ledcWrite(PIN_TFT_BL, BACKLIGHT_ACTIVE_HIGH ? level : 255 - level);   // core 3.x: pin-based
+  #else
+    ledcWrite(kBlChannel, BACKLIGHT_ACTIVE_HIGH ? level : 255 - level);
+  #endif
 #endif
 }
 

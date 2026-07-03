@@ -1,0 +1,13 @@
+{
+  "name": "Overhead — Crowpanel HMI 5in (502727) [experimental]",
+  "version": "0.0.1-hmi5",
+  "new_install_prompt_erase": true,
+  "builds": [
+    {
+      "chipFamily": "ESP32-S3",
+      "parts": [
+        { "path": "crowpanel-hmi5/firmware.factory.bin", "offset": 0 }
+      ]
+    }
+  ]
+}
