@@ -30,9 +30,13 @@ accelerometer still does the closed‑loop el trim while tracking.
 
 ## Flash
 
-Browser flasher in [`flasher/`](flasher/): open `index.html` over **HTTPS or localhost** in
-**Chrome / Edge**, pick the build (**28BYJ** or **NEMA 17**) from the dropdown, click *Install*, and
-choose the serial port. Custom pins/ratios: edit `config.h` and flash from source
+**Web flasher (easiest):** <https://jamesdavid.github.io/Overhead/rotor-flasher/> — open in
+**Chrome / Edge**, pick the build (**28BYJ** or **NEMA 17**) from the dropdown, plug the ESP32 in over
+USB, click *Install*, and choose the serial port. (Source lives in
+[`../docs/rotor-flasher/`](../docs/rotor-flasher/), served by the same GitHub Pages as the dashboard
+flasher.)
+
+Custom pins/ratios: edit `config.h` and flash from source
 (`pio run -d rotor -e byj|nema -t upload`).
 
 ## Calibrate — no gear‑ratio math
