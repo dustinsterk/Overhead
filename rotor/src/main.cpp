@@ -324,9 +324,6 @@ void serviceSerial() {
 void setup() {
   Serial.begin(115200);
   pinMode(AZ_LIMIT_PIN, INPUT_PULLUP);
-#if EL_LIMIT_PIN >= 0
-  pinMode(EL_LIMIT_PIN, INPUT_PULLUP);
-#endif
   mpuInit();
   nvsLoad();                     // calibration over config.h defaults (§8)
   azM.setMaxSpeed(AZ_MAX_SPEED); azM.setAcceleration(AZ_ACCEL);
@@ -352,17 +349,8 @@ void homeAz() {
   azM.runSpeed();
 }
 void homeEl() {
-#if EL_LIMIT_PIN >= 0
-  // El limit switch (optional, config): drive down to the horizon switch -> el zero.
-  elM.setSpeed(g_elSign * -HOME_SPEED);
-  if (digitalRead(EL_LIMIT_PIN) == EL_LIMIT_ACTIVE) {
-    elM.setCurrentPosition(0);
-    state = TRACKING;
-    return;
-  }
-  elM.runSpeed();
-#else
-  // Gravity homing (default): drive to level (accelerometer pitch ~ 0) -> el zero.
+  // Gravity homing: drive to level (accelerometer pitch ~ 0) -> el zero. El has no
+  // switch — the accelerometer is the el reference (homing here, and trim while tracking).
   float pitch = readPitchDeg();
   if (fabsf(pitch) < 0.5f) {                 // level == elevation 0
     elM.setCurrentPosition(0);
@@ -371,7 +359,6 @@ void homeEl() {
   }
   elM.setSpeed(g_elSign * (pitch > 0 ? -HOME_SPEED : HOME_SPEED));
   elM.runSpeed();
-#endif
 }
 
 // --- tracking: extrapolate target from last packet + rate ------------------

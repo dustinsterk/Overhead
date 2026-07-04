@@ -23,10 +23,9 @@ pio run -d rotor -e byj -t upload    # build + flash over USB
 You do **not** enter a gear ratio — calibration measures it. If your pins/wiring differ from a
 preset, edit its block in `config.h` and rebuild that env.
 
-**Switches:** an **azimuth** limit switch is required (mechanical home + az auto‑cal). An
-**elevation** limit switch is **optional** — set `EL_LIMIT_PIN` in `config.h` to home el off a
-horizon switch, or leave it `-1` to home el off gravity (the accelerometer). Either way the
-accelerometer still does the closed‑loop el trim while tracking.
+**Switch:** an **azimuth** limit switch is required — it's the mechanical home and the reference
+for az auto‑cal. Elevation has no switch: the accelerometer (MPU6050) is the el reference, homing
+el to level and trimming it against gravity while tracking.
 
 ## Flash
 

@@ -92,16 +92,12 @@
 
 // ── Globals (build-agnostic; shared by both presets) ────────────────────────
 // Azimuth limit switch — mechanical home. REQUIRED (az homing + az auto-cal use it).
+// Elevation has no switch: the accelerometer is the el reference (el homes to level,
+// and trims against gravity while tracking).
 #define AZ_LIMIT_PIN     34       // input-only pin is ideal for a switch (saves an output GPIO)
 #define AZ_LIMIT_ACTIVE  LOW      // switch to GND, INPUT_PULLUP
 
-// Elevation limit switch — OPTIONAL. Set EL_LIMIT_PIN to a GPIO to home el off a switch at
-// the horizon (defines el = 0); leave it -1 to home el off gravity (the accelerometer). Either
-// way the accelerometer still does the closed-loop el trim while tracking.
-#define EL_LIMIT_PIN     -1       // -1 = gravity homing (default); else a switch GPIO
-#define EL_LIMIT_ACTIVE  LOW      // switch to GND, INPUT_PULLUP (used only when EL_LIMIT_PIN >= 0)
-
-// IMU (MPU6050) — el reference (gravity): el trim always, and el homing when no el switch.
+// IMU (MPU6050) — el reference (gravity): el homing (to level) and el trim while tracking.
 #define I2C_SDA  21
 #define I2C_SCL  22
 #define MPU_ADDR 0x68
