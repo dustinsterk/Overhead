@@ -157,6 +157,11 @@ uint8_t  scanIdx = 0;
 uint32_t chanChangeMs = 0;
 uint8_t  lockedChannel = 0;
 
+// Web-triggered commands are queued here and run from loop() (serviceWeb), so the
+// HTTP handler returns instantly and never blocks on motor motion / calibration.
+enum WebCmd { WC_NONE, WC_CALAZ, WC_CALEL, WC_SETNORTH, WC_HOME, WC_RESET, WC_REBOOT };
+volatile WebCmd g_webCmd = WC_NONE;
+
 // ----------------------------------------------------------------------------
 //  MPU6050 — raw accel read, no extra libs. Returns pitch (elevation) in deg.
 // ----------------------------------------------------------------------------
@@ -202,6 +207,7 @@ void onRecv(const esp_now_recv_info_t* info, const uint8_t* data, int len) {
 //  WebServer (no extra lib) and shares the radio channel with ESP-NOW.
 // ----------------------------------------------------------------------------
 WebServer server(80);
+void nvsSave();                 // defined below; handleSave persists cfg through it
 
 const char* stateName(State s) {
   switch (s) {
@@ -211,7 +217,16 @@ const char* stateName(State s) {
     default:          return "?";
   }
 }
-static String pinStr(int8_t p) { return p < 0 ? String("—") : String((int)p); }
+// form-row helpers (kept terse; the page is assembled as one String)
+static String rowNum(const char* label, const char* name, int val, int lo, int hi) {
+  return "<tr><th>" + String(label) + "</th><td><input type=number name=" + name +
+         " value=" + String(val) + " min=" + String(lo) + " max=" + String(hi) + "></td></tr>";
+}
+static String rowSel2(const char* label, const char* name, uint8_t v, const char* o0, const char* o1) {
+  return "<tr><th>" + String(label) + "</th><td><select name=" + name + ">"
+         "<option value=0" + (v == 0 ? " selected" : "") + ">" + o0 + "</option>"
+         "<option value=1" + (v == 1 ? " selected" : "") + ">" + o1 + "</option></select></td></tr>";
+}
 
 void handleRoot() {
   telemetry_t p; noInterrupts(); memcpy(&p, (const void*)&rxPkt, sizeof(p)); interrupts();
@@ -223,31 +238,91 @@ void handleRoot() {
     "font:15px/1.5 system-ui,Segoe UI,Roboto,sans-serif}.wrap{max-width:640px;margin:0 auto;padding:22px 16px}"
     "h1{font-size:1.4rem;margin:.2em 0}.tag{color:var(--accent);margin:0 0 1em}"
     "table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);"
-    "border-radius:10px;overflow:hidden;margin-bottom:.4em}td,th{text-align:left;padding:8px 12px;"
-    "border-bottom:1px solid var(--line)}th{color:var(--dim);font-weight:600;width:42%}"
-    "h2{font-size:1rem;color:var(--dim);margin:1.3em 0 .4em}code{color:#cfe0f5}</style></head>"
+    "border-radius:10px;overflow:hidden;margin-bottom:.4em}td,th{text-align:left;padding:7px 12px;"
+    "border-bottom:1px solid var(--line)}th{color:var(--dim);font-weight:600;width:46%}"
+    "h2{font-size:1rem;color:var(--dim);margin:1.3em 0 .4em}code{color:#cfe0f5}"
+    "input,select,button{background:#0e1420;color:var(--fg);border:1px solid var(--line);border-radius:6px;"
+    "padding:5px 8px;font:inherit}input[type=number]{width:5.5rem}"
+    "button{background:var(--accent);color:#0b0f17;font-weight:700;cursor:pointer;padding:9px 18px}"
+    "a.btn{display:inline-block;background:#0e1420;border:1px solid var(--line);border-radius:6px;"
+    "padding:6px 11px;color:var(--accent);text-decoration:none;margin:2px 1px}</style></head>"
     "<body><div class=wrap><h1>Overhead Rotor</h1><p class=tag>setup &amp; status</p>");
   h += F("<h2>Status</h2><table>");
   h += "<tr><th>State</th><td><code>" + String(stateName(state)) + "</code></td></tr>";
   h += "<tr><th>Channel</th><td>" + (lockedChannel ? String(lockedChannel) : String("hunting…")) + "</td></tr>";
   h += "<tr><th>Telemetry</th><td>" + String(haveData ? "receiving" : "none yet") + "</td></tr>";
   h += "<tr><th>Target az / el</th><td>" + String(p.az, 1) + "° / " + String(p.el, 1) + "°</td></tr>";
-  h += F("</table><h2>Calibration</h2><table>");
-  h += "<tr><th>az steps/deg</th><td>" + String(g_azSpd, 3) + " (sign " + String(g_azSign) + ")</td></tr>";
-  h += "<tr><th>el steps/deg</th><td>" + String(g_elSpd, 3) + " (sign " + String(g_elSign) + ")</td></tr>";
-  h += "<tr><th>north offset</th><td>" + String(g_northOff, 2) + "°</td></tr>";
-  h += F("</table><h2>Hardware</h2><table>");
-  h += "<tr><th>Az motor</th><td>" + String(cfg.azDriver == DRIVER_STEP_DIR ? "STEP/DIR" : "unipolar") +
-       " — " + pinStr(cfg.azPins[0]) + ", " + pinStr(cfg.azPins[1]) + ", " + pinStr(cfg.azPins[2]) + ", " + pinStr(cfg.azPins[3]) + "</td></tr>";
-  h += "<tr><th>El motor</th><td>" + String(cfg.elDriver == DRIVER_STEP_DIR ? "STEP/DIR" : "unipolar") +
-       " — " + pinStr(cfg.elPins[0]) + ", " + pinStr(cfg.elPins[1]) + ", " + pinStr(cfg.elPins[2]) + ", " + pinStr(cfg.elPins[3]) + "</td></tr>";
-  h += "<tr><th>Home switches az / el</th><td>" + pinStr(cfg.azHomePin) + " / " + pinStr(cfg.elHomePin) + "</td></tr>";
-  h += "<tr><th>End-stops az cw/ccw</th><td>" + pinStr(cfg.azCwPin) + " / " + pinStr(cfg.azCcwPin) + "</td></tr>";
-  h += "<tr><th>End-stops el min/max</th><td>" + pinStr(cfg.elMinPin) + " / " + pinStr(cfg.elMaxPin) + "</td></tr>";
-  h += "<tr><th>ESP-NOW channel</th><td>" + (cfg.channel ? String(cfg.channel) : String("auto-hunt")) + "</td></tr>";
-  h += F("</table><p style='color:#9fb0c4;font-size:.85rem;margin-top:1.1em'>Editable settings &amp; "
-    "calibration buttons arrive next. You're on the <b>Rotor-setup</b> AP.</p></div></body></html>");
+  h += "<tr><th>az/el steps/deg</th><td>" + String(g_azSpd, 2) + " / " + String(g_elSpd, 2) +
+       "  ·  north " + String(g_northOff, 1) + "°</td></tr>";
+  h += F("</table><h2>Calibrate / actions</h2><p>"
+    "<a class=btn href='/cmd?do=calaz'>CAL AZ</a><a class=btn href='/cmd?do=calel'>CAL EL</a>"
+    "<a class=btn href='/cmd?do=setnorth'>SET NORTH</a><a class=btn href='/cmd?do=home'>HOME</a>"
+    "<a class=btn href='/cmd?do=reset'>RESET</a></p>"
+    "<p class=tag style='color:#9fb0c4;font-size:.82rem'>CAL AZ/EL and HOME move the rotor. "
+    "SET NORTH stores the current heading as north.</p>");
+  h += F("<h2>Hardware — edit &amp; save</h2><form method=POST action=/save><table>");
+  h += rowSel2("Az driver", "azdrv", cfg.azDriver, "unipolar (28BYJ/ULN2003)", "STEP/DIR (NEMA/A4988)");
+  h += rowNum("Az pin 1 / STEP", "azp0", cfg.azPins[0], -1, 39);
+  h += rowNum("Az pin 2 / DIR",  "azp1", cfg.azPins[1], -1, 39);
+  h += rowNum("Az pin 3 / EN",   "azp2", cfg.azPins[2], -1, 39);
+  h += rowNum("Az pin 4",        "azp3", cfg.azPins[3], -1, 39);
+  h += rowSel2("El driver", "eldrv", cfg.elDriver, "unipolar (28BYJ/ULN2003)", "STEP/DIR (NEMA/A4988)");
+  h += rowNum("El pin 1 / STEP", "elp0", cfg.elPins[0], -1, 39);
+  h += rowNum("El pin 2 / DIR",  "elp1", cfg.elPins[1], -1, 39);
+  h += rowNum("El pin 3 / EN",   "elp2", cfg.elPins[2], -1, 39);
+  h += rowNum("El pin 4",        "elp3", cfg.elPins[3], -1, 39);
+  h += rowNum("Az home switch",  "azhome", cfg.azHomePin, -1, 39);
+  h += rowNum("El home switch (-1=gravity)", "elhome", cfg.elHomePin, -1, 39);
+  h += rowNum("Az end-stop CW",  "azcw",  cfg.azCwPin,  -1, 39);
+  h += rowNum("Az end-stop CCW", "azccw", cfg.azCcwPin, -1, 39);
+  h += rowNum("El end-stop min", "elmin", cfg.elMinPin, -1, 39);
+  h += rowNum("El end-stop max", "elmax", cfg.elMaxPin, -1, 39);
+  h += rowSel2("Home switch level",  "homeact", cfg.homeActive,    "active-LOW", "active-HIGH");
+  h += rowSel2("End-stop level",     "endact",  cfg.endstopActive, "active-LOW", "active-HIGH");
+  h += rowNum("ESP-NOW channel (0=auto-hunt)", "chan", cfg.channel, 0, 13);
+  h += F("</table><p><button type=submit>Save &amp; reboot</button></p></form>"
+    "<p class=tag style='color:#9fb0c4;font-size:.82rem'>Saving reboots to apply pin/driver changes. "
+    "You're on the <b>Rotor-setup</b> Wi-Fi.</p></div></body></html>");
   server.send(200, "text/html", h);
+}
+
+// clamp a form pin arg to [-1,39]; keep current if the field is absent
+static int8_t argPin(const char* k, int8_t cur) {
+  if (!server.hasArg(k)) return cur;
+  int v = server.arg(k).toInt();
+  if (v < -1) v = -1; if (v > 39) v = 39;
+  return (int8_t)v;
+}
+void handleSave() {
+  cfg.azDriver = server.arg("azdrv").toInt() ? DRIVER_STEP_DIR : DRIVER_UNIPOLAR_4WIRE;
+  cfg.elDriver = server.arg("eldrv").toInt() ? DRIVER_STEP_DIR : DRIVER_UNIPOLAR_4WIRE;
+  cfg.azPins[0]=argPin("azp0",cfg.azPins[0]); cfg.azPins[1]=argPin("azp1",cfg.azPins[1]);
+  cfg.azPins[2]=argPin("azp2",cfg.azPins[2]); cfg.azPins[3]=argPin("azp3",cfg.azPins[3]);
+  cfg.elPins[0]=argPin("elp0",cfg.elPins[0]); cfg.elPins[1]=argPin("elp1",cfg.elPins[1]);
+  cfg.elPins[2]=argPin("elp2",cfg.elPins[2]); cfg.elPins[3]=argPin("elp3",cfg.elPins[3]);
+  cfg.azHomePin=argPin("azhome",cfg.azHomePin); cfg.elHomePin=argPin("elhome",cfg.elHomePin);
+  cfg.azCwPin=argPin("azcw",cfg.azCwPin);   cfg.azCcwPin=argPin("azccw",cfg.azCcwPin);
+  cfg.elMinPin=argPin("elmin",cfg.elMinPin); cfg.elMaxPin=argPin("elmax",cfg.elMaxPin);
+  cfg.homeActive    = server.arg("homeact").toInt() ? 1 : 0;
+  cfg.endstopActive = server.arg("endact").toInt()  ? 1 : 0;
+  int ch = server.arg("chan").toInt();
+  cfg.channel = (ch >= 1 && ch <= 13) ? (uint8_t)ch : 0;
+  nvsSave();
+  server.send(200, "text/html",
+    F("<!doctype html><meta charset=utf-8><meta http-equiv=refresh content='4;url=/'>"
+      "<body style='background:#0b0f17;color:#e8eef6;font-family:system-ui;padding:2rem'>"
+      "Saved. Rebooting to apply… <a style='color:#4ea1ff' href='/'>back</a></body>"));
+  g_webCmd = WC_REBOOT;
+}
+void handleCmd() {
+  String d = server.arg("do");
+  if      (d == "calaz")    g_webCmd = WC_CALAZ;
+  else if (d == "calel")    g_webCmd = WC_CALEL;
+  else if (d == "setnorth") g_webCmd = WC_SETNORTH;
+  else if (d == "home")     g_webCmd = WC_HOME;
+  else if (d == "reset")    g_webCmd = WC_RESET;
+  server.sendHeader("Location", "/");
+  server.send(303, "text/plain", "ok");
 }
 
 void radioInit() {
@@ -258,6 +333,8 @@ void radioInit() {
   if (esp_now_init() != ESP_OK) { Serial.println("esp_now_init failed"); return; }
   esp_now_register_recv_cb(onRecv);
   server.on("/", handleRoot);
+  server.on("/save", HTTP_POST, handleSave);
+  server.on("/cmd", handleCmd);
   server.begin();
   Serial.printf("[net] AP '%s' up -> http://%s/\n", AP_SSID, WiFi.softAPIP().toString().c_str());
 }
@@ -560,8 +637,26 @@ void park() {
   if (haveData && rxPkt.valid && (millis() - rxTimeMs) < PACKET_TIMEOUT_MS) state = TRACKING;
 }
 
+// Execute any queued web command (set by the HTTP handlers) in loop context, so
+// blocking calibration / motor motion never stalls the web server.
+void serviceWeb() {
+  WebCmd c = g_webCmd;
+  if (c == WC_NONE) return;
+  g_webCmd = WC_NONE;
+  switch (c) {
+    case WC_CALAZ:    state = CALIBRATION; calAz(); startScan(); break;
+    case WC_CALEL:    state = CALIBRATION; calEl(); startScan(); break;
+    case WC_SETNORTH: setNorth(); break;
+    case WC_HOME:     startScan(); state = HOMING_AZ; break;
+    case WC_RESET:    nvsReset(); Serial.println("[web] NVS reset -> reboot"); delay(250); ESP.restart(); break;
+    case WC_REBOOT:   delay(250); ESP.restart(); break;
+    default: break;
+  }
+}
+
 void loop() {
   server.handleClient();         // setup AP web UI (non-blocking)
+  serviceWeb();                  // run any queued web command (cal / home / reset / reboot)
   serviceSerial();               // USB calibration menu (§7), available in any state
   switch (state) {
     case SCANNING:  scan();   break;
