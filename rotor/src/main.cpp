@@ -20,60 +20,22 @@
 #include <math.h>
 
 #include "shared/telemetry.h" // THE wire format (§4) — via -I <monorepo root>
+#include "config.h"           // per-build tunables + BYJ/NEMA presets (§5)
 
 // The wire format is fixed-size + packed; guard it so a silent struct-layout drift
 // (the classic split-repo failure) fails the BUILD, not a field in the field.
 static_assert(sizeof(telemetry_t) == 36, "telemetry_t layout drifted — check shared/telemetry.h");
 
-// ----------------------------------------------------------------------------
-//  CONFIG  — fill these in for your build
-// ----------------------------------------------------------------------------
-// Channel hunt: rotor walks these until it hears Overhead's broadcast. 1/6/11 first
-// (routers almost always use those), then the rest. No hardcoded channel needed.
-static const uint8_t  SCAN_CH[]     = {1, 6, 11, 2, 3, 4, 5, 7, 8, 9, 10, 12, 13};
-static const uint8_t  N_SCAN_CH     = sizeof(SCAN_CH) / sizeof(SCAN_CH[0]);
-static const uint32_t SCAN_DWELL_MS = 250;     // listen this long per channel
-static const uint32_t RESCAN_MS     = 8000;    // signal lost this long -> hunt again
-
-// 28BYJ-48 in HALF4WIRE. NOTE the pin ORDER (IN1,IN3,IN2,IN4) — this sequencing
-// quirk is why "the motor just buzzes" when wired the obvious way.
-#define AZ_IN1 32
-#define AZ_IN2 33
-#define AZ_IN3 25
-#define AZ_IN4 26
-#define EL_IN1 27
-#define EL_IN2 14
-#define EL_IN3 12          // strapping pin — fine as output once booted, but avoid pulling high at reset
-#define EL_IN4 13
-
-#define LIMIT_PIN 34       // input-only pin is perfect for a switch (saves an output-capable GPIO)
-#define LIMIT_ACTIVE LOW   // switch to GND, INPUT_PULLUP
-
-#define I2C_SDA 21
-#define I2C_SCL 22
-#define MPU_ADDR 0x68
-
-// Mechanics
-static const float STEPS_PER_REV   = 4096.0f;       // 28BYJ-48 half-step, output shaft
-static const float AZ_STEPS_PER_DEG = STEPS_PER_REV / 360.0f;   // ~11.378
-static const float EL_STEPS_PER_DEG = STEPS_PER_REV / 360.0f;   // change if el axis has its own reduction
-static const float NORTH_OFFSET_DEG = 0.0f;         // mechanical-zero (switch) -> true north; set once
-static const float EL_MIN_DEG = 0.0f;
-static const float EL_MAX_DEG = 90.0f;
-
-// Speeds (steps/sec). 28BYJ stalls past ~900-1000; keep margin.
-static const float MAX_SPEED   = 700.0f;
-static const float ACCEL       = 1200.0f;
-static const float HOME_SPEED  = 350.0f;
-
-// Tracking / safety
-static const uint32_t PACKET_TIMEOUT_MS = 2500;     // no data this long -> park
-static const float    EL_TRIM_GAIN = 0.25f;         // accel closed-loop trim on el (0 = off)
-static const float    EL_TRIM_DEADBAND_DEG = 0.4f;
+// Channel-hunt list materialised from config (§5). 1/6/11 first, then the rest.
+static const uint8_t  SCAN_CH[]  = SCAN_CH_LIST;
+static const uint8_t  N_SCAN_CH  = sizeof(SCAN_CH) / sizeof(SCAN_CH[0]);
 
 // ----------------------------------------------------------------------------
-AccelStepper azM(AccelStepper::HALF4WIRE, AZ_IN1, AZ_IN3, AZ_IN2, AZ_IN4);
-AccelStepper elM(AccelStepper::HALF4WIRE, EL_IN1, EL_IN3, EL_IN2, EL_IN4);
+// Steppers. Construction is HALF4WIRE here; the driver abstraction (§6, next
+// milestone) selects HALF4WIRE vs DRIVER per axis from config.h. The unipolar pin
+// ORDER (IN1,IN3,IN2,IN4) is the sequencing quirk that otherwise just buzzes.
+AccelStepper azM(AccelStepper::HALF4WIRE, AZ_PIN_IN1, AZ_PIN_IN3, AZ_PIN_IN2, AZ_PIN_IN4);
+AccelStepper elM(AccelStepper::HALF4WIRE, EL_PIN_IN1, EL_PIN_IN3, EL_PIN_IN2, EL_PIN_IN4);
 
 // Pointing state received from Overhead. The full shared contract; the rotor reads the
 // pointing fields (az/el/az_rate/el_rate/valid/seq) and ignores the reserved radio fields.
@@ -173,8 +135,8 @@ void setup() {
   Serial.begin(115200);
   pinMode(LIMIT_PIN, INPUT_PULLUP);
   mpuInit();
-  azM.setMaxSpeed(MAX_SPEED); azM.setAcceleration(ACCEL);
-  elM.setMaxSpeed(MAX_SPEED); elM.setAcceleration(ACCEL);
+  azM.setMaxSpeed(AZ_MAX_SPEED); azM.setAcceleration(AZ_ACCEL);
+  elM.setMaxSpeed(EL_MAX_SPEED); elM.setAcceleration(EL_ACCEL);
   radioInit();
   startScan();           // find Overhead's channel before doing anything
 }
