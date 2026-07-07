@@ -214,8 +214,10 @@ void PageSolarSystem::onTouch(App& app, int x, int y) {
   } else if (_view == 2) {                  // Moon: side tap flips near <-> far side
     _moonFar = !_moonFar;
   } else {                                  // sky-dome: step visible bodies
-    if (x < third)          { do { _sel = (_sel - 1 + kN) % kN; } while (!visible(_sel) && _filter); }
-    else if (x > 2 * third) { do { _sel = (_sel + 1) % kN; } while (!visible(_sel) && _filter); }
+    // bounded like autoAdvance(): if nothing is visible (pre-sync, or all bodies below
+    // the horizon) the unguarded loop never exits -> task-WDT reset on a side tap.
+    if (x < third)          { int g = 0; do { _sel = (_sel - 1 + kN) % kN; } while (!visible(_sel) && _filter && ++g < kN); }
+    else if (x > 2 * third) { int g = 0; do { _sel = (_sel + 1) % kN; } while (!visible(_sel) && _filter && ++g < kN); }
   }
   _dirty = true;
 }
