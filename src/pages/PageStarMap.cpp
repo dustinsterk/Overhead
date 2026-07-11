@@ -89,18 +89,19 @@ int PageStarMap::nextVisibleCon(App& app, int from) {
 
 void PageStarMap::onTouch(App& app, int x, int y) {
   const int cw = app.contentW(), ch = app.contentH();
-  if (x <= 80 && y >= ch - 20) {                   // bottom-left badge: mag limit
+  const int u = app.ui();                          // badges are drawn ui()-scaled; hit-test must match
+  if (x <= 80 * u && y >= ch - 20 * u) {           // bottom-left badge: mag limit
     _magLimit = (_magLimit >= 4.0f) ? 2.0f : _magLimit + 1.0f;
     _dirty = true; return;
   }
-  if (x >= cw - 46 && y >= ch - 20) {              // bottom-right: SS overlay
+  if (x >= cw - 46 * u && y >= ch - 20 * u) {      // bottom-right: SS overlay
     _showSS = !_showSS; _dirty = true; return;
   }
-  if (y >= ch - 20) {                                          // bottom-centre badges
+  if (y >= ch - 20 * u) {                                      // bottom-centre badges
     if (_view >= 1) {                                          // memory sky: tour (left) + chart (right)
-      if (x >= cw / 2 - 52 && x <= cw / 2 - 4) { _tour = !_tour; _tourCon = -1; _t = 0; _dirty = true; return; }
-      if (x >= cw / 2 + 4 && x <= cw / 2 + 52) { _chart = !_chart; _dirty = true; return; }
-    } else if (x > cw / 2 - 26 && x < cw / 2 + 26) {           // live sky: single tour chip
+      if (x >= cw / 2 - 52 * u && x <= cw / 2 - 4 * u) { _tour = !_tour; _tourCon = -1; _t = 0; _dirty = true; return; }
+      if (x >= cw / 2 + 4 * u && x <= cw / 2 + 52 * u) { _chart = !_chart; _dirty = true; return; }
+    } else if (x > cw / 2 - 26 * u && x < cw / 2 + 26 * u) {   // live sky: single tour chip
       _tour = !_tour; _tourCon = -1; _t = 0; _dirty = true; return;
     }
   }

@@ -187,21 +187,22 @@ void PageSolarSystem::computeRST(int idx) {
 
 void PageSolarSystem::onTouch(App& app, int x, int y) {
   int third = app.contentW() / 3;
+  const int u = app.ui();                   // badges are drawn ui()-scaled; hit-tests must match
   // Centre tap cycles sky-dome -> orbits -> Moon -> Mars -> Jupiter -> Saturn ->
   // Deep Space -> meteors.
   if (x >= third && x <= 2 * third) { _view = (_view + 1) % kViews; _dirty = true; return; }
   // Bottom-left badge cycles the filter (sky-dome view only).
-  if (_view == 0 && x <= 80 && y >= app.contentH() - 20) {
+  if (_view == 0 && x <= 80 * u && y >= app.contentH() - 20 * u) {
     _filter = (_filter + 1) % 3; _settings.set("ssShowFilter", (long)_filter); _settings.save();
     _dirty = true; return;
   }
   // Bottom-right badge toggles the star/constellation overlay (sky-dome view only).
-  if (_view == 0 && x >= app.contentW() - 58 && y >= app.contentH() - 20) {
+  if (_view == 0 && x >= app.contentW() - 58 * u && y >= app.contentH() - 20 * u) {
     _stars = !_stars; _settings.set("ssShowStars", _stars); _settings.save();
     _dirty = true; return;
   }
   if (_view == 1) {                         // orbits
-    if (x > app.contentW() - 52 && y >= app.contentH() - 16) {   // bottom-right: inner/all
+    if (x > app.contentW() - 52 * u && y >= app.contentH() - 16 * u) {   // bottom-right: inner/all
       _orbScope = (_orbScope + 1) % 3;                    // inner -> mid -> all
       _settings.set("orbScope", (long)_orbScope); _settings.save();
       int cnt = orbitVisibleCount();
