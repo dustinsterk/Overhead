@@ -144,9 +144,12 @@ static inline void elRunSpeed() { float s = elM.speed(); int dir = (s > 0) - (s 
 
 // Pointing state received from Overhead. The full shared contract; the rotor reads the
 // pointing fields (az/el/az_rate/el_rate/valid/seq) and ignores the reserved radio fields.
+// Guarded by a cross-core spinlock: the ESP-NOW RX callback runs in the WiFi task on the
+// OTHER core, so noInterrupts() (current-core only) could not prevent a torn 36-byte copy.
 volatile telemetry_t rxPkt   = {0};
 volatile uint32_t     rxTimeMs = 0;
 volatile bool         haveData = false;
+portMUX_TYPE g_pktMux = portMUX_INITIALIZER_UNLOCKED;
 
 // State machine (§9):
 //   SCANNING --lock--> HOMING_AZ --> HOMING_EL --> TRACKING <-> PARK
@@ -167,11 +170,15 @@ volatile WebCmd g_webCmd = WC_NONE;
 // ----------------------------------------------------------------------------
 //  MPU6050 — raw accel read, no extra libs. Returns pitch (elevation) in deg.
 // ----------------------------------------------------------------------------
+bool g_mpuOk = false;   // MPU6050 answered at init; gravity homing/trim gated on this —
+                        // without it readPitchDeg() returns a constant garbage angle and
+                        // gravity homing would drive the el axis forever in one direction.
 void mpuInit() {
   Wire.begin(I2C_SDA, I2C_SCL);
   Wire.beginTransmission(MPU_ADDR);
   Wire.write(0x6B); Wire.write(0x00);          // PWR_MGMT_1 = 0 -> wake
-  Wire.endTransmission();
+  g_mpuOk = (Wire.endTransmission() == 0);
+  if (!g_mpuOk) Serial.println("[imu] MPU6050 NOT found — gravity homing/el-trim disabled (fit an el switch or the IMU)");
 }
 
 float readPitchDeg() {
@@ -198,8 +205,10 @@ float readPitchDeg() {
 void onRecv(const esp_now_recv_info_t* info, const uint8_t* data, int len) {
   if (len != sizeof(telemetry_t)) return;                       // §4: reject on wrong length
   if (data[0] != TELEM_PROTO_VER) return;                       // §4: reject on proto mismatch (proto_ver is byte 0)
+  portENTER_CRITICAL(&g_pktMux);
   memcpy((void*)&rxPkt, data, sizeof(telemetry_t));
   rxTimeMs = millis();
+  portEXIT_CRITICAL(&g_pktMux);
   haveData = true;
 }
 
@@ -231,7 +240,8 @@ static String rowSel2(const char* label, const char* name, uint8_t v, const char
 }
 
 void handleRoot() {
-  telemetry_t p; noInterrupts(); memcpy(&p, (const void*)&rxPkt, sizeof(p)); interrupts();
+  telemetry_t p;
+  portENTER_CRITICAL(&g_pktMux); memcpy(&p, (const void*)&rxPkt, sizeof(p)); portEXIT_CRITICAL(&g_pktMux);
   String h = F("<!doctype html><html lang=en><head><meta charset=utf-8>"
     "<meta name=viewport content='width=device-width,initial-scale=1'>"
     "<title>Overhead Rotor — setup</title><style>"
@@ -289,20 +299,25 @@ void handleRoot() {
   server.send(200, "text/html", h);
 }
 
-// clamp a form pin arg to [-1,39]; keep current if the field is absent
-static int8_t argPin(const char* k, int8_t cur) {
+// Validate a form pin arg; keep the CURRENT value if absent or unusable. GPIO6-11 are
+// the SPI flash pins on every ESP32 — driving them crashes/boot-loops (and cfg persists
+// to NVS, so a bad save could brick until a serial RESET) — rejected outright. Motor/EN
+// pins additionally reject 34-39 (input-only, can't drive an output).
+static int8_t argPin(const char* k, int8_t cur, bool needsOutput = false) {
   if (!server.hasArg(k)) return cur;
   int v = server.arg(k).toInt();
-  if (v < -1) v = -1; if (v > 39) v = 39;
+  if (v < -1 || v > 39) return cur;
+  if (v >= 6 && v <= 11) return cur;              // SPI flash pins — never
+  if (needsOutput && v >= 34) return cur;         // input-only GPIOs can't step a motor
   return (int8_t)v;
 }
 void handleSave() {
   cfg.azDriver = server.arg("azdrv").toInt() ? DRIVER_STEP_DIR : DRIVER_UNIPOLAR_4WIRE;
   cfg.elDriver = server.arg("eldrv").toInt() ? DRIVER_STEP_DIR : DRIVER_UNIPOLAR_4WIRE;
-  cfg.azPins[0]=argPin("azp0",cfg.azPins[0]); cfg.azPins[1]=argPin("azp1",cfg.azPins[1]);
-  cfg.azPins[2]=argPin("azp2",cfg.azPins[2]); cfg.azPins[3]=argPin("azp3",cfg.azPins[3]);
-  cfg.elPins[0]=argPin("elp0",cfg.elPins[0]); cfg.elPins[1]=argPin("elp1",cfg.elPins[1]);
-  cfg.elPins[2]=argPin("elp2",cfg.elPins[2]); cfg.elPins[3]=argPin("elp3",cfg.elPins[3]);
+  cfg.azPins[0]=argPin("azp0",cfg.azPins[0],true); cfg.azPins[1]=argPin("azp1",cfg.azPins[1],true);
+  cfg.azPins[2]=argPin("azp2",cfg.azPins[2],true); cfg.azPins[3]=argPin("azp3",cfg.azPins[3],true);
+  cfg.elPins[0]=argPin("elp0",cfg.elPins[0],true); cfg.elPins[1]=argPin("elp1",cfg.elPins[1],true);
+  cfg.elPins[2]=argPin("elp2",cfg.elPins[2],true); cfg.elPins[3]=argPin("elp3",cfg.elPins[3],true);
   cfg.azHomePin=argPin("azhome",cfg.azHomePin); cfg.elHomePin=argPin("elhome",cfg.elHomePin);
   cfg.azCwPin=argPin("azcw",cfg.azCwPin);   cfg.azCcwPin=argPin("azccw",cfg.azCcwPin);
   cfg.elMinPin=argPin("elmin",cfg.elMinPin); cfg.elMaxPin=argPin("elmax",cfg.elMaxPin);
@@ -351,7 +366,14 @@ float wrap360(float d){ while(d<0)d+=360; while(d>=360)d-=360; return d; }
 
 long azDegToSteps(float trueAz) {
   float mech = wrap360(trueAz - g_northOff);
-  // TODO cable-wrap: if a target crosses the no-go seam, take the long way instead
+  // Seam handling: command the 360-equivalent angle NEAREST the axis' current position.
+  // Raw wrap360 made a target dithering across 0/360 (e.g. a star near due north) flip
+  // between ~0 and ~360 -> the rotor unwound a full turn back and forth continuously.
+  // Bounded to one wrap past either side ([-90, 450]) so cables can never wind endlessly;
+  // a long-tracking target that walks past the bound takes one deliberate unwind there.
+  float cur = (float)(g_azSign * azM.currentPosition()) / g_azSpd;   // mechanical deg now
+  if (mech - cur >  180.0f && mech - 360.0f >= -90.0f) mech -= 360.0f;
+  if (cur - mech >  180.0f && mech + 360.0f <=  450.0f) mech += 360.0f;
   return g_azSign * lroundf(mech * g_azSpd);
 }
 long elDegToSteps(float el) {
@@ -439,25 +461,29 @@ void showConfig() {
                 g_azSpd, g_azSign, g_elSpd, g_elSign, g_northOff);
 }
 
-// Blocking helpers, used only during operator-driven calibration.
-void homeAzBlocking() {
+// Blocking helpers, used only during operator-driven calibration. Each spin loop
+// yield()s so the AP/web UI and the IDLE task aren't starved for the whole cal.
+bool homeAzBlocking() {                            // false = an end-stop blocked the path
   azM.setSpeed(g_azSign * -HOME_SPEED);
   int dir = (azM.speed() > 0) - (azM.speed() < 0);
   while (digitalRead(cfg.azHomePin) != homeLvl()) {
-    if (dir && azStopHit(dir)) break;             // an end-stop blocks the path to home
+    if (dir && azStopHit(dir)) return false;      // do NOT zero on a failed home
     azM.runSpeed();
+    yield();
   }
   azM.setCurrentPosition(0);
+  return true;
 }
 void jogAxis(AccelStepper& m, int sign, float spd, float deg) {
   bool isAz = (&m == &azM);                        // pick the axis' end-stop guard
   m.move(sign * lroundf(deg * spd));
-  while (m.distanceToGo() != 0) { isAz ? azRun() : elRun(); }
+  while (m.distanceToGo() != 0) { isAz ? azRun() : elRun(); yield(); }
 }
 
 // EL steps/deg — automatic + exact: step a block, read the gravity pitch before/after,
 // steps_per_deg = |Δsteps| / |Δpitch|. Averaged over a few spans; also learns el direction.
 void calEl() {
+  if (!g_mpuOk) { Serial.println("[cal] EL needs the MPU6050 (gravity reference) — not found."); return; }
   Serial.println("[cal] EL: measuring steps/deg against gravity (keep the el axis free)...");
   const int SPANS = 3;
   long block = lroundf(g_elSpd * 20.0f);          // ~20 deg per span using the current estimate
@@ -466,7 +492,7 @@ void calEl() {
   for (int s = 0; s < SPANS; ++s) {
     float p0 = readPitchAvg();
     long from = elM.currentPosition();
-    elM.move(block); while (elM.distanceToGo() != 0) elRun();
+    elM.move(block); while (elM.distanceToGo() != 0) { elRun(); yield(); }
     delay(300);
     float dp = readPitchAvg() - p0;
     if (fabsf(dp) > 2.0f) {                        // enough travel to trust the ratio
@@ -474,7 +500,7 @@ void calEl() {
       signVotes += (dp >= 0) ? 1 : -1;            // +steps -> +pitch means sign matches
       Serial.printf("[cal] EL span %d: %ld steps / %.2f deg = %.3f\n", s, block, fabsf(dp), block / fabsf(dp));
     }
-    elM.moveTo(from); while (elM.distanceToGo() != 0) elRun();   // return
+    elM.moveTo(from); while (elM.distanceToGo() != 0) { elRun(); yield(); }   // return
     delay(300);
   }
   if (n == 0) { Serial.println("[cal] EL failed — too little pitch change. Is the el axis free / IMU mounted?"); return; }
@@ -493,7 +519,10 @@ long g_azMarkPos = 0;
 // cable-wrap stops a full turn.
 void calAz() {
   Serial.println("[cal] AZ: homing, then one full turn back to the switch...");
-  homeAzBlocking();                               // switch active, position = 0
+  if (!homeAzBlocking()) {                        // end-stop blocked the path to home:
+    Serial.println("[cal] AZ aborted: an end-stop tripped before the home switch — not calibrating.");
+    return;                                       // zeroing there would persist a bogus steps/deg
+  }
   azM.setSpeed(g_azSign * (AZ_MAX_SPEED * 0.6f));
   bool leftFlag = false;
   long maxSteps = lroundf(g_azSpd * 400.0f);      // safety cap > one revolution
@@ -501,6 +530,7 @@ void calAz() {
   while (labs(azM.currentPosition()) < maxSteps) {
     if (dir && azStopHit(dir)) break;             // an end-stop stops the full-turn cal
     azM.runSpeed();
+    yield();
     bool active = (digitalRead(cfg.azHomePin) == homeLvl());
     if (!leftFlag) { if (!active) leftFlag = true; }         // rolled off the home flag
     else if (active) {                                        // flag again -> full revolution
@@ -547,7 +577,8 @@ void serviceSerial() {
   else if (c == "SETNORTH") { setNorth(); }
   else if (c == "HOME")     { startScan(); state = HOMING_AZ; }
   else if (c == "SHOW")     { showConfig(); }
-  else if (c == "RESET")    { nvsReset(); Serial.println("[cfg] NVS cleared -> config.h defaults"); showConfig(); }
+  else if (c == "RESET")    { nvsReset(); Serial.println("[cfg] NVS cleared -> reboot to apply pins/driver");
+                              delay(250); ESP.restart(); }   // match web RESET: steppers rebuild from defaults
   else if (c == "MARK")     { markAz(); }
   else if (c.startsWith("AZ+")) jogAxis(azM, g_azSign, g_azSpd,  c.substring(3).toFloat());
   else if (c.startsWith("AZ-")) jogAxis(azM, g_azSign, g_azSpd, -c.substring(3).toFloat());
@@ -607,6 +638,12 @@ void homeEl() {
     elRunSpeed();
   } else {
     // Gravity homing (default): drive to level (accelerometer pitch ~ 0) -> el zero.
+    if (!g_mpuOk) {                          // no IMU -> no reference; DON'T drive blind
+      Serial.println("[home] no IMU: taking current el as 0 (fit the MPU6050 or an el switch)");
+      elM.setCurrentPosition(0);
+      state = TRACKING;
+      return;
+    }
     float pitch = readPitchDeg();
     if (fabsf(pitch) < 0.5f) {               // level == elevation 0
       elM.setCurrentPosition(0);
@@ -621,10 +658,10 @@ void homeEl() {
 // --- tracking: extrapolate target from last packet + rate ------------------
 void track() {
   telemetry_t p;
-  noInterrupts();
+  portENTER_CRITICAL(&g_pktMux);           // cross-core: the WiFi task writes rxPkt on core 0
   memcpy(&p, (const void*)&rxPkt, sizeof(p));
   uint32_t t = rxTimeMs;
-  interrupts();
+  portEXIT_CRITICAL(&g_pktMux);
 
   if (!haveData || (millis() - t) > PACKET_TIMEOUT_MS) { state = PARK; return; }
   if (!p.valid) { state = PARK; return; }
@@ -633,11 +670,16 @@ void track() {
   float azCmd = wrap360(p.az + p.az_rate * dt);       // coast at rate between updates
   float elCmd = p.el + p.el_rate * dt;
 
-  // elevation closed-loop trim against gravity (kills BYJ backlash on el)
-  if (EL_TRIM_GAIN > 0) {
+  // Elevation closed-loop trim against gravity (kills BYJ backlash on el). Rate-limited:
+  // an I2C read is ~1 ms, and doing it EVERY loop pass starved AccelStepper::run() (700
+  // steps/s needs a call every 1.4 ms) — roughly halving the achievable az slew rate.
+  static uint32_t s_trimMs = 0; static float s_trim = 0;
+  if (EL_TRIM_GAIN > 0 && g_mpuOk && millis() - s_trimMs > 100) {
+    s_trimMs = millis();
     float err = elCmd - readPitchDeg();
-    if (fabsf(err) > EL_TRIM_DEADBAND_DEG) elCmd += EL_TRIM_GAIN * err;
+    s_trim = (fabsf(err) > EL_TRIM_DEADBAND_DEG) ? EL_TRIM_GAIN * err : 0;
   }
+  elCmd += s_trim;
 
   // Known limitation (§9): near a zenith pass, az slews faster than a 28BYJ can follow, so the
   // rotor lags through overhead and recovers on the far side. Cosmetic for a pointer — this is
