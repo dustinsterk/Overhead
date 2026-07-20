@@ -2,9 +2,10 @@
 #include <Arduino.h>
 #include <esp_heap_caps.h>
 #include <JPEGENC.h>
-#if BACKLIGHT_VIA_EXPANDER
-  #include <Wire.h>
-#else
+#if BACKLIGHT_VIA_EXPANDER || defined(BOARD_CROWPANEL_S3_5HMI)
+  #include <Wire.h>                      // expander and/or Wire-read GT911 touch
+#endif
+#if !BACKLIGHT_VIA_EXPANDER
   static constexpr int kBlChannel = 7;   // LEDC channel for the backlight PWM
 #endif
 #if defined(BOARD_CROWPANEL_S3_5HMI)
@@ -180,10 +181,15 @@ bool Display::begin(bool enableShots) {
   // is the full SPI panel init.
   if (!_lcd.init()) return false;
 
-#if BACKLIGHT_VIA_EXPANDER
-  // I2C bus + the backlight/reset expander (crowpanel-5in.md §4). Wire owns I2C_NUM_0;
-  // LovyanGFX's GT911 is on I2C_NUM_1 to avoid driver contention.
+#if defined(BOARD_CROWPANEL_S3_5HMI)
+  // I2C bus: the GT911 touch is read over Wire on EVERY CrowPanel variant (Touch.cpp),
+  // so Wire must begin regardless of the backlight path. On the direct-GPIO-backlight
+  // boards (classic 7", HMI5 502727) it previously never did — touch was dead with
+  // "NULL TX buffer pointer" console spam (field report on the classic 7").
+  // On the Advance the same bus also carries the backlight/RTC expander.
   Wire.begin(PIN_I2C_SDA, PIN_I2C_SCL, I2C_FREQ_HZ);
+#endif
+#if BACKLIGHT_VIA_EXPANDER
   expanderBegin();
 #endif
 
