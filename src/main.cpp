@@ -308,7 +308,13 @@ void setup() {
   // watchdog aborts ("IDLE0 did not reset" -> boot loop). Nothing more important than
   // idle shares core 0, so unsubscribe core-0 idle from the TWDT. (loop/UI on core 1
   // stays watchdog-protected.)
+  // Only the no-PSRAM CYD-class boards starve IDLE0 (slow single-core parse under
+  // heap pressure). The S3 + PSRAM CrowPanels parse fast and never trip it — and there
+  // disableCore0WDT() leaves the idle hook resetting an unsubscribed task, spamming
+  // "esp_task_wdt_reset: task not found". So scope the workaround to non-PSRAM boards.
+#if !defined(BOARD_HAS_PSRAM)
   disableCore0WDT();
+#endif
   tleProv.begin(&settings, &net, &cache, &bus);    // cacheable -> boot-updater candidates (load cache + fetch if stale)
   launchProv.begin(&settings, &net, &cache, &bus); // LL2 + fallback
   spaceWxProv.begin(&settings, &net, &cache, &bus);// Kp/SFI (persists a while)
