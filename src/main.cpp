@@ -52,6 +52,18 @@
 #include "pages/PageAviation.h"
 #if ASTRO_SELFTEST
 #include "astro/SelfTest.h"
+
+#if defined(BOARD_HAS_PSRAM)
+#include <esp_heap_caps.h>
+#include "mbedtls/platform.h"
+// Arduino-ESP32 defaults to CONFIG_MBEDTLS_INTERNAL_MEM_ALLOC, so mbedtls allocates
+// its (large, contiguous) TLS handshake buffers from INTERNAL RAM even on an S3 with
+// 8 MB PSRAM free. A fragmented internal heap then fails the handshake with -32512
+// (MBEDTLS_ERR_SSL_ALLOC_FAILED). Redirect mbedtls to PSRAM so TLS stops starving.
+static void* mbedtlsPsramCalloc(size_t n, size_t sz) {
+  return heap_caps_calloc(n, sz, MALLOC_CAP_SPIRAM);
+}
+#endif
 #endif
 
 // --- HAL ---
@@ -301,6 +313,10 @@ void setup() {
   timeSvc.setRtc(&rtc);
   timeSvc.begin();
 
+#if defined(BOARD_HAS_PSRAM)
+  // Route TLS allocations to PSRAM BEFORE the first HTTPS fetch (see note at top).
+  mbedtls_platform_set_calloc_free(mbedtlsPsramCalloc, free);
+#endif
   net.begin(24576);   // generous stack — mbedtls TLS handshakes are stack-hungry
   // The NetTask (core 0, just above idle) does multi-second blocking HTTP/TLS
   // reads. Arduino Stream reads busy-spin on yield() while waiting for TCP data, and
